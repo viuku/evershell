@@ -50,6 +50,10 @@ npm run tauri -w @evershell/desktop -- dev   # 桌面版
 
 网页版需要先构建 WASM 内核并启动中转，步骤见 [docs/m0-report.md](docs/m0-report.md) 的“怎么在本机复现”一节。
 
+## 协议
+
+EverShell 以 [GNU 通用公共许可证第 3 版或更高版本](LICENSE)（GPL-3.0-or-later）发布：任何人都可以使用、修改和分发，但分发修改后的版本时，也必须以同样的协议公开源代码。`vendor/russh` 除外，见下一节。
+
 ## 说明
 
 - 本项目与 FinalShell 及其开发者没有任何关系。文中提到 FinalShell 只是为了说明布局参考和连接导入。

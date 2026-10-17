@@ -5,6 +5,7 @@ name = "evershell-desktop"
 description = "EverShell 桌面端"
 edition.workspace = true
 version.workspace = true
+license.workspace = true
 
 [lib]
 name = "evershell_desktop_lib"

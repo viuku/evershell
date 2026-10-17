@@ -6,6 +6,7 @@ exclude = ["vendor"]
 [workspace.package]
 edition = "2024"
 version = "0.1.0"
+license = "GPL-3.0-or-later"
 
 [workspace.dependencies]
 # 加密后端统一用 ring：aws-lc-rs 编不出 WASM

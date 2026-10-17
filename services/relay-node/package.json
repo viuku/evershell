@@ -1,6 +1,7 @@
 {
   "name": "@evershell/relay-node",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "start": "node server.mjs"

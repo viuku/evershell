@@ -1,6 +1,7 @@
 {
   "name": "@evershell/ssh-wasm",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "type": "module",
   "main": "ssh_wasm.js",
   "types": "ssh_wasm.d.ts"
