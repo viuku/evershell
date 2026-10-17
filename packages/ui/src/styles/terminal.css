@@ -1,0 +1,217 @@
+/* 终端区：xterm 容器、命令栏、外观浮层 */
+
+.term-section {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  background: var(--t-bg);
+}
+
+.term-wrap {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.term-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+
+.term-view {
+  position: absolute;
+  inset: 0;
+  padding: 6px 4px 2px 10px;
+}
+
+.term-host {
+  width: 100%;
+  height: 100%;
+}
+
+/* xterm 自己的滚动条配色跟随终端前景 */
+.term-host .xterm-viewport::-webkit-scrollbar {
+  width: 10px;
+}
+
+.term-host .xterm-viewport::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--t-fg) 25%, transparent);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.term-offline {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 2;
+}
+
+.term-reconnect {
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--t-amber);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--t-bg) 85%, transparent);
+  color: var(--t-amber);
+  font-size: 12px;
+}
+
+.term-reconnect:hover {
+  background: color-mix(in srgb, var(--t-amber) 15%, var(--t-bg));
+}
+
+/* 命令栏 */
+.cmdbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--bar);
+  border-top: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+
+.cmdbar__input {
+  flex: 1 1 240px;
+}
+
+/* 外观浮层 */
+.look {
+  position: absolute;
+  left: 8px;
+  bottom: 40px;
+  z-index: 5;
+  width: 560px;
+  max-width: calc(100% - 16px);
+  padding: 12px 14px 14px;
+  background: var(--bar);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--text);
+}
+
+.look__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.look__close {
+  width: 22px;
+  height: 22px;
+}
+
+.look__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 8px;
+}
+
+.preset {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.preset__swatch {
+  display: block;
+  width: 100%;
+  height: 48px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+.preset__swatch--on {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.preset__line {
+  display: block;
+  white-space: nowrap;
+}
+
+.preset__name {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.preset__name--on {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.look__custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line2);
+}
+
+.look__customLabel {
+  font-weight: 500;
+}
+
+.look__customLabel--on {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.look__color {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.look__color input {
+  width: 28px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--fieldline);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.look__size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.look__size select {
+  width: 64px;
+}
+
+.look__hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.look__preview {
+  height: 44px;
+}

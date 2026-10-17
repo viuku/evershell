@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>主界面</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.ap-light,.ap-auto{--win:#E4E4E7;--bar:#F6F6F7;--side:#F0F0F2;--content:#FFFFFF;--zebra:#F5F5F7;--line:#D4D4D8;--line2:#E5E5E8;--text:#1D1D1F;--muted:#5C5C63;--field:#FFFFFF;--fieldline:#C8C8CD;--hover:rgba(0,0,0,0.06);--seg:#E2E2E5;--segon:#FFFFFF;--track:#E1E1E5;--ok:#1A7F37;--warn:#B25E00;--up:#C2410C;--down:#15803D;--folder:#5AA7F0;--sys-t-bg:#EEF0F3;--sys-tab-on:#EEF0F3;--sys-t-fg:#1D1D1F;--sys-t-dim:#6A6A70;--sys-t-green:#1D7F37;--sys-t-blue:#0B5CC4;--sys-t-red:#C62828;--sys-t-amber:#9A5B00;--sys-t-cyan:#0E7490;--sys-t-cursor:#1D1D1F;--sys-t-line:#E5E5E8;color-scheme:light}
+.ap-dark{--win:#19191B;--bar:#28282B;--side:#212124;--content:#1C1C1E;--zebra:#232326;--line:#3A3A3F;--line2:#2F2F33;--text:#ECECEE;--muted:#A3A3AA;--field:#2C2C2F;--fieldline:#4A4A50;--hover:rgba(255,255,255,0.07);--seg:#333337;--segon:#5B5B60;--track:#36363B;--ok:#32D74B;--warn:#FF9F0A;--up:#FF9F0A;--down:#32D74B;--folder:#5FA8EE;--sys-t-bg:#0C0C0C;--sys-tab-on:var(--content);--sys-t-fg:#D0D0D0;--sys-t-dim:#8A8A8A;--sys-t-green:#5FD068;--sys-t-blue:#6CA8FF;--sys-t-red:#FF6B6B;--sys-t-amber:#E5B847;--sys-t-cyan:#4FC8D8;--sys-t-cursor:#D0D0D0;--sys-t-line:#2A2A2E;color-scheme:dark}
+@media (prefers-color-scheme: dark){.ap-auto{--win:#19191B;--bar:#28282B;--side:#212124;--content:#1C1C1E;--zebra:#232326;--line:#3A3A3F;--line2:#2F2F33;--text:#ECECEE;--muted:#A3A3AA;--field:#2C2C2F;--fieldline:#4A4A50;--hover:rgba(255,255,255,0.07);--seg:#333337;--segon:#5B5B60;--track:#36363B;--ok:#32D74B;--warn:#FF9F0A;--up:#FF9F0A;--down:#32D74B;--folder:#5FA8EE;--sys-t-bg:#0C0C0C;--sys-tab-on:var(--content);--sys-t-fg:#D0D0D0;--sys-t-dim:#8A8A8A;--sys-t-green:#5FD068;--sys-t-blue:#6CA8FF;--sys-t-red:#FF6B6B;--sys-t-amber:#E5B847;--sys-t-cyan:#4FC8D8;--sys-t-cursor:#D0D0D0;--sys-t-line:#2A2A2E;color-scheme:dark}}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font:inherit;color:inherit}
+.tb{display:grid;place-items:center;width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;flex:0 0 auto}
+.tb:hover{background:var(--hover);color:var(--text)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:22px;box-sizing:border-box;padding:0 10px;border:1px solid var(--fieldline);border-radius:5px;background:var(--field);color:var(--text);font-size:12px;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn-primary{border-color:transparent;background:var(--accent);color:#FFFFFF}
+.btn-primary:hover{background:var(--accent);filter:brightness(1.1)}
+.field{height:22px;box-sizing:border-box;padding:0 7px;border:1px solid var(--fieldline);border-radius:5px;background:var(--field);color:var(--text);font-size:12px;outline:none}
+.field:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent)}
+.grid-bg{background:repeating-linear-gradient(to bottom, transparent 0, transparent 13px, var(--line2) 13px, var(--line2) 14px)}
+.cursor{display:inline-block;width:0.6em;height:1.15em;vertical-align:text-bottom;background:var(--t-cursor);animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.scroll::-webkit-scrollbar{width:10px;height:10px}
+.scroll::-webkit-scrollbar-thumb{background:var(--track);border-radius:10px;border:2px solid transparent;background-clip:content-box}
+</style>
+</helmet>
+<div class="{{apClass}}" style="--accent: {{accent}}; --t-bg: {{tv.bg}}; --t-fg: {{tv.fg}}; --t-dim: {{tv.dim}}; --t-green: {{tv.green}}; --t-blue: {{tv.blue}}; --t-red: {{tv.red}}; --t-amber: {{tv.amber}}; --t-cyan: {{tv.cyan}}; --t-cursor: {{tv.fg}}; --tab-on: {{tv.tab}}; --t-size: {{tv.size}}; min-height: 100vh; display: flex; flex-wrap: wrap; background: var(--content); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 12px">
+
+<sc-if value="{{monitorOpen}}" hint-placeholder-val="{{ true }}">
+<aside aria-label="服务器状态" class="scroll" style="flex: 1 1 232px; min-width: 0; box-sizing: border-box; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; overflow-y: auto">
+<div aria-hidden="true" style="display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; flex: 0 0 auto">
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57"></span>
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E"></span>
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840"></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 9px; padding: 2px 12px 14px">
+<div style="display: flex; justify-content: space-between; align-items: center"><span>同步状态</span><span style="display: flex; align-items: center; gap: 5px; color: var(--muted)"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--ok)"></span>已同步</span></div>
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 6px">
+<span>IP</span>
+<span style="display: flex; align-items: center; gap: 6px; min-width: 0"><span style="font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11.5px">{{mon.ip}}</span><button type="button" class="btn" style="height: 18px; padding: 0 6px; font-size: 11px">复制</button></span>
+</div>
+<button type="button" class="btn" style="width: 100%">系统信息</button>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span>运行 <span style="color: var(--muted)">{{mon.uptime}}</span></span>
+<span>负载 <span style="font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11.5px; color: var(--muted)">{{mon.load}}</span></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<sc-for list="{{mon.meters}}" as="m" hint-placeholder-count="3">
+<div style="display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 6px">
+<span>{{m.label}}</span>
+<div style="position: relative; height: 16px; border-radius: 4px; background: var(--track); overflow: hidden">
+<div style="position: absolute; top: 0; bottom: 0; left: 0; width: {{m.w}}; background: {{m.fill}}"></div>
+<div style="position: relative; display: flex; align-items: center; justify-content: space-between; height: 100%; padding: 0 6px; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11px"><span>{{m.pct}}</span><span>{{m.used}}</span></div>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="border: 1px solid var(--line); border-radius: 5px; background: var(--content); overflow: hidden">
+<div style="display: grid; grid-template-columns: 46px 40px minmax(0, 1fr); gap: 4px; padding: 3px 6px; background: var(--bar); border-bottom: 1px solid var(--line2); color: var(--muted)"><span>内存</span><span>CPU</span><span>命令</span></div>
+<sc-for list="{{mon.procs}}" as="p" hint-placeholder-count="7">
+<div style="display: grid; grid-template-columns: 46px 40px minmax(0, 1fr); gap: 4px; padding: 0 6px; height: 18px; align-items: center; background: {{p.bg}}; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11px">
+<span>{{p.mem}}</span><span>{{p.cpu}}</span><span style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis">{{p.name}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; justify-content: space-between; align-items: center; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11px">
+<span><span style="color: var(--up)">↑</span>{{mon.up}}  <span style="color: var(--down)">↓</span>{{mon.down}}</span>
+<label for="nic" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">网卡</label>
+<select id="nic" style="height: 18px; border: 0; background: transparent; color: var(--muted); font-size: 11px"><option>eth0</option><option>docker0</option></select>
+</div>
+<div style="display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 4px">
+<div style="display: flex; flex-direction: column; justify-content: space-between; height: 56px; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 10px; color: var(--muted); text-align: right"><span>{{mon.netMax}}</span><span>{{mon.netMid}}</span><span>0</span></div>
+<div class="grid-bg" style="display: flex; align-items: flex-end; gap: 1px; height: 56px; border-bottom: 1px solid var(--line)">
+<sc-for list="{{mon.net}}" as="n" hint-placeholder-count="30">
+<div style="flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; gap: 0">
+<div style="flex: 1 1 0; height: {{n.u}}; background: var(--up); opacity: 0.8"></div>
+<div style="flex: 1 1 0; height: {{n.d}}; background: var(--down); opacity: 0.8"></div>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; justify-content: space-between; font-size: 11px"><span style="color: var(--accent-text, var(--text))">{{mon.latency}}</span><span style="color: var(--muted)">本机 → 服务器</span></div>
+<div class="grid-bg" style="display: flex; align-items: flex-end; gap: 1px; height: 28px; border-bottom: 1px solid var(--line)">
+<sc-for list="{{mon.ping}}" as="g" hint-placeholder-count="40">
+<div style="flex: 1 1 0; height: {{g.h}}; background: var(--accent); opacity: 0.55"></div>
+</sc-for>
+</div>
+</div>
+<div style="border: 1px solid var(--line); border-radius: 5px; background: var(--content); overflow: hidden">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 4px; padding: 3px 6px; background: var(--bar); border-bottom: 1px solid var(--line2); color: var(--muted)"><span>路径</span><span>可用 / 大小</span></div>
+<sc-for list="{{mon.disks}}" as="d" hint-placeholder-count="3">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 4px; padding: 0 6px; height: 19px; align-items: center; background: {{d.bg}}; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11px">
+<span style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis">{{d.mount}}</span><span style="color: {{d.color}}">{{d.text}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</aside>
+</sc-if>
+
+<div style="flex: 999 1 600px; min-width: 0; display: flex; flex-direction: column">
+<div style="display: flex; align-items: flex-end; gap: 2px; height: 38px; padding: 0 6px; background: var(--win); border-bottom: 1px solid var(--line)">
+<sc-if value="{{monitorClosed}}" hint-placeholder-val="{{ false }}">
+<div aria-hidden="true" style="display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 10px 0 8px; align-self: center">
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57"></span>
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E"></span>
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840"></span>
+</div>
+</sc-if>
+<a href="Manager.dc.html" class="tb" aria-label="连接管理器" title="连接管理器（⌘O）" style="margin: 0 2px 4px 0; color: var(--text)">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+</a>
+<nav aria-label="会话" class="scroll" style="display: flex; align-items: flex-end; gap: 2px; flex: 1 1 auto; min-width: 0; height: 38px; overflow-x: auto; overflow-y: hidden">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; flex: 0 1 200px; min-width: 120px; height: 31px; margin-bottom: -1px; box-sizing: border-box; border: 1px solid {{t.border}}; border-bottom: 0; border-radius: 7px 7px 0 0; background: {{t.bg}}">
+<button type="button" onClick="{{t.pick}}" style="flex: 1 1 auto; min-width: 0; height: 100%; display: flex; align-items: center; gap: 7px; padding: 0 4px 0 11px; border: 0; background: transparent; color: {{t.color}}; text-align: left; cursor: pointer">
+<span style="font-family: 'SF Mono', Menlo, Consolas, monospace; color: var(--muted)">{{t.num}}</span>
+<span style="width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: {{t.dot}}"></span>
+<span style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis">{{t.name}}</span>
+</button>
+<button type="button" class="tb" aria-label="关闭会话" style="width: 18px; height: 18px; border-radius: 50%; margin-right: 6px">
+<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+</button>
+</div>
+</sc-for>
+<a href="NewTab.dc.html" class="tb" aria-label="新标签页" style="width: 26px; height: 26px; margin: 0 0 3px 4px; border-radius: 50%">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+</a>
+</nav>
+<button type="button" class="tb" aria-label="显示或隐藏状态栏" onClick="{{toggleMonitor}}" style="margin-bottom: 4px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path></svg>
+</button>
+<button type="button" class="tb" aria-label="菜单" style="margin-bottom: 4px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+</button>
+</div>
+
+<section aria-label="终端" style="position: relative; flex: 1 1 0; min-height: 260px; display: flex; flex-direction: column; background: var(--t-bg)">
+<div class="scroll" style="flex: 1 1 0; min-height: 0; overflow: auto; padding: 6px 10px; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: var(--t-size); line-height: 1.45; color: var(--t-fg)">
+<sc-for list="{{term.lines}}" as="line" hint-placeholder-count="12">
+<div style="white-space: pre; min-height: 1.45em"><sc-for list="{{line.segs}}" as="sg" hint-placeholder-count="2"><span style="color: {{sg.c}}">{{sg.t}}</span></sc-for></div>
+</sc-for>
+<sc-if value="{{term.connected}}" hint-placeholder-val="{{ true }}">
+<div style="white-space: pre"><sc-for list="{{term.prompt}}" as="sg" hint-placeholder-count="4"><span style="color: {{sg.c}}">{{sg.t}}</span></sc-for><span class="cursor"></span></div>
+</sc-if>
+<sc-if value="{{term.offline}}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{reconnect}}" style="margin-top: 8px; height: 22px; padding: 0 10px; border: 1px solid var(--t-amber); border-radius: 5px; background: transparent; color: var(--t-amber); font-family: inherit; font-size: 12px; cursor: pointer">立即重连</button>
+</sc-if>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 8px; background: var(--bar); border-top: 1px solid var(--line)">
+<button type="button" class="btn" onClick="{{toggleLook}}" aria-expanded="{{lookOpen}}" title="终端外观">
+<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c.9 0 1.5-.7 1.5-1.5 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.8.7-1.5 1.5-1.5H16a5 5 0 0 0 5-5c0-4.3-4-7.8-9-7.8z"></path><circle cx="7.5" cy="11" r="1"></circle><circle cx="10.5" cy="7" r="1"></circle><circle cx="15" cy="7" r="1"></circle></svg>外观
+</button>
+<button type="button" class="btn">历史 ▾</button>
+<label for="cmdbox" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">命令</label>
+<input id="cmdbox" class="field" value="{{cmd}}" onChange="{{onCmd}}" onKeyDown="{{onKey}}" placeholder="输入命令后回车，发送到当前会话" autocomplete="off" spellcheck="false" style="flex: 1 1 240px; min-width: 0; font-family: 'SF Mono', Menlo, Consolas, monospace">
+<button type="button" class="btn btn-primary" onClick="{{sendCmd}}">发送</button>
+<button type="button" class="btn" onClick="{{sendAll}}">发送到全部会话</button>
+</div>
+<sc-if value="{{lookOpen}}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-label="终端外观" style="position: absolute; left: 8px; bottom: 40px; z-index: 5; width: 560px; max-width: calc(100% - 16px); box-sizing: border-box; padding: 12px 14px 14px; background: var(--bar); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28); display: flex; flex-direction: column; gap: 12px; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<strong style="font-size: 13px; font-weight: 600">终端外观</strong>
+<button type="button" class="tb" aria-label="关闭" onClick="{{toggleLook}}" style="width: 22px; height: 22px">
+<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+</button>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 8px">
+<sc-for list="{{presets}}" as="p" hint-placeholder-count="8">
+<button type="button" onClick="{{p.pick}}" aria-pressed="{{p.sel}}" style="display: flex; flex-direction: column; gap: 5px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left">
+<span style="display: block; width: 100%; height: 48px; box-sizing: border-box; padding: 7px 8px; border-radius: 6px; background: {{p.bg}}; box-shadow: {{p.ring}}; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 10px; line-height: 1.5; overflow: hidden">
+<span style="display: block; white-space: nowrap"><span style="color: {{p.green}}">root@web</span><span style="color: {{p.fg}}">:</span><span style="color: {{p.blue}}">~</span><span style="color: {{p.fg}}">$ ls</span></span>
+<span style="display: block; white-space: nowrap; color: {{p.fg}}">app  logs  <span style="color: {{p.red}}">error</span></span>
+</span>
+<span style="font-size: 12px; font-weight: {{p.weight}}; color: {{p.label}}">{{p.name}}</span>
+</button>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-top: 10px; border-top: 1px solid var(--line2); font-size: 12px">
+<span style="font-weight: {{customWeight}}; color: {{customLabel}}">自定义</span>
+<label style="display: flex; align-items: center; gap: 6px; cursor: pointer">背景色<input type="color" value="{{custom.bg}}" onChange="{{onCustomBg}}" style="width: 28px; height: 20px; padding: 0; border: 1px solid var(--fieldline); border-radius: 4px; background: transparent; cursor: pointer"></label>
+<label style="display: flex; align-items: center; gap: 6px; cursor: pointer">文字色<input type="color" value="{{custom.fg}}" onChange="{{onCustomFg}}" style="width: 28px; height: 20px; padding: 0; border: 1px solid var(--fieldline); border-radius: 4px; background: transparent; cursor: pointer"></label>
+<span style="display: flex; align-items: center; gap: 6px"><label for="tsize">字号</label><select id="tsize" class="field" value="{{size}}" onChange="{{onSize}}" style="width: 64px"><option value="12px">12</option><option value="12.5px">12.5</option><option value="13px">13</option><option value="14px">14</option><option value="15px">15</option></select></span>
+<button type="button" class="btn">背景图片…</button>
+</div>
+<span style="font-size: 11px; color: var(--muted)">对所有会话生效。“跟随系统”在浅色模式下是浅灰底，深色模式下是黑底。</span>
+</div>
+</sc-if>
+</section>
+
+<section aria-label="文件与命令" style="flex: 0 0 280px; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line)">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; background: var(--bar); border-bottom: 1px solid var(--line)">
+<div role="tablist" aria-label="底部面板" style="display: flex; padding: 2px; border-radius: 6px; background: var(--seg)">
+<sc-for list="{{btabs}}" as="b" hint-placeholder-count="4">
+<button type="button" role="tab" aria-selected="{{b.sel}}" onClick="{{b.pick}}" style="height: 20px; padding: 0 12px; border: 0; border-radius: 5px; background: {{b.bg}}; box-shadow: {{b.shadow}}; color: var(--text); font-size: 12px; cursor: pointer; white-space: nowrap">{{b.label}}</button>
+</sc-for>
+</div>
+<sc-if value="{{isFiles}}" hint-placeholder-val="{{ true }}">
+<label style="display: flex; align-items: center; gap: 5px; margin-left: auto; color: var(--muted); cursor: pointer">
+<input type="checkbox" checked="{{follow}}" onChange="{{toggleFollow}}" style="margin: 0; accent-color: var(--accent)">
+跟随终端目录
+</label>
+</sc-if>
+</div>
+
+<sc-if value="{{isFiles}}" hint-placeholder-val="{{ true }}">
+<div style="flex: 1 1 0; min-height: 0; display: flex">
+<sc-if value="{{filesReady}}" hint-placeholder-val="{{ true }}">
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap">
+<nav aria-label="目录" class="scroll" style="flex: 1 1 170px; min-width: 0; box-sizing: border-box; padding: 4px; background: var(--side); border-right: 1px solid var(--line); overflow-y: auto; display: flex; flex-direction: column; gap: 1px">
+<sc-for list="{{tree}}" as="d" hint-placeholder-count="5">
+<button type="button" onClick="{{d.pick}}" style="display: flex; align-items: center; gap: 6px; width: 100%; height: 22px; padding: 0 8px; border: 0; border-radius: 5px; background: {{d.bg}}; color: {{d.color}}; text-align: left; cursor: pointer; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11.5px; white-space: nowrap; overflow: hidden">
+<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="flex: 0 0 auto"><path d="M2.5 6.5a2 2 0 0 1 2-2h4.6l2 2.2h8.4a2 2 0 0 1 2 2v9.8a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2z" fill="{{d.folder}}"></path></svg>
+<span style="overflow: hidden; text-overflow: ellipsis">{{d.label}}</span>
+</button>
+</sc-for>
+</nav>
+<div style="flex: 999 1 420px; min-width: 0; display: flex; flex-direction: column">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 8px; border-bottom: 1px solid var(--line2)">
+<button type="button" class="tb" aria-label="上级目录" onClick="{{goUp}}" style="width: 24px; height: 24px">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>
+</button>
+<label for="pathbox" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">当前路径</label>
+<input id="pathbox" class="field" value="{{dir}}" readonly style="flex: 1 1 200px; min-width: 0; font-family: 'SF Mono', Menlo, Consolas, monospace">
+<button type="button" class="btn">上传</button>
+<button type="button" class="btn">下载</button>
+<button type="button" class="tb" aria-label="新建文件夹" style="width: 24px; height: 24px">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><path d="M12 11v5M9.5 13.5h5"></path></svg>
+</button>
+<button type="button" class="tb" aria-label="刷新" style="width: 24px; height: 24px">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 5v6h-6"></path></svg>
+</button>
+</div>
+<div class="scroll" style="flex: 1 1 0; min-height: 0; overflow: auto">
+<div style="min-width: 560px">
+<div style="position: sticky; top: 0; display: grid; grid-template-columns: minmax(0, 1fr) 80px 96px 92px 70px; height: 22px; align-items: center; padding: 0 8px; background: var(--content); border-bottom: 1px solid var(--line2); color: var(--muted)">
+<span>名称</span><span style="text-align: right; padding-right: 8px; border-left: 1px solid var(--line2)">大小</span><span style="padding-left: 8px; border-left: 1px solid var(--line2)">修改时间</span><span style="padding-left: 8px; border-left: 1px solid var(--line2)">权限</span><span style="padding-left: 8px; border-left: 1px solid var(--line2)">所有者</span>
+</div>
+<sc-for list="{{files}}" as="f" hint-placeholder-count="6">
+<button type="button" onClick="{{f.pick}}" style="display: grid; grid-template-columns: minmax(0, 1fr) 80px 96px 92px 70px; align-items: center; width: 100%; height: 21px; padding: 0 8px; border: 0; background: {{f.bg}}; color: {{f.color}}; text-align: left; cursor: default; font-size: 12px">
+<span style="display: flex; align-items: center; gap: 6px; min-width: 0">
+<sc-if value="{{f.isDir}}" hint-placeholder-val="{{ true }}"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" style="flex: 0 0 auto"><path d="M2.5 6.5a2 2 0 0 1 2-2h4.6l2 2.2h8.4a2 2 0 0 1 2 2v9.8a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2z" fill="{{f.folder}}"></path></svg></sc-if>
+<sc-if value="{{f.isFile}}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 auto; opacity: 0.7"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg></sc-if>
+<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{f.name}}</span>
+</span>
+<span style="text-align: right; padding-right: 8px; color: {{f.sub}}">{{f.size}}</span>
+<span style="padding-left: 8px; color: {{f.sub}}">{{f.mod}}</span>
+<span style="padding-left: 8px; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11px; color: {{f.sub}}">{{f.perm}}</span>
+<span style="padding-left: 8px; color: {{f.sub}}">{{f.owner}}</span>
+</button>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{filesOffline}}" hint-placeholder-val="{{ false }}">
+<div style="flex: 1 1 auto; display: grid; place-items: center; color: var(--muted)">会话已断开，重连后显示远程文件</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{isSnip}}" hint-placeholder-val="{{ false }}">
+<div style="flex: 1 1 0; min-height: 0; display: flex; flex-direction: column">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 8px; border-bottom: 1px solid var(--line2)">
+<div style="display: flex; padding: 2px; border-radius: 6px; background: var(--seg)">
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+<button type="button" onClick="{{g.pick}}" style="height: 18px; padding: 0 10px; border: 0; border-radius: 5px; background: {{g.bg}}; box-shadow: {{g.shadow}}; color: var(--text); font-size: 11.5px; cursor: pointer">{{g.label}}</button>
+</sc-for>
+</div>
+<button type="button" class="btn" style="margin-left: auto">新建命令</button>
+</div>
+<div class="scroll" style="flex: 1 1 0; min-height: 0; overflow: auto">
+<div style="min-width: 560px">
+<div style="display: grid; grid-template-columns: 140px minmax(0, 1fr) 70px 64px; height: 22px; align-items: center; padding: 0 8px; border-bottom: 1px solid var(--line2); color: var(--muted)"><span>名称</span><span>命令</span><span>分组</span><span></span></div>
+<sc-for list="{{snips}}" as="sn" hint-placeholder-count="6">
+<div style="display: grid; grid-template-columns: 140px minmax(0, 1fr) 70px 64px; height: 24px; align-items: center; padding: 0 8px; background: {{sn.bg}}">
+<span style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis">{{sn.name}}</span>
+<code style="font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11.5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis">{{sn.cmd}}</code>
+<span style="color: var(--muted)">{{sn.g}}</span>
+<button type="button" class="btn" onClick="{{sn.send}}" style="height: 19px; justify-self: end">发送</button>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isHist}}" hint-placeholder-val="{{ false }}">
+<div class="scroll" style="flex: 1 1 0; min-height: 0; overflow: auto">
+<div style="min-width: 560px">
+<div style="display: grid; grid-template-columns: 64px minmax(0, 1fr) 100px 76px; height: 22px; align-items: center; padding: 0 8px; border-bottom: 1px solid var(--line2); color: var(--muted)"><span>时间</span><span>命令</span><span>会话</span><span></span></div>
+<sc-for list="{{history}}" as="h" hint-placeholder-count="6">
+<div style="display: grid; grid-template-columns: 64px minmax(0, 1fr) 100px 76px; height: 24px; align-items: center; padding: 0 8px; background: {{h.bg}}">
+<span style="color: var(--muted)">{{h.when}}</span>
+<code style="font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11.5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis">{{h.cmd}}</code>
+<span style="color: var(--muted)">{{h.where}}</span>
+<button type="button" class="btn" onClick="{{h.send}}" style="height: 19px; justify-self: end">再次发送</button>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isXfer}}" hint-placeholder-val="{{ false }}">
+<div class="scroll" style="flex: 1 1 0; min-height: 0; overflow: auto">
+<div style="min-width: 560px">
+<div style="display: grid; grid-template-columns: 28px minmax(0, 1.2fr) minmax(0, 1.4fr) 120px 150px; height: 22px; align-items: center; padding: 0 8px; border-bottom: 1px solid var(--line2); color: var(--muted)"><span></span><span>文件</span><span>路径</span><span>进度</span><span>状态</span></div>
+<sc-for list="{{transfers}}" as="x" hint-placeholder-count="2">
+<div style="display: grid; grid-template-columns: 28px minmax(0, 1.2fr) minmax(0, 1.4fr) 120px 150px; height: 26px; align-items: center; padding: 0 8px; background: {{x.bg}}">
+<span style="color: var(--muted)">{{x.arrow}}</span>
+<span style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis">{{x.name}}</span>
+<span style="font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11px; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis">{{x.route}}</span>
+<span style="display: flex; align-items: center; padding-right: 10px"><span style="flex: 1 1 auto; height: 4px; border-radius: 2px; background: var(--track)"><span style="display: block; height: 100%; width: {{x.w}}; border-radius: 2px; background: var(--accent)"></span></span></span>
+<span style="color: var(--muted)">{{x.speed}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+</section>
+
+<footer style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; min-height: 22px; padding: 0 10px; background: var(--bar); border-top: 1px solid var(--line); color: var(--muted); font-size: 11px">
+<span style="display: flex; align-items: center; gap: 5px"><span style="width: 6px; height: 6px; border-radius: 50%; background: {{status.dot}}"></span>{{status.text}}</span>
+<span>UTF-8</span>
+<span>xterm-256color · 132×38</span>
+<span style="margin-left: auto">{{status.server}}</span>
+</footer>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"appearance":{"editor":"enum","options":["跟随系统","浅色","深色"],"default":"跟随系统"},"accent":{"editor":"color","options":["#0068D6","#7A4FD1","#C25E00","#6E6E73"],"default":"#0068D6"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      active: 0,
+      tab: 'files',
+      dirs: ['/var/log', '/etc', '/volume1'],
+      sel: '',
+      follow: true,
+      monitorOpen: true,
+      nasUp: false,
+      extra: [[], [], []],
+      cmd: '',
+      group: '全部',
+      termPreset: 'system',
+      custom: { bg: '#1E2B24', fg: '#D5E4D9' },
+      termSize: '12.5px',
+      lookOpen: false
+    };
+  }
+
+  sendTo(indexes, text) {
+    var cmd = (text || '').trim();
+    if (!cmd) return;
+    var extra = this.state.extra.map(function (x) { return x.slice(); });
+    indexes.forEach(function (i) { extra[i].push(cmd); });
+    this.setState({ extra: extra, cmd: '' });
+  }
+
+  connectedIndexes() {
+    return this.state.nasUp ? [0, 1, 2] : [0, 1];
+  }
+
+  renderVals() {
+    var self = this;
+    var st = this.state;
+    var ap = this.props.appearance ?? '跟随系统';
+    var apClass = ap === '浅色' ? 'ap-light' : (ap === '深色' ? 'ap-dark' : 'ap-auto');
+    var accent = this.props.accent ?? '#0068D6';
+
+    var C = { fg: 'var(--t-fg)', dim: 'var(--t-dim)', green: 'var(--t-green)', blue: 'var(--t-blue)', red: 'var(--t-red)', amber: 'var(--t-amber)', cyan: 'var(--t-cyan)' };
+    function s(t, c) { return { t: t, c: C[c || 'fg'] }; }
+    function L() { return { segs: Array.prototype.slice.call(arguments) }; }
+    function P(u, h, p, sym) { return [s(u + '@' + h, 'green'), s(':'), s(p, 'blue'), s(sym + ' ')]; }
+    function PL(u, h, p, sym, cmd) { return { segs: P(u, h, p, sym).concat([s(cmd)]) }; }
+    function zebra(i) { return i % 2 === 1 ? 'var(--zebra)' : 'transparent'; }
+    function meter(label, pct, used) {
+      var warn = pct >= 85;
+      return { label: label, pct: pct + '%', used: used, w: pct + '%', fill: warn ? 'color-mix(in srgb, var(--warn) 40%, transparent)' : 'color-mix(in srgb, var(--accent) 32%, transparent)' };
+    }
+
+    var web = {
+      name: 'prod-web-01', user: 'dev', host: 'prod-web-01', addr: '10.0.1.12', sym: '$', cwd: '/var/log',
+      connected: true, latency: '18 ms', server: 'OpenSSH 9.6', uptime: '41 天 6 小时', load: '0.42, 0.51, 0.47',
+      cpu: 23, mem: 65, memUsed: '5.2G/8.0G', swap: 5, swapUsed: '0.1G/2.0G',
+      up: '1.2M/s', down: '386K/s', netMax: '2M', netMid: '1M',
+      netUp: [30, 42, 38, 55, 61, 48, 36, 40, 52, 70, 66, 58, 44, 39, 47, 63, 72, 55, 49, 58, 52, 47, 60, 66, 58, 51, 44, 57, 62, 60],
+      netDown: [12, 15, 10, 18, 22, 16, 12, 14, 20, 26, 24, 18, 15, 13, 17, 21, 25, 19, 16, 20, 18, 14, 19, 22, 20, 16, 14, 18, 21, 19],
+      ping: [36, 34, 38, 35, 33, 40, 37, 35, 34, 36, 52, 38, 35, 34, 33, 36, 35, 37, 34, 36, 35, 33, 34, 38, 36, 35, 34, 37, 36, 35, 33, 34, 36, 35, 37, 34, 36, 35, 34, 36],
+      disks: [{ mount: '/', text: '42G / 80G', pct: 48 }, { mount: '/data', text: '88G / 500G', pct: 82 }, { mount: '/boot', text: '780M / 1G', pct: 22 }],
+      procs: [{ mem: '1.1G', cpu: '12.4', name: 'node' }, { mem: '612M', cpu: '3.1', name: 'dockerd' }, { mem: '488M', cpu: '0.8', name: 'redis-server' }, { mem: '236M', cpu: '4.6', name: 'nginx' }, { mem: '142M', cpu: '0.2', name: 'containerd' }, { mem: '64M', cpu: '0.1', name: 'systemd-journald' }, { mem: '38M', cpu: '0.1', name: 'sshd' }],
+      tree: ['/', '/home/dev', '/etc', '/opt/app', '/var/log', '/var/log/nginx'],
+      lines: [
+        L(s('Last login: Fri Oct 17 09:12:44 2026 from 203.0.113.24', 'dim')),
+        PL('dev', 'prod-web-01', '~', '$', 'docker ps'),
+        L(s('CONTAINER ID   IMAGE             STATUS        NAMES', 'dim')),
+        L(s('a3f9c2d1e8b0   nginx:1.27        Up 6 days     web-nginx')),
+        L(s('7be21c09f4aa   app/api:2.14.0    Up 6 days     api')),
+        L(s('c41d8e7a2f13   redis:7.4         Up 12 days    cache')),
+        PL('dev', 'prod-web-01', '~', '$', 'cd /var/log && tail -n 3 nginx/error.log'),
+        L(s('2026/10/17 09:14:02 '), s('[warn]', 'amber'), s(' upstream response is buffered to a temporary file')),
+        L(s('2026/10/17 09:15:47 '), s('[error]', 'red'), s(' connect() failed (111: Connection refused) while connecting to upstream')),
+        L(s('2026/10/17 09:15:48 '), s('[notice]', 'cyan'), s(' signal process started')),
+        PL('dev', 'prod-web-01', '/var/log', '$', 'df -h /data'),
+        L(s('Filesystem      Size  Used Avail Use% Mounted on', 'dim')),
+        L(s('/dev/nvme1n1    500G  412G   88G  '), s('82%', 'amber'), s(' /data'))
+      ]
+    };
+
+    var db = {
+      name: 'db-master', user: 'root', host: 'db-master', addr: '10.0.2.5', sym: '#', cwd: '/etc',
+      connected: true, latency: '24 ms', server: 'OpenSSH 9.2', uptime: '46 天 2 小时', load: '3.86, 3.42, 3.10',
+      cpu: 61, mem: 89, memUsed: '28.4G/32G', swap: 33, swapUsed: '1.3G/4.0G',
+      up: '22.4M/s', down: '3.1M/s', netMax: '30M', netMid: '15M',
+      netUp: [62, 70, 85, 78, 90, 72, 66, 74, 88, 95, 80, 76, 70, 68, 82, 91, 86, 77, 72, 80, 84, 79, 88, 92, 85, 78, 74, 81, 87, 83],
+      netDown: [10, 12, 9, 14, 11, 13, 10, 12, 15, 18, 14, 12, 11, 10, 13, 16, 15, 12, 11, 13, 14, 12, 15, 16, 14, 12, 11, 13, 15, 14],
+      ping: [48, 46, 50, 47, 45, 52, 49, 47, 46, 48, 47, 45, 46, 49, 48, 47, 46, 48, 47, 49, 46, 45, 47, 48, 49, 47, 46, 48, 47, 46, 45, 47, 48, 46, 47, 49, 48, 47, 46, 48],
+      disks: [{ mount: '/', text: '39G / 60G', pct: 35 }, { mount: '/var/lib/mysql', text: '400G / 2.0T', pct: 80 }],
+      procs: [{ mem: '26.1G', cpu: '58.2', name: 'mysqld' }, { mem: '64M', cpu: '0.3', name: 'systemd-journald' }, { mem: '22M', cpu: '0.4', name: 'node_exporter' }, { mem: '12M', cpu: '0.1', name: 'sshd' }, { mem: '9M', cpu: '0.0', name: 'rsyslogd' }, { mem: '6M', cpu: '0.0', name: 'systemd' }, { mem: '4M', cpu: '0.0', name: 'cron' }],
+      tree: ['/', '/etc', '/var/lib/mysql', '/var/log'],
+      lines: [
+        L(s('Last login: Fri Oct 17 08:57:10 2026 from 10.0.1.12', 'dim')),
+        PL('root', 'db-master', '~', '#', 'systemctl status mysql --no-pager | head -3'),
+        L(s('●', 'green'), s(' mysql.service - MySQL Community Server')),
+        L(s('     Loaded: loaded (/lib/systemd/system/mysql.service; enabled)')),
+        L(s('     Active: '), s('active (running)', 'green'), s(' since Mon 2026-09-01 03:12:55 UTC; 1 month 16 days ago')),
+        PL('root', 'db-master', '~', '#', 'free -h'),
+        L(s('               total        used        free      shared  buff/cache   available', 'dim')),
+        L(s('Mem:            31Gi        28Gi       1.1Gi       312Mi       2.4Gi       2.6Gi')),
+        L(s('Swap:          4.0Gi       1.3Gi       2.7Gi')),
+        PL('root', 'db-master', '~', '#', 'cd /etc')
+      ]
+    };
+
+    var nasLines = [
+      L(s('Last login: Thu Oct 16 22:40:31 2026 from 192.168.1.8', 'dim')),
+      PL('admin', 'home-nas', '~', '$', 'rsync -a --info=progress2 /volume1/photos/ backup:/photos/'),
+      L(s('  18,432,991,204  61%   42.18MB/s    0:07:12')),
+      L(),
+      L(s('连接已断开：Network is unreachable', 'amber')),
+      L(s('5 秒后自动重连（第 2 次）', 'amber'))
+    ];
+    var nas = {
+      name: 'home-nas', user: 'admin', host: 'home-nas', addr: '192.168.1.20', sym: '$', cwd: '/volume1',
+      connected: st.nasUp, latency: '3 ms', server: 'OpenSSH 8.2', uptime: '12 天 4 小时', load: '0.12, 0.20, 0.18',
+      cpu: 6, mem: 45, memUsed: '1.8G/4.0G', swap: 0, swapUsed: '0/2.0G',
+      up: '120K/s', down: '48K/s', netMax: '200K', netMid: '100K',
+      netUp: [40, 60, 50, 80, 60, 40, 50, 70, 90, 60, 50, 40, 60, 80, 70, 50, 40, 60, 50, 70, 60, 50, 40, 60, 55, 65, 50, 45, 60, 62],
+      netDown: [30, 20, 40, 30, 50, 20, 30, 40, 30, 20, 40, 30, 20, 30, 40, 30, 20, 30, 40, 30, 20, 30, 30, 40, 25, 30, 35, 20, 30, 24],
+      ping: [8, 9, 8, 10, 8, 9, 8, 8, 9, 10, 8, 9, 8, 8, 9, 8, 10, 9, 8, 8, 9, 8, 9, 10, 8, 8, 9, 8, 9, 8, 8, 9, 10, 8, 9, 8, 8, 9, 8, 9],
+      disks: [{ mount: '/volume1', text: '1.9T / 8.0T', pct: 76 }, { mount: '/', text: '400M / 2.3G', pct: 83 }],
+      procs: [{ mem: '210M', cpu: '1.2', name: 'synoscgi' }, { mem: '96M', cpu: '0.6', name: 'smbd' }, { mem: '88M', cpu: '0.3', name: 'postgres' }, { mem: '31M', cpu: '0.1', name: 'nginx' }, { mem: '9M', cpu: '0.0', name: 'sshd' }, { mem: '5M', cpu: '0.0', name: 'syslog-ng' }, { mem: '3M', cpu: '0.0', name: 'crond' }],
+      tree: ['/', '/volume1'],
+      lines: st.nasUp ? nasLines.concat([L(s('已重新连接', 'green'))]) : nasLines
+    };
+
+    var sessions = [web, db, nas];
+    var cur = sessions[st.active];
+    var dir = st.dirs[st.active];
+
+    var tabs = sessions.map(function (x, i) {
+      var on = i === st.active;
+      return {
+        num: String(i + 1),
+        name: x.name,
+        dot: x.connected ? 'var(--ok)' : 'var(--warn)',
+        bg: on ? 'var(--tab-on)' : 'transparent',
+        border: on ? 'var(--line)' : 'transparent',
+        color: on ? 'var(--text)' : 'var(--muted)',
+        pick: function () { self.setState({ active: i, sel: '' }); }
+      };
+    });
+
+    var mon = cur.connected ? {
+      ip: cur.addr,
+      uptime: cur.uptime,
+      load: cur.load,
+      meters: [meter('CPU', cur.cpu, ''), meter('内存', cur.mem, cur.memUsed), meter('交换', cur.swap, cur.swapUsed)],
+      procs: cur.procs.map(function (p, i) { return { mem: p.mem, cpu: p.cpu, name: p.name, bg: zebra(i) }; }),
+      up: cur.up,
+      down: cur.down,
+      netMax: cur.netMax,
+      netMid: cur.netMid,
+      net: cur.netUp.map(function (u, k) { return { u: Math.max(u, 2) + '%', d: Math.max(cur.netDown[k], 2) + '%' }; }),
+      latency: cur.latency,
+      ping: cur.ping.map(function (v) { return { h: v + '%' }; }),
+      disks: cur.disks.map(function (d, i) { return { mount: d.mount, text: d.text, bg: zebra(i), color: d.pct >= 80 ? 'var(--warn)' : 'var(--text)' }; })
+    } : {
+      ip: cur.addr,
+      uptime: '-',
+      load: '-',
+      meters: [meter('CPU', 0, ''), meter('内存', 0, '0/0'), meter('交换', 0, '0/0')],
+      procs: [],
+      up: '0B/s',
+      down: '0B/s',
+      netMax: '0',
+      netMid: '0',
+      net: [],
+      latency: '-- ms',
+      ping: [],
+      disks: []
+    };
+
+    var extraLines = st.extra[st.active].map(function (c) { return PL(cur.user, cur.host, cur.cwd, cur.sym, c); });
+    var term = {
+      connected: cur.connected,
+      offline: !cur.connected,
+      lines: cur.lines.concat(extraLines),
+      prompt: P(cur.user, cur.host, cur.cwd, cur.sym)
+    };
+
+    function f(n, d, size, mod, perm, owner, p) { return { n: n, d: d, size: size, mod: mod, perm: perm, owner: owner, p: p }; }
+    var DIR = 'drwxr-xr-x';
+    var RW = '-rw-r--r--';
+    var F = {
+      '/': [f('bin', 1, '--', '09-02 11:20', DIR, 'root'), f('boot', 1, '--', '09-02 11:24', DIR, 'root'), f('data', 1, '--', '10-11 18:02', DIR, 'root'), f('etc', 1, '--', '10-16 23:10', DIR, 'root', '/etc'), f('home', 1, '--', '09-02 11:30', DIR, 'root', '/home'), f('opt', 1, '--', '10-14 16:41', DIR, 'root', '/opt'), f('root', 1, '--', '10-12 08:03', 'drwx------', 'root'), f('usr', 1, '--', '09-02 11:20', DIR, 'root'), f('var', 1, '--', '09-02 11:21', DIR, 'root', '/var'), f('volume1', 1, '--', '10-16 22:40', DIR, 'admin', '/volume1')],
+      '/home': [f('dev', 1, '--', '10-17 09:12', DIR, 'dev', '/home/dev')],
+      '/home/dev': [f('.ssh', 1, '--', '10-03 14:22', 'drwx------', 'dev'), f('app', 1, '--', '10-14 16:40', DIR, 'dev'), f('.bashrc', 0, '3.7 KB', '09-02 11:35', RW, 'dev'), f('.profile', 0, '807 B', '09-02 11:35', RW, 'dev'), f('deploy.sh', 0, '1.4 KB', '10-14 16:38', '-rwxr-xr-x', 'dev'), f('notes.md', 0, '2.2 KB', '10-09 21:05', RW, 'dev')],
+      '/etc': [f('mysql', 1, '--', '09-01 03:10', DIR, 'root'), f('nginx', 1, '--', '10-08 10:12', DIR, 'root'), f('ssh', 1, '--', '09-20 17:45', DIR, 'root'), f('systemd', 1, '--', '09-02 11:22', DIR, 'root'), f('crontab', 0, '1.0 KB', '09-15 09:00', RW, 'root'), f('fstab', 0, '612 B', '09-02 11:24', RW, 'root'), f('hostname', 0, '12 B', '09-02 11:24', RW, 'root'), f('hosts', 0, '221 B', '09-18 13:47', RW, 'root')],
+      '/opt': [f('app', 1, '--', '10-14 16:41', DIR, 'dev', '/opt/app')],
+      '/opt/app': [f('releases', 1, '--', '10-14 16:41', DIR, 'dev'), f('shared', 1, '--', '09-05 12:00', DIR, 'dev'), f('current', 1, '链接', '10-14 16:41', 'lrwxrwxrwx', 'dev'), f('docker-compose.yml', 0, '2.8 KB', '10-14 16:39', RW, 'dev'), f('.env.production', 0, '1.1 KB', '10-02 10:15', '-rw-------', 'dev')],
+      '/var': [f('lib', 1, '--', '09-02 11:21', DIR, 'root', '/var/lib'), f('log', 1, '--', '10-17 00:00', 'drwxrwxr-x', 'root', '/var/log'), f('www', 1, '--', '09-06 15:30', DIR, 'www-data')],
+      '/var/lib': [f('docker', 1, '--', '10-11 18:05', 'drwx--x---', 'root'), f('mysql', 1, '--', '10-17 09:15', 'drwx------', 'mysql', '/var/lib/mysql')],
+      '/var/log': [f('nginx', 1, '--', '10-17 00:00', DIR, 'root', '/var/log/nginx'), f('journal', 1, '--', '09-02 11:22', 'drwxr-sr-x', 'root'), f('apt', 1, '--', '10-10 06:25', DIR, 'root'), f('syslog', 0, '2.1 MB', '10-17 09:16', '-rw-r-----', 'syslog'), f('syslog.1', 0, '8.4 MB', '10-17 00:00', '-rw-r-----', 'syslog'), f('auth.log', 0, '384 KB', '10-17 09:12', '-rw-r-----', 'syslog'), f('kern.log', 0, '96 KB', '10-16 22:31', '-rw-r-----', 'syslog'), f('dpkg.log', 0, '1.2 MB', '10-10 06:26', RW, 'root')],
+      '/var/log/nginx': [f('access.log', 0, '48.3 MB', '10-17 09:16', '-rw-r-----', 'www-data'), f('error.log', 0, '212 KB', '10-17 09:15', '-rw-r-----', 'www-data'), f('access.log.1.gz', 0, '6.1 MB', '10-16 00:00', '-rw-r-----', 'www-data'), f('error.log.1.gz', 0, '18 KB', '10-16 00:00', '-rw-r-----', 'www-data')],
+      '/var/lib/mysql': [f('app_prod', 1, '--', '10-17 09:15', 'drwxr-x---', 'mysql'), f('mysql', 1, '--', '09-01 03:12', 'drwxr-x---', 'mysql'), f('performance_schema', 1, '--', '09-01 03:12', 'drwxr-x---', 'mysql'), f('ibdata1', 0, '12.0 GB', '10-17 09:15', '-rw-r-----', 'mysql'), f('binlog.000412', 0, '1.0 GB', '10-16 21:04', '-rw-r-----', 'mysql'), f('binlog.000413', 0, '386 MB', '10-17 09:15', '-rw-r-----', 'mysql'), f('binlog.index', 0, '96 B', '10-16 21:04', '-rw-r-----', 'mysql')],
+      '/volume1': [f('backup', 1, '--', '10-16 03:00', DIR, 'admin'), f('docker', 1, '--', '10-01 20:11', DIR, 'admin'), f('homes', 1, '--', '08-21 19:40', DIR, 'admin'), f('media', 1, '--', '10-12 23:58', DIR, 'admin'), f('photos', 1, '--', '10-16 22:40', DIR, 'admin')]
+    };
+
+    function setDir(path) {
+      var dirs = st.dirs.slice();
+      dirs[st.active] = path;
+      self.setState({ dirs: dirs, sel: '' });
+    }
+
+    var files = (F[dir] || []).map(function (x, i) {
+      var on = st.sel === x.n;
+      return {
+        name: x.n, isDir: !!x.d, isFile: !x.d, size: x.size, mod: x.mod, perm: x.perm, owner: x.owner,
+        bg: on ? 'var(--accent)' : zebra(i),
+        color: on ? '#FFFFFF' : 'var(--text)',
+        sub: on ? 'rgba(255, 255, 255, 0.88)' : 'var(--muted)',
+        folder: on ? '#FFFFFF' : 'var(--folder)',
+        pick: function () { if (x.p && F[x.p]) { setDir(x.p); } else { self.setState({ sel: x.n }); } }
+      };
+    });
+
+    var tree = cur.tree.map(function (p) {
+      var on = p === dir;
+      return {
+        label: p,
+        bg: on ? 'var(--accent)' : 'transparent',
+        color: on ? '#FFFFFF' : 'var(--text)',
+        folder: on ? '#FFFFFF' : 'var(--folder)',
+        pick: function () { setDir(p); }
+      };
+    });
+
+    var parent = dir === '/' ? null : (dir.substring(0, dir.lastIndexOf('/')) || '/');
+
+    function segLook(on) {
+      return { bg: on ? 'var(--segon)' : 'transparent', shadow: on ? '0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.12)' : 'none' };
+    }
+
+    var btabs = [
+      { id: 'files', label: '文件' },
+      { id: 'snip', label: '快捷命令' },
+      { id: 'hist', label: '历史命令' },
+      { id: 'xfer', label: '传输 (1)' }
+    ].map(function (b) {
+      var on = st.tab === b.id;
+      var l = segLook(on);
+      return { label: b.label, sel: on, bg: l.bg, shadow: l.shadow, pick: function () { self.setState({ tab: b.id }); } };
+    });
+
+    var snipDefs = [
+      { g: '常用', name: '查看磁盘', cmd: 'df -h' },
+      { g: '常用', name: '内存占用前 10', cmd: 'ps aux --sort=-%mem | head -11' },
+      { g: 'Docker', name: '容器状态', cmd: 'docker ps' },
+      { g: 'Docker', name: '重启 API 服务', cmd: 'docker compose restart api' },
+      { g: '日志', name: 'Nginx 错误日志', cmd: 'tail -f /var/log/nginx/error.log' },
+      { g: '日志', name: '最近登录记录', cmd: 'last -n 10' }
+    ];
+    var groups = ['全部', '常用', 'Docker', '日志'].map(function (g) {
+      var l = segLook(st.group === g);
+      return { label: g, bg: l.bg, shadow: l.shadow, pick: function () { self.setState({ group: g }); } };
+    });
+    var snips = snipDefs.filter(function (x) { return st.group === '全部' || x.g === st.group; }).map(function (x, i) {
+      return { g: x.g, name: x.name, cmd: x.cmd, bg: zebra(i), send: function () { self.sendTo([st.active], x.cmd); } };
+    });
+
+    var history = [
+      { when: '09:16', cmd: 'df -h /data', where: 'prod-web-01' },
+      { when: '09:15', cmd: 'cd /var/log && tail -n 3 nginx/error.log', where: 'prod-web-01' },
+      { when: '09:13', cmd: 'docker ps', where: 'prod-web-01' },
+      { when: '08:58', cmd: 'free -h', where: 'db-master' },
+      { when: '08:57', cmd: 'systemctl status mysql --no-pager | head -3', where: 'db-master' },
+      { when: '昨天', cmd: 'rsync -a --info=progress2 /volume1/photos/ backup:/photos/', where: 'home-nas' }
+    ].map(function (h, i) {
+      return { when: h.when, cmd: h.cmd, where: h.where, bg: zebra(i), send: function () { self.sendTo([st.active], h.cmd); } };
+    });
+
+    var transfers = [
+      { arrow: '↑', name: 'deploy-2.14.1.tar.gz', route: '本机 → /opt/app/releases', speed: '68% · 4.2 MB/s · 剩 6 秒', w: '68%' },
+      { arrow: '↓', name: 'access.log', route: '/var/log/nginx → ~/Downloads', speed: '已完成 · 48.3 MB', w: '100%' }
+    ].map(function (x, i) { return Object.assign({ bg: zebra(i) }, x); });
+
+    var darkPal = { dim: '#8A8A8A', green: '#5FD068', blue: '#6CA8FF', red: '#FF6B6B', amber: '#E5B847', cyan: '#4FC8D8' };
+    var lightPal = { dim: '#6A6A70', green: '#1D7F37', blue: '#0B5CC4', red: '#C62828', amber: '#9A5B00', cyan: '#0E7490' };
+    function isLight(hex) {
+      var h = String(hex).replace('#', '');
+      var r = parseInt(h.substr(0, 2), 16), g = parseInt(h.substr(2, 2), 16), b = parseInt(h.substr(4, 2), 16);
+      return 0.299 * r + 0.587 * g + 0.114 * b > 150;
+    }
+    var schemes = [
+      { id: 'system', name: '跟随系统', bg: 'var(--sys-t-bg)', fg: 'var(--sys-t-fg)', dim: 'var(--sys-t-dim)', green: 'var(--sys-t-green)', blue: 'var(--sys-t-blue)', red: 'var(--sys-t-red)', amber: 'var(--sys-t-amber)', cyan: 'var(--sys-t-cyan)', tab: 'var(--sys-tab-on)' },
+      Object.assign({ id: 'black', name: '经典黑', bg: '#000000', fg: '#E5E5E5' }, darkPal),
+      Object.assign({ id: 'gray', name: '深灰', bg: '#1E1E1E', fg: '#D4D4D4' }, darkPal),
+      Object.assign({ id: 'navy', name: '深海蓝', bg: '#0F1B2B', fg: '#CFD8E3' }, darkPal),
+      { id: 'solar', name: 'Solarized 暗', bg: '#002B36', fg: '#93A1A1', dim: '#6C8087', green: '#859900', blue: '#268BD2', red: '#DC322F', amber: '#B58900', cyan: '#2AA198' },
+      Object.assign({ id: 'paper', name: '纸张米白', bg: '#FBF7EC', fg: '#3B3A36' }, lightPal),
+      Object.assign({ id: 'green', name: '护眼绿', bg: '#C7EDCC', fg: '#1E3A24' }, lightPal, { dim: '#4C6652' }),
+      Object.assign({ id: 'white', name: '纯白', bg: '#FFFFFF', fg: '#1D1D1F' }, lightPal)
+    ];
+    var customScheme = Object.assign({ id: 'custom', name: '自定义', bg: st.custom.bg, fg: st.custom.fg }, isLight(st.custom.bg) ? lightPal : darkPal);
+    var active = st.termPreset === 'custom' ? customScheme : (schemes.filter(function (x) { return x.id === st.termPreset; })[0] || schemes[0]);
+    var tv = Object.assign({}, active, { tab: active.tab || active.bg, size: st.termSize });
+    var presets = schemes.map(function (x) {
+      var on = st.termPreset === x.id;
+      return {
+        name: x.name, bg: x.bg, fg: x.fg, green: x.green, blue: x.blue, red: x.red, sel: on,
+        ring: on ? '0 0 0 2px var(--accent)' : 'inset 0 0 0 1px var(--line)',
+        label: on ? 'var(--text)' : 'var(--muted)',
+        weight: on ? '600' : '400',
+        pick: function () { self.setState({ termPreset: x.id }); }
+      };
+    });
+    function setCustom(k) {
+      return function (e) {
+        var c = Object.assign({}, self.state.custom);
+        c[k] = e.target.value;
+        self.setState({ custom: c, termPreset: 'custom' });
+      };
+    }
+
+    var status = cur.connected
+      ? { dot: 'var(--ok)', text: '已连接 · ' + cur.user + '@' + cur.addr + ':22', server: cur.server + ' · 延迟 ' + cur.latency }
+      : { dot: 'var(--warn)', text: '连接已断开 · 正在自动重连', server: '' };
+
+    return {
+      apClass: apClass,
+      accent: accent,
+      tv: tv,
+      lookOpen: st.lookOpen,
+      toggleLook: function () { self.setState({ lookOpen: !self.state.lookOpen }); },
+      presets: presets,
+      custom: st.custom,
+      customLabel: st.termPreset === 'custom' ? 'var(--accent)' : 'var(--text)',
+      customWeight: st.termPreset === 'custom' ? '600' : '500',
+      onCustomBg: setCustom('bg'),
+      onCustomFg: setCustom('fg'),
+      size: st.termSize,
+      onSize: function (e) { self.setState({ termSize: e.target.value }); },
+      tabs: tabs,
+      mon: mon,
+      term: term,
+      monitorOpen: st.monitorOpen,
+      monitorClosed: !st.monitorOpen,
+      toggleMonitor: function () { self.setState({ monitorOpen: !st.monitorOpen }); },
+      reconnect: function () { if (st.active === 2) self.setState({ nasUp: true }); },
+      cmd: st.cmd,
+      onCmd: function (e) { self.setState({ cmd: e.target.value }); },
+      onKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.sendTo([st.active], self.state.cmd); } },
+      sendCmd: function () { self.sendTo([st.active], self.state.cmd); },
+      sendAll: function () { self.sendTo(self.connectedIndexes(), self.state.cmd); },
+      btabs: btabs,
+      isFiles: st.tab === 'files',
+      isSnip: st.tab === 'snip',
+      isHist: st.tab === 'hist',
+      isXfer: st.tab === 'xfer',
+      follow: st.follow,
+      toggleFollow: function () { self.setState({ follow: !st.follow }); },
+      filesReady: cur.connected,
+      filesOffline: !cur.connected,
+      tree: tree,
+      dir: dir,
+      files: files,
+      goUp: function () { if (parent && F[parent]) setDir(parent); },
+      groups: groups,
+      snips: snips,
+      history: history,
+      transfers: transfers,
+      status: status
+    };
+  }
+}
+</script>
+</body>
+</html>

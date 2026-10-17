@@ -1,0 +1,53 @@
+{
+  "format": "evershell-connections",
+  "version": 1,
+  "exportedAt": "2026-10-17T08:00:00.000Z",
+  "folders": [
+    { "id": "dir_a", "parentId": null, "name": "生产" },
+    { "id": "dir_b", "parentId": "dir_a", "name": "华东" }
+  ],
+  "servers": [
+    {
+      "id": "srv_1",
+      "parentId": "dir_b",
+      "name": "web-01",
+      "host": "192.0.2.10",
+      "port": 22,
+      "user": "deploy",
+      "note": "前端节点",
+      "proto": "ssh",
+      "auth": "password",
+      "keyLabel": null,
+      "advanced": { "jumpServerId": "srv_3", "proxy": "none", "proxyHost": "", "proxyPort": 1080, "keepAliveSecs": 30, "encoding": "UTF-8", "termType": "xterm-256color" },
+      "forwards": [{ "id": "fwd_1", "type": "local", "bindHost": "127.0.0.1", "bindPort": 8080, "targetHost": "127.0.0.1", "targetPort": 80 }]
+    },
+    {
+      "id": "srv_2",
+      "parentId": "dir_a",
+      "name": "db-01",
+      "host": "198.51.100.20",
+      "port": 2222,
+      "user": "dbadmin",
+      "note": "",
+      "proto": "ssh",
+      "auth": "key",
+      "keyLabel": "db_ed25519",
+      "advanced": { "jumpServerId": null, "proxy": "none", "proxyHost": "", "proxyPort": 1080, "keepAliveSecs": 30, "encoding": "GBK", "termType": "xterm-256color" },
+      "forwards": []
+    },
+    {
+      "id": "srv_3",
+      "parentId": null,
+      "name": "bastion",
+      "host": "bastion.example.com",
+      "port": 22,
+      "user": "ops",
+      "note": "跳板机",
+      "proto": "ssh",
+      "auth": "password",
+      "keyLabel": null,
+      "advanced": { "jumpServerId": null, "proxy": "socks5", "proxyHost": "proxy.example.com", "proxyPort": 1080, "keepAliveSecs": 60, "encoding": "UTF-8", "termType": "xterm" },
+      "forwards": []
+    }
+  ]
+}

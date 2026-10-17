@@ -1,0 +1,11 @@
+[Bookmarks]
+SubRep=
+ImgNum=42
+web-01=#109#0%192.0.2.10%22%deploy%%-1%-1%%%22%%0%0%Interactive shell%%%-1%0%0%0%%1080#MobaFont%10%0%0%0%0%236,236,236%0,0,0%180,180,192%0%-1%0%%xterm%-1#0
+old-switch=#98#0%203.0.113.5%23%%%-1%-1%%%%0#MobaFont%10%0%0%0%0%236,236,236%0,0,0%180,180,192%0%-1%0%%xterm%-1#0
+
+[Bookmarks_1]
+SubRep=Azure\PRE
+ImgNum=41
+db-01=#109#0%198.51.100.20%2222%dbadmin%%-1%-1%%%22%%0%0%Interactive shell%%%-1%0%0%0%%1080#MobaFont%10%0%0%0%0%236,236,236%0,0,0%180,180,192%0%-1%0%%xterm%-1#0
+bastion=#109#0%bastion.example.com%22%ops%%-1%-1%%%22%%0%0%Interactive shell%C:\Users\me\.ssh\id_ed25519%%-1%0%0%0%%1080#MobaFont%10%0%0%0%0%236,236,236%0,0,0%180,180,192%0%-1%0%%xterm%-1#0

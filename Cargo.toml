@@ -1,0 +1,26 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/desktop/src-tauri"]
+exclude = ["vendor"]
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+
+[workspace.dependencies]
+# 加密后端统一用 ring：aws-lc-rs 编不出 WASM
+russh = { version = "0.64", default-features = false, features = ["ring", "rsa", "flate2"] }
+tokio = { version = "1", default-features = false }
+thiserror = "2"
+log = "0.4"
+
+[patch.crates-io]
+# russh 的定时器在浏览器里会 panic，打了补丁，见 vendor/README.md
+russh = { path = "vendor/russh" }
+
+# 网页端 WASM 包：优先体积
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"
+lto = true
+codegen-units = 1

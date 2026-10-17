@@ -1,0 +1,31 @@
+[package]
+name = "ssh-core"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+russh = { workspace = true }
+# SFTP 只依赖一条字节流，不依赖 russh 的版本；3.x 自带 wasm32 运行时适配
+russh-sftp = "3.0"
+tokio = { workspace = true, features = ["sync", "io-util", "macros"] }
+futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
+serde = { version = "1", features = ["derive"] }
+thiserror = { workspace = true }
+log = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["rt", "net", "time"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = "0.4"
+# tokio 的定时器和 std::time::Instant 在 wasm32 上会 panic，监控采样改用这两个
+futures-timer = { version = "3", features = ["wasm-bindgen"] }
+web-time = "1"
+# 随机数在浏览器里走 crypto.getRandomValues：0.3 给 russh，0.2 给 ring
+getrandom = { version = "0.3", features = ["wasm_js"] }
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
+
+[dev-dependencies]
+rand = { version = "0.10", features = ["thread_rng"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "time"] }
+serde_json = "1"

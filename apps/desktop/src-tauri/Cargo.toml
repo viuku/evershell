@@ -1,0 +1,32 @@
+# 产品名 EverShell，应用标识 dev.evershell.desktop（见 tauri.conf.json）。
+# 标识决定 Mac 上的数据目录和钥匙串条目，正式发布后不要再改。
+[package]
+name = "evershell-desktop"
+description = "EverShell 桌面端"
+edition.workspace = true
+version.workspace = true
+
+[lib]
+name = "evershell_desktop_lib"
+# 以后做 iOS / Android 时再加 staticlib / cdylib
+crate-type = ["lib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+ssh-core = { path = "../../../crates/ssh-core" }
+tauri = { version = "2.12", features = [] }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "macros", "fs"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = { workspace = true }
+log = { workspace = true }
+env_logger = "0.11"
+# 系统钥匙串：macOS Keychain / Windows 凭据管理器 / Linux Secret Service
+keyring = "4"
+# 上传的远端路径走 HTTP 头，要 percent 编码
+percent-encoding = "2"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }

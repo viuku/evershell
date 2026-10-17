@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>连接管理器</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.ap-light,.ap-auto{--win:#E4E4E7;--bar:#F6F6F7;--side:#F0F0F2;--content:#FFFFFF;--sheet:#F4F4F6;--zebra:#F5F5F7;--line:#D4D4D8;--line2:#E5E5E8;--text:#1D1D1F;--muted:#5C5C63;--field:#FFFFFF;--fieldline:#C8C8CD;--hover:rgba(0,0,0,0.06);--seg:#E2E2E5;--segon:#FFFFFF;--track:#E1E1E5;--ok:#1A7F37;--warn:#B25E00;--scrim:rgba(0,0,0,0.16);--folder:#5AA7F0;color-scheme:light}
+.ap-dark{--win:#19191B;--bar:#28282B;--side:#212124;--content:#1C1C1E;--sheet:#2A2A2D;--zebra:#232326;--line:#3A3A3F;--line2:#2F2F33;--text:#ECECEE;--muted:#A3A3AA;--field:#1E1E21;--fieldline:#4A4A50;--hover:rgba(255,255,255,0.07);--seg:#333337;--segon:#5B5B60;--track:#36363B;--ok:#32D74B;--warn:#FF9F0A;--scrim:rgba(0,0,0,0.4);--folder:#5FA8EE;color-scheme:dark}
+@media (prefers-color-scheme: dark){.ap-auto{--win:#19191B;--bar:#28282B;--side:#212124;--content:#1C1C1E;--sheet:#2A2A2D;--zebra:#232326;--line:#3A3A3F;--line2:#2F2F33;--text:#ECECEE;--muted:#A3A3AA;--field:#1E1E21;--fieldline:#4A4A50;--hover:rgba(255,255,255,0.07);--seg:#333337;--segon:#5B5B60;--track:#36363B;--ok:#32D74B;--warn:#FF9F0A;--scrim:rgba(0,0,0,0.4);--folder:#5FA8EE;color-scheme:dark}}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font:inherit;color:inherit}
+.tb{display:grid;place-items:center;width:28px;height:26px;border:0;border-radius:5px;background:transparent;color:var(--muted);cursor:pointer;flex:0 0 auto}
+.tb:hover{background:var(--hover);color:var(--text)}
+.tb:disabled{opacity:0.4;cursor:default;background:transparent}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:22px;box-sizing:border-box;padding:0 12px;border:1px solid var(--fieldline);border-radius:5px;background:var(--field);color:var(--text);font-size:12px;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn:disabled{opacity:0.5;cursor:default}
+.btn-primary{border-color:transparent;background:var(--accent);color:#FFFFFF}
+.btn-primary:hover{background:var(--accent);filter:brightness(1.1)}
+.field{height:22px;box-sizing:border-box;padding:0 7px;border:1px solid var(--fieldline);border-radius:5px;background:var(--field);color:var(--text);font-size:12px;outline:none;min-width:0}
+.field:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent)}
+textarea.field{height:auto;padding:5px 7px;resize:vertical}
+.lbl{text-align:right;font-size:12px;padding-top:3px}
+.scroll::-webkit-scrollbar{width:10px;height:10px}
+.scroll::-webkit-scrollbar-thumb{background:var(--track);border-radius:10px;border:2px solid transparent;background-clip:content-box}
+</style>
+</helmet>
+<div class="{{apClass}}" style="--accent: {{accent}}; position: relative; min-height: 100vh; display: flex; flex-wrap: wrap; background: var(--content); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 12px">
+
+<aside aria-hidden="true" style="flex: 1 1 232px; min-width: 0; box-sizing: border-box; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px">
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57"></span>
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E"></span>
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840"></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 9px; padding: 2px 12px 14px">
+<div style="display: flex; justify-content: space-between"><span>同步状态</span><span style="display: flex; align-items: center; gap: 5px; color: var(--muted)"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--ok)"></span>已同步</span></div>
+<div style="display: flex; justify-content: space-between"><span>IP</span><span style="color: var(--muted)">-</span></div>
+<div style="height: 22px; border: 1px solid var(--fieldline); border-radius: 5px; display: grid; place-items: center; color: var(--muted)">系统信息</div>
+<div style="display: flex; flex-direction: column; gap: 4px; color: var(--muted)"><span>运行 -</span><span>负载 -</span></div>
+<div style="height: 16px; border-radius: 4px; background: var(--track)"></div>
+<div style="height: 16px; border-radius: 4px; background: var(--track)"></div>
+<div style="height: 16px; border-radius: 4px; background: var(--track)"></div>
+<div style="height: 132px; border: 1px solid var(--line); border-radius: 5px; background: var(--content)"></div>
+<div style="height: 70px; border: 1px solid var(--line2); border-radius: 5px"></div>
+<div style="height: 50px; border: 1px solid var(--line2); border-radius: 5px"></div>
+</div>
+</aside>
+
+<div aria-hidden="true" style="flex: 999 1 600px; min-width: 0; display: flex; flex-direction: column">
+<div style="display: flex; align-items: flex-end; gap: 2px; height: 38px; padding: 0 6px; background: var(--win); border-bottom: 1px solid var(--line)">
+<span style="display: grid; place-items: center; width: 28px; height: 28px; margin: 0 4px 4px 0">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+</span>
+<div style="display: flex; align-items: center; gap: 7px; width: 210px; height: 31px; margin-bottom: -1px; padding: 0 12px; box-sizing: border-box; border: 1px solid var(--line); border-bottom: 0; border-radius: 7px 7px 0 0; background: var(--content)"><span style="color: var(--muted)">1</span>新标签页</div>
+</div>
+<div style="flex: 1 1 auto; display: flex; justify-content: center; padding: 64px 24px">
+<div style="width: 100%; max-width: 860px; height: 300px; border: 1px solid var(--line); border-radius: 8px"></div>
+</div>
+</div>
+
+<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--scrim)">
+<section role="dialog" aria-modal="true" aria-labelledby="mgr-title" style="width: 100%; max-width: 920px; height: 580px; max-height: 100%; display: flex; flex-direction: column; box-sizing: border-box; background: var(--content); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28); overflow: hidden">
+
+<div style="position: relative; display: flex; align-items: center; justify-content: center; height: 30px; background: var(--bar); flex: 0 0 auto">
+<div aria-hidden="true" style="position: absolute; left: 12px; display: flex; gap: 8px">
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57"></span>
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E"></span>
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840"></span>
+</div>
+<h1 id="mgr-title" style="margin: 0; font-size: 13px; font-weight: 600">连接管理器</h1>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-height: 36px; padding: 0 8px; background: var(--bar); border-bottom: 1px solid var(--line); flex: 0 0 auto">
+<button type="button" class="tb" title="新建连接" aria-label="新建连接" onClick="{{openNew}}">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="15" height="13" rx="2"></rect><path d="M6 10l2.5 2-2.5 2M10.5 14h3.5M19.5 3v6M16.5 6h6"></path></svg>
+</button>
+<button type="button" class="tb" title="新建文件夹" aria-label="新建文件夹" onClick="{{newFolder}}">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><path d="M12 10.5v5M9.5 13h5"></path></svg>
+</button>
+<span style="width: 1px; height: 18px; margin: 0 4px; background: var(--line)"></span>
+<button type="button" class="tb" title="编辑" aria-label="编辑" onClick="{{openEdit}}" disabled="{{noServer}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"></path><path d="M13.5 6.5l4 4"></path></svg>
+</button>
+<button type="button" class="tb" title="删除（可在“显示已删除”里恢复）" aria-label="删除" onClick="{{remove}}" disabled="{{noServer}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13"></path></svg>
+</button>
+<span style="width: 1px; height: 18px; margin: 0 4px; background: var(--line)"></span>
+<button type="button" class="tb" title="全部折叠" aria-label="全部折叠" onClick="{{collapseAll}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M8.5 12h7"></path></svg>
+</button>
+<button type="button" class="tb" title="全部展开" aria-label="全部展开" onClick="{{expandAll}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M8.5 12h7M12 8.5v7"></path></svg>
+</button>
+<label style="display: flex; align-items: center; gap: 5px; margin-left: 8px; cursor: pointer">
+<input type="checkbox" checked="{{showDeleted}}" onChange="{{toggleDeleted}}" style="margin: 0; accent-color: var(--accent)">显示已删除
+</label>
+<div style="display: flex; align-items: center; gap: 6px; margin-left: auto">
+<label for="mgr-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">搜索</label>
+<input id="mgr-search" class="field" type="search" value="{{q}}" onChange="{{onQ}}" placeholder="搜索名称、主机、备注" autocomplete="off" spellcheck="false" style="width: 200px; border-radius: 11px; padding: 0 10px">
+<label for="mgr-kind" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">类型</label>
+<select id="mgr-kind" class="field" value="{{kind}}" onChange="{{onKind}}" style="width: 96px">
+<option value="全部">全部</option>
+<option value="SSH">SSH</option>
+<option value="远程桌面">远程桌面</option>
+</select>
+</div>
+</div>
+
+<div class="scroll" style="flex: 1 1 0; min-height: 0; overflow: auto">
+<div style="min-width: 720px">
+<div style="position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: minmax(0, 1.5fr) 128px 56px 104px minmax(0, 1.2fr); height: 22px; align-items: center; padding: 0 10px; background: var(--content); border-bottom: 1px solid var(--line2); color: var(--muted)">
+<span style="display: flex; align-items: center; gap: 4px; color: var(--text); font-weight: 500">名称 <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 6l8 10H4z"></path></svg></span>
+<span style="padding-left: 8px; border-left: 1px solid var(--line2)">主机</span>
+<span style="padding-left: 8px; border-left: 1px solid var(--line2)">端口</span>
+<span style="padding-left: 8px; border-left: 1px solid var(--line2)">用户名</span>
+<span style="padding-left: 8px; border-left: 1px solid var(--line2)">备注</span>
+</div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="12">
+<button type="button" onClick="{{r.pick}}" aria-expanded="{{r.expanded}}" style="display: grid; grid-template-columns: minmax(0, 1.5fr) 128px 56px 104px minmax(0, 1.2fr); align-items: center; width: 100%; height: 24px; padding: 0 10px; border: 0; background: {{r.bg}}; color: {{r.color}}; opacity: {{r.opacity}}; text-align: left; cursor: default; font-size: 12.5px">
+<span style="display: flex; align-items: center; gap: 5px; min-width: 0; padding-left: {{r.indent}}">
+<span style="display: grid; place-items: center; width: 12px; flex: 0 0 auto; color: {{r.sub}}">
+<sc-if value="{{r.isFolder}}" hint-placeholder-val="{{ true }}"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="transform: rotate({{r.rot}}); transition: transform 0.12s"><path d="M8 4l10 8-10 8z"></path></svg></sc-if>
+</span>
+<sc-if value="{{r.isFolder}}" hint-placeholder-val="{{ true }}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="flex: 0 0 auto"><path d="M2.5 6.5a2 2 0 0 1 2-2h4.6l2 2.2h8.4a2 2 0 0 1 2 2v9.8a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2z" fill="{{r.folderFill}}"></path><path d="M2.5 9h19" stroke="rgba(0,0,0,0.12)" stroke-width="1"></path></svg></sc-if>
+<sc-if value="{{r.isServer}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="flex: 0 0 auto"><rect x="2.5" y="4" width="19" height="16" rx="3" fill="{{r.termFill}}"></rect><path d="M7 9.5l3 2.5-3 2.5M12 15h5" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+<span style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-decoration: {{r.strike}}">{{r.name}}</span>
+<sc-if value="{{r.isFolder}}" hint-placeholder-val="{{ true }}"><span style="color: {{r.sub}}; font-size: 11px">{{r.count}}</span></sc-if>
+</span>
+<span style="padding-left: 8px; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11.5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis">{{r.host}}</span>
+<span style="padding-left: 8px; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11.5px">{{r.port}}</span>
+<span style="padding-left: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis">{{r.user}}</span>
+<span style="padding-left: 8px; color: {{r.sub}}; overflow: hidden; white-space: nowrap; text-overflow: ellipsis">{{r.note}}</span>
+</button>
+</sc-for>
+<sc-if value="{{noRows}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 40px 16px; text-align: center; color: var(--muted)">没有匹配的连接</div>
+</sc-if>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; background: var(--bar); border-top: 1px solid var(--line); flex: 0 0 auto">
+<label style="display: flex; align-items: center; gap: 5px; cursor: pointer">
+<input type="checkbox" checked="{{closeAfter}}" onChange="{{toggleClose}}" style="margin: 0; accent-color: var(--accent)">连接后关闭窗口
+</label>
+<span style="color: var(--muted); margin-left: 8px">{{footHint}}</span>
+<button type="button" class="btn" onClick="{{openEdit}}" disabled="{{noServer}}" style="margin-left: auto">编辑…</button>
+<a href="Main.dc.html" class="btn btn-primary">连接</a>
+</div>
+</section>
+</div>
+
+<sc-if value="{{dialogOpen}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0, 0, 0, 0.12)">
+<section role="dialog" aria-modal="true" aria-labelledby="edit-title" style="width: 100%; max-width: 470px; box-sizing: border-box; background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3); overflow: hidden">
+<div style="position: relative; display: flex; align-items: center; justify-content: center; height: 30px">
+<div aria-hidden="true" style="position: absolute; left: 12px; display: flex; gap: 8px">
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57"></span>
+<span style="width: 12px; height: 12px; border-radius: 50%; background: var(--track)"></span>
+<span style="width: 12px; height: 12px; border-radius: 50%; background: var(--track)"></span>
+</div>
+<h2 id="edit-title" style="margin: 0; font-size: 13px; font-weight: 600">{{dialogTitle}}</h2>
+</div>
+<div style="display: flex; justify-content: center; padding: 2px 0 10px">
+<div role="tablist" aria-label="设置分类" style="display: flex; padding: 2px; border-radius: 6px; background: var(--seg)">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+<button type="button" role="tab" aria-selected="{{t.sel}}" onClick="{{t.pick}}" style="height: 18px; padding: 0 14px; border: 0; border-radius: 5px; background: {{t.bg}}; box-shadow: {{t.shadow}}; color: var(--text); font-size: 12px; cursor: pointer">{{t.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="padding: 4px 20px 14px; min-height: 250px; box-sizing: border-box">
+<sc-if value="{{isGeneral}}" hint-placeholder-val="{{ true }}">
+<div style="display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 8px 10px; align-items: start">
+<label for="e-name" class="lbl">名称</label>
+<input id="e-name" class="field" value="{{form.name}}" onChange="{{on.name}}" placeholder="例如 prod-web-03" autocomplete="off">
+<label for="e-group" class="lbl">位置</label>
+<select id="e-group" class="field" value="{{form.parent}}" onChange="{{on.parent}}" style="justify-self: start; min-width: 180px">
+<option value="">根目录</option>
+<option value="f1">生产</option>
+<option value="f2">测试</option>
+<option value="f3">海外 VPS</option>
+<option value="f4">家里</option>
+<option value="f5">家里 / 网络设备</option>
+</select>
+<label for="e-host" class="lbl">主机</label>
+<div style="display: flex; align-items: center; gap: 6px">
+<input id="e-host" class="field" value="{{form.host}}" onChange="{{on.host}}" placeholder="IP 或域名" autocomplete="off" spellcheck="false" style="flex: 1 1 auto; font-family: 'SF Mono', Menlo, Consolas, monospace">
+<label for="e-port">端口</label>
+<input id="e-port" class="field" value="{{form.port}}" onChange="{{on.port}}" inputmode="numeric" style="width: 58px; font-family: 'SF Mono', Menlo, Consolas, monospace">
+</div>
+<label for="e-note" class="lbl">备注</label>
+<input id="e-note" class="field" value="{{form.note}}" onChange="{{on.note}}" placeholder="可选">
+<span style="grid-column: 1 / -1; height: 1px; margin: 4px 0; background: var(--line)"></span>
+<label for="e-auth" class="lbl">认证方式</label>
+<select id="e-auth" class="field" value="{{form.auth}}" onChange="{{on.auth}}" style="justify-self: start; min-width: 140px">
+<option value="密码">密码</option>
+<option value="公钥">公钥</option>
+<option value="密钥库">密钥库</option>
+</select>
+<label for="e-user" class="lbl">用户名</label>
+<input id="e-user" class="field" value="{{form.user}}" onChange="{{on.user}}" autocomplete="off" spellcheck="false" style="justify-self: start; width: 200px; max-width: 100%">
+<sc-if value="{{authPassword}}" hint-placeholder-val="{{ true }}">
+<div style="grid-column: 1 / -1; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; align-items: start">
+<label for="e-pass" class="lbl">密码</label>
+<div style="display: flex; flex-direction: column; gap: 5px">
+<input id="e-pass" class="field" type="password" value="{{form.pass}}" onChange="{{on.pass}}" placeholder="{{passHint}}" autocomplete="new-password" style="width: 200px; max-width: 100%">
+<label style="display: flex; align-items: center; gap: 5px; color: var(--muted)"><input type="checkbox" checked style="margin: 0; accent-color: var(--accent)">记住密码</label>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{authKey}}" hint-placeholder-val="{{ false }}">
+<div style="grid-column: 1 / -1; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; align-items: center">
+<span class="lbl" style="padding-top: 0">私钥</span>
+<div style="display: flex; align-items: center; gap: 6px"><span class="field" style="display: flex; align-items: center; flex: 1 1 auto; color: var(--muted)">未选择</span><button type="button" class="btn">选择…</button></div>
+</div>
+</sc-if>
+<sc-if value="{{authRing}}" hint-placeholder-val="{{ false }}">
+<div style="grid-column: 1 / -1; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; align-items: center">
+<label for="e-ring" class="lbl" style="padding-top: 0">密钥</label>
+<select id="e-ring" class="field" style="justify-self: start; min-width: 240px">
+<option>dev-ed25519</option>
+<option>deploy-rsa-4096</option>
+</select>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{isAdvanced}}" hint-placeholder-val="{{ false }}">
+<div style="display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 10px; align-items: start">
+<label for="e-jump" class="lbl">跳板机</label>
+<select id="e-jump" class="field" style="justify-self: start; min-width: 220px">
+<option>不使用</option>
+<option>bastion（ops@203.0.113.10）</option>
+</select>
+<label for="e-proxy" class="lbl">代理</label>
+<select id="e-proxy" class="field" style="justify-self: start; min-width: 220px">
+<option>不使用</option>
+<option>HTTP 代理…</option>
+<option>SOCKS5 代理…</option>
+</select>
+<label for="e-alive" class="lbl">心跳间隔</label>
+<div style="display: flex; align-items: center; gap: 6px"><input id="e-alive" class="field" value="30" style="width: 58px"><span style="color: var(--muted)">秒</span></div>
+<label for="e-enc" class="lbl">字符编码</label>
+<select id="e-enc" class="field" style="justify-self: start; min-width: 120px"><option>UTF-8</option><option>GBK</option><option>Big5</option></select>
+<label for="e-term" class="lbl">终端类型</label>
+<select id="e-term" class="field" style="justify-self: start; min-width: 160px"><option>xterm-256color</option><option>xterm</option><option>vt100</option></select>
+</div>
+</sc-if>
+
+<sc-if value="{{isForward}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="border: 1px solid var(--line); border-radius: 5px; overflow: hidden; background: var(--content)">
+<div style="display: grid; grid-template-columns: 54px minmax(0, 1fr) minmax(0, 1fr); gap: 6px; height: 22px; align-items: center; padding: 0 8px; background: var(--bar); border-bottom: 1px solid var(--line2); color: var(--muted)"><span>类型</span><span>本地</span><span>远程</span></div>
+<div style="display: grid; grid-template-columns: 54px minmax(0, 1fr) minmax(0, 1fr); gap: 6px; height: 24px; align-items: center; padding: 0 8px; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11.5px"><span style="font-family: inherit">本地</span><span>127.0.0.1:13306</span><span>127.0.0.1:3306</span></div>
+<div style="height: 96px"></div>
+</div>
+<div style="display: flex; gap: 6px"><button type="button" class="btn">添加…</button><button type="button" class="btn">删除</button></div>
+</div>
+</sc-if>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px 14px">
+<button type="button" class="btn" onClick="{{test}}">测试连接</button>
+<sc-if value="{{tested}}" hint-placeholder-val="{{ false }}"><span role="status" style="color: var(--ok)">✓ 连接成功 · 18 ms</span></sc-if>
+<button type="button" class="btn" onClick="{{cancel}}" style="margin-left: auto">取消</button>
+<button type="button" class="btn btn-primary" onClick="{{save}}">确定</button>
+</div>
+</section>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"appearance":{"editor":"enum","options":["跟随系统","浅色","深色"],"default":"跟随系统"},"accent":{"editor":"color","options":["#0068D6","#7A4FD1","#C25E00","#6E6E73"],"default":"#0068D6"},"dialog":{"editor":"enum","options":["不显示","新建连接","编辑连接"],"default":"不显示"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      folders: [
+        { id: 'f1', name: '生产', parent: null },
+        { id: 'f2', name: '测试', parent: null },
+        { id: 'f3', name: '海外 VPS', parent: null },
+        { id: 'f4', name: '家里', parent: null },
+        { id: 'f5', name: '网络设备', parent: 'f4' }
+      ],
+      servers: [
+        { id: 's1', parent: 'f1', name: 'prod-web-01', host: '10.0.1.12', port: '22', user: 'dev', note: '主站 Web', proto: 'SSH' },
+        { id: 's2', parent: 'f1', name: 'prod-web-02', host: '10.0.1.13', port: '22', user: 'dev', note: '', proto: 'SSH' },
+        { id: 's3', parent: 'f1', name: 'db-master', host: '10.0.2.5', port: '22', user: 'root', note: '主库，勿随意重启', proto: 'SSH' },
+        { id: 's4', parent: 'f1', name: 'db-replica', host: '10.0.2.6', port: '22', user: 'root', note: '经 bastion 跳转', proto: 'SSH' },
+        { id: 's16', parent: 'f1', name: 'old-web', host: '10.0.1.9', port: '22', user: 'dev', note: '已下线', proto: 'SSH', deleted: true },
+        { id: 's5', parent: 'f2', name: 'staging-api', host: '10.1.0.20', port: '22', user: 'deploy', note: '', proto: 'SSH' },
+        { id: 's6', parent: 'f2', name: 'k3s-node-a', host: '10.1.0.40', port: '22', user: 'root', note: '', proto: 'SSH' },
+        { id: 's7', parent: 'f2', name: 'win-test', host: '10.1.0.50', port: '3389', user: 'Administrator', note: '远程桌面', proto: 'RDP' },
+        { id: 's8', parent: 'f3', name: '东京-1', host: '198.51.100.21', port: '22', user: 'root', note: '年付，2027-03 到期', proto: 'SSH' },
+        { id: 's9', parent: 'f3', name: '洛杉矶-cn2', host: '198.51.100.88', port: '22', user: 'root', note: '', proto: 'SSH' },
+        { id: 's10', parent: 'f3', name: '新加坡-arm', host: '203.0.113.45', port: '22', user: 'ubuntu', note: 'ARM 4 核 24G', proto: 'SSH' },
+        { id: 's11', parent: 'f4', name: 'home-nas', host: '192.168.1.20', port: '22', user: 'admin', note: '', proto: 'SSH' },
+        { id: 's12', parent: 'f4', name: 'raspberry-pi', host: '192.168.1.30', port: '22', user: 'pi', note: '', proto: 'SSH' },
+        { id: 's13', parent: 'f5', name: 'router', host: '192.168.1.1', port: '22', user: 'root', note: 'OpenWrt', proto: 'SSH' },
+        { id: 's14', parent: null, name: 'bastion', host: '203.0.113.10', port: '2222', user: 'ops', note: '跳板机', proto: 'SSH' },
+        { id: 's15', parent: null, name: 'r-lab', host: '10.0.0.1', port: '22', user: 'root', note: '', proto: 'SSH' }
+      ],
+      open: { f1: true },
+      sel: 's3',
+      q: '',
+      kind: '全部',
+      showDeleted: false,
+      closeAfter: true,
+      dialog: null,
+      tab: 'general',
+      form: null,
+      tested: false,
+      seq: 20
+    };
+  }
+
+  server(id) {
+    return this.state.servers.filter(function (s) { return s.id === id; })[0] || null;
+  }
+
+  selectedFolderId() {
+    var sel = this.state.sel;
+    if (!sel) return '';
+    if (sel.charAt(0) === 'f') return sel;
+    var s = this.server(sel);
+    return s && s.parent ? s.parent : '';
+  }
+
+  blankForm() {
+    return { name: '', parent: this.selectedFolderId(), host: '', port: '22', note: '', auth: '密码', user: 'root', pass: '' };
+  }
+
+  formFor(s) {
+    return { name: s.name, parent: s.parent || '', host: s.host, port: s.port, note: s.note, auth: '密码', user: s.user, pass: '' };
+  }
+
+  mode() {
+    if (this.state.dialog !== null) return this.state.dialog;
+    var p = this.props.dialog ?? '不显示';
+    return p === '新建连接' ? 'new' : (p === '编辑连接' ? 'edit' : 'none');
+  }
+
+  currentForm() {
+    if (this.state.form) return this.state.form;
+    var s = this.server(this.state.sel);
+    return this.mode() === 'edit' && s ? this.formFor(s) : this.blankForm();
+  }
+
+  renderVals() {
+    var self = this;
+    var st = this.state;
+    var ap = this.props.appearance ?? '跟随系统';
+    var apClass = ap === '浅色' ? 'ap-light' : (ap === '深色' ? 'ap-dark' : 'ap-auto');
+    var accent = this.props.accent ?? '#0068D6';
+    var q = st.q.trim().toLowerCase();
+    var filtering = !!q || st.kind !== '全部';
+
+    function matches(s) {
+      if (s.deleted && !st.showDeleted) return false;
+      if (st.kind === 'SSH' && s.proto !== 'SSH') return false;
+      if (st.kind === '远程桌面' && s.proto !== 'RDP') return false;
+      if (!q) return true;
+      return (s.name + ' ' + s.host + ' ' + s.note + ' ' + s.user).toLowerCase().indexOf(q) >= 0;
+    }
+    function countIn(fid) {
+      var c = st.servers.filter(function (s) { return s.parent === fid && matches(s); }).length;
+      st.folders.forEach(function (f) { if (f.parent === fid) c += countIn(f.id); });
+      return c;
+    }
+
+    var rows = [];
+    function look(id, i) {
+      var on = st.sel === id;
+      return {
+        bg: on ? 'var(--accent)' : (i % 2 === 1 ? 'var(--zebra)' : 'transparent'),
+        color: on ? '#FFFFFF' : 'var(--text)',
+        sub: on ? 'rgba(255, 255, 255, 0.85)' : 'var(--muted)',
+        folderFill: on ? '#FFFFFF' : 'var(--folder)',
+        termFill: on ? 'rgba(255, 255, 255, 0.25)' : '#3A3A40'
+      };
+    }
+    function walk(parent, depth) {
+      st.folders.forEach(function (f) {
+        if (f.parent !== parent) return;
+        var n = countIn(f.id);
+        if (filtering && n === 0) return;
+        var isOpen = filtering ? true : !!st.open[f.id];
+        var l = look(f.id, rows.length);
+        rows.push({
+          isFolder: true, isServer: false, expanded: isOpen,
+          name: f.name, count: n + ' 台', host: '', port: '', user: '', note: '',
+          indent: depth * 18 + 'px', rot: isOpen ? '90deg' : '0deg', strike: 'none', opacity: '1',
+          bg: l.bg, color: l.color, sub: l.sub, folderFill: l.folderFill, termFill: l.termFill,
+          pick: function () {
+            var open = Object.assign({}, st.open);
+            open[f.id] = !open[f.id];
+            self.setState({ open: open, sel: f.id });
+          }
+        });
+        if (isOpen) walk(f.id, depth + 1);
+      });
+      st.servers.forEach(function (s) {
+        if (s.parent !== parent || !matches(s)) return;
+        var l = look(s.id, rows.length);
+        rows.push({
+          isFolder: false, isServer: true, expanded: false,
+          name: s.deleted ? s.name + '（已删除）' : s.name, count: '', host: s.host, port: s.port, user: s.user, note: s.note,
+          indent: depth * 18 + 'px', rot: '0deg', strike: s.deleted ? 'line-through' : 'none', opacity: s.deleted ? '0.6' : '1',
+          bg: l.bg, color: l.color, sub: l.sub, folderFill: l.folderFill, termFill: l.termFill,
+          pick: function () { self.setState({ sel: s.id }); }
+        });
+      });
+    }
+    walk(null, 0);
+
+    var selServer = this.server(st.sel);
+    var mode = this.mode();
+    var form = this.currentForm();
+    function setField(k) {
+      return function (e) {
+        var next = Object.assign({}, self.currentForm());
+        next[k] = e.target.value;
+        self.setState({ form: next, dialog: self.mode(), tested: false });
+      };
+    }
+
+    function segLook(on) {
+      return { bg: on ? 'var(--segon)' : 'transparent', shadow: on ? '0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.12)' : 'none' };
+    }
+    var tabs = [{ id: 'general', label: '常规' }, { id: 'advanced', label: '高级' }, { id: 'forward', label: '端口转发' }].map(function (t) {
+      var l = segLook(st.tab === t.id);
+      return { label: t.label, sel: st.tab === t.id, bg: l.bg, shadow: l.shadow, pick: function () { self.setState({ tab: t.id, dialog: self.mode() }); } };
+    });
+
+    var visibleServers = st.servers.filter(function (s) { return !s.deleted; }).length;
+    var foot = selServer ? '已选中 ' + selServer.name + ' · 双击连接' : '共 ' + visibleServers + ' 台服务器 · 双击连接';
+
+    return {
+      apClass: apClass,
+      accent: accent,
+      rows: rows,
+      noRows: rows.length === 0,
+      q: st.q,
+      onQ: function (e) { self.setState({ q: e.target.value }); },
+      kind: st.kind,
+      onKind: function (e) { self.setState({ kind: e.target.value }); },
+      showDeleted: st.showDeleted,
+      toggleDeleted: function () { self.setState({ showDeleted: !st.showDeleted }); },
+      closeAfter: st.closeAfter,
+      toggleClose: function () { self.setState({ closeAfter: !st.closeAfter }); },
+      noServer: !selServer,
+      footHint: foot,
+      collapseAll: function () { self.setState({ open: {} }); },
+      expandAll: function () {
+        var open = {};
+        st.folders.forEach(function (f) { open[f.id] = true; });
+        self.setState({ open: open });
+      },
+      newFolder: function () {
+        var id = 'f' + st.seq;
+        self.setState({ folders: st.folders.concat([{ id: id, name: '新建文件夹', parent: null }]), sel: id, seq: st.seq + 1 });
+      },
+      remove: function () {
+        if (!selServer) return;
+        self.setState({ servers: st.servers.map(function (s) { return s.id === selServer.id ? Object.assign({}, s, { deleted: !s.deleted }) : s; }) });
+      },
+      openNew: function () { self.setState({ dialog: 'new', tab: 'general', form: self.blankForm(), tested: false }); },
+      openEdit: function () { if (selServer) self.setState({ dialog: 'edit', tab: 'general', form: self.formFor(selServer), tested: false }); },
+      dialogOpen: mode !== 'none',
+      dialogTitle: mode === 'edit' && selServer ? '编辑连接 · ' + selServer.name : '新建连接',
+      tabs: tabs,
+      isGeneral: st.tab === 'general',
+      isAdvanced: st.tab === 'advanced',
+      isForward: st.tab === 'forward',
+      form: form,
+      on: { name: setField('name'), parent: setField('parent'), host: setField('host'), port: setField('port'), note: setField('note'), auth: setField('auth'), user: setField('user'), pass: setField('pass') },
+      authPassword: form.auth === '密码',
+      authKey: form.auth === '公钥',
+      authRing: form.auth === '密钥库',
+      passHint: mode === 'edit' ? '不修改请留空' : '',
+      tested: st.tested,
+      test: function () { self.setState({ tested: true, dialog: self.mode() }); },
+      cancel: function () { self.setState({ dialog: 'none', form: null, tested: false }); },
+      save: function () {
+        var f = self.currentForm();
+        var parent = f.parent || null;
+        var open = Object.assign({}, st.open);
+        if (parent) open[parent] = true;
+        if (self.mode() === 'edit' && selServer) {
+          self.setState({
+            servers: st.servers.map(function (s) { return s.id === selServer.id ? Object.assign({}, s, { name: f.name || s.name, parent: parent, host: f.host, port: f.port || '22', user: f.user, note: f.note }) : s; }),
+            dialog: 'none', form: null, open: open, tested: false
+          });
+        } else {
+          var id = 's' + st.seq;
+          var created = { id: id, parent: parent, name: f.name || f.host || '新连接', host: f.host, port: f.port || '22', user: f.user, note: f.note, proto: 'SSH' };
+          self.setState({ servers: st.servers.concat([created]), sel: id, seq: st.seq + 1, dialog: 'none', form: null, open: open, tested: false });
+        }
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

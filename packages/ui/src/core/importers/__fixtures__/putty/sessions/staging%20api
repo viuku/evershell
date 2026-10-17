@@ -1,0 +1,6 @@
+HostName=203.0.113.7
+PortNumber=22
+Protocol=ssh
+UserName=ci
+PublicKeyFile=/Users/me/.ssh/staging.ppk
+TerminalType=xterm

@@ -1,0 +1,4 @@
+#!/bin/sh
+# ring 的 C 代码编到 wasm32 时需要能识别 WASM 目标文件的 ar，macOS 自带的 ar 不行。
+# 用 rustup 的 llvm-tools 组件（rustup component add llvm-tools）。
+exec "$(rustc --print sysroot)"/lib/rustlib/*/bin/llvm-ar "$@"

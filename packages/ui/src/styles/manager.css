@@ -1,0 +1,580 @@
+/* 连接管理器 + 新建 / 编辑连接弹窗 */
+
+.mgr__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  min-height: 36px;
+  padding: 0 8px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+
+.mgr__toolbar .tb {
+  height: 26px;
+  border-radius: 5px;
+}
+
+.mgr__sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--line);
+}
+
+.mgr__deleted {
+  margin-left: 8px;
+}
+
+.mgr__filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.mgr__search {
+  width: 200px;
+  border-radius: 11px;
+  padding: 0 10px;
+}
+
+.mgr__kind {
+  width: 96px;
+}
+
+.mgr__list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+}
+
+.mgr__list:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.mgr__inner {
+  min-width: 720px;
+}
+
+.mgr__cols {
+  grid-template-columns: minmax(0, 1.5fr) 128px 56px 104px minmax(0, 1.2fr);
+  padding: 0 10px;
+}
+
+.mgr__sortCol {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.mgr__row {
+  height: 24px;
+  font-size: 12.5px;
+}
+
+.mgr__row--deleted {
+  opacity: 0.6;
+}
+
+.mgr__strike {
+  text-decoration: line-through;
+}
+
+.mgr__name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.mgr__name svg {
+  flex: 0 0 auto;
+}
+
+.mgr__disclosure {
+  display: grid;
+  place-items: center;
+  width: 12px;
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.grid-row--on .mgr__disclosure {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mgr__count {
+  font-size: 11px;
+}
+
+.mgr__mono {
+  font-size: 11.5px;
+}
+
+.mgr__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 12px;
+  background: var(--bar);
+  border-top: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+
+.mgr__hint {
+  margin-left: 8px;
+}
+
+.mgr__edit {
+  margin-left: auto;
+}
+
+/* ---------- 新建 / 编辑连接 ---------- */
+
+.edit__tabs {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 10px;
+}
+
+.edit__body {
+  min-height: 250px;
+  padding: 0 0 4px;
+}
+
+.form--plain {
+  padding: 4px 20px 10px;
+}
+
+.form--wide {
+  grid-template-columns: 96px minmax(0, 1fr);
+}
+
+.edit__select {
+  justify-self: start;
+  min-width: 180px;
+  max-width: 100%;
+}
+
+.edit__select--auth {
+  min-width: 140px;
+}
+
+.edit__select--narrow {
+  min-width: 120px;
+}
+
+.edit__hostRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.edit__host {
+  flex: 1 1 auto;
+}
+
+.edit__port {
+  width: 58px;
+  flex: 0 0 auto;
+}
+
+.edit__user {
+  justify-self: start;
+  width: 200px;
+  max-width: 100%;
+}
+
+.edit__rule {
+  grid-column: 1 / -1;
+  height: 1px;
+  margin: 4px 0;
+  background: var(--line);
+}
+
+.edit__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.edit__inlineLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.edit__inlineLabel .field {
+  flex: 1 1 auto;
+}
+
+.edit__pending {
+  grid-column: 1 / -1;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  color: var(--warn);
+  font-size: 11.5px;
+}
+
+.edit__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 14px;
+}
+
+.edit__ok {
+  flex: 1 1 0;
+  color: var(--ok);
+  min-width: 0;
+  user-select: text;
+}
+
+.edit__fail {
+  flex: 1 1 0;
+  color: var(--danger);
+  min-width: 0;
+}
+
+.edit__cancel {
+  margin-left: auto;
+}
+
+/* 私钥选择 */
+.keypick {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.keypick__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.keypick__name {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.keypick__text {
+  font-size: 11px;
+}
+
+/* 端口转发 */
+.fwd {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 20px 10px;
+}
+
+.fwd__table {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--content);
+}
+
+.fwd__head,
+.fwd__row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  padding: 0 8px;
+}
+
+.fwd__head {
+  height: 22px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--line2);
+  color: var(--muted);
+}
+
+.fwd__row {
+  width: 100%;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 11.5px;
+}
+
+.fwd__row--on {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.fwd__row--draft {
+  height: auto;
+  padding: 6px 8px;
+  border-top: 1px solid var(--line2);
+}
+
+.fwd__type {
+  font-family: var(--font);
+}
+
+.fwd__pair {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fwd__pair .field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fwd__port {
+  flex: 0 0 56px !important;
+}
+
+.fwd__empty {
+  padding: 36px 16px;
+}
+
+.fwd__actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ---------- 导入连接 ---------- */
+
+.imp__steps {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  padding: 2px 0 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.imp__step--on {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.imp__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  gap: 8px;
+  padding: 0 16px;
+}
+
+.imp__sources {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.imp__source {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 1px 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.imp__source:hover {
+  background: var(--hover);
+}
+
+.imp__source--on {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.imp__source input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.imp__sourceName {
+  font-weight: 500;
+}
+
+.imp__sourceBlurb {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.imp__guide {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 6px 10px;
+  margin: 0;
+  line-height: 1.5;
+  user-select: text;
+}
+
+.imp__guide dt {
+  color: var(--muted);
+}
+
+.imp__guide dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.imp__drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1 1 0;
+  min-height: 110px;
+  border: 1.5px dashed var(--fieldline);
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.imp__drop--over {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.imp__dropBtns {
+  display: flex;
+  gap: 8px;
+}
+
+.imp__options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+
+.imp__inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.imp__tree {
+  flex: 1 1 0;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--content);
+}
+
+.imp__cols {
+  grid-template-columns: minmax(0, 1.7fr) 124px 48px 90px 108px;
+  padding: 0 8px;
+}
+
+.imp__row {
+  height: 24px;
+  font-size: 12.5px;
+}
+
+.imp__row:hover {
+  background: var(--hover);
+}
+
+.imp__row input[type='checkbox'] {
+  margin: 0 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.imp__disc {
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.imp__tag {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.imp__tag--ok {
+  color: var(--ok);
+}
+
+.imp__tag--warn {
+  color: var(--warn);
+}
+
+.imp__warn {
+  color: var(--warn);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.imp__issues {
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.imp__issues summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.imp__issues ul {
+  max-height: 90px;
+  margin: 4px 0 0;
+  padding-left: 16px;
+  overflow: auto;
+  user-select: text;
+}
+
+.imp__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 14px;
+}
+
+.imp__foot .muted {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.imp__cancel {
+  margin-left: auto;
+}
+
+.imp__done {
+  padding: 32px 0;
+  text-align: center;
+  line-height: 1.9;
+}
+
+.imp__big {
+  font-size: 20px;
+  font-weight: 600;
+}

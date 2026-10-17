@@ -1,0 +1,83 @@
+/* 新标签页 */
+
+.newtab {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 64px 24px 40px;
+  overflow: auto;
+}
+
+.quick {
+  width: 100%;
+  max-width: 860px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.quick__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px 0 14px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--line);
+}
+
+.quick__head strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.quick__manager {
+  margin-left: auto;
+}
+
+.quick__cols {
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 110px 100px;
+  padding: 0 14px;
+}
+
+.quick__colsHead > span + span {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.quick__cols > span + span {
+  padding-left: 0;
+}
+
+.quick__list {
+  max-height: 440px;
+  overflow-y: auto;
+}
+
+.quick__row {
+  height: 28px;
+  cursor: pointer;
+}
+
+.quick__row:hover {
+  background: var(--hover);
+}
+
+.quick__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.quick__name svg {
+  flex: 0 0 auto;
+}
+
+.quick__empty {
+  padding: 40px 16px;
+}

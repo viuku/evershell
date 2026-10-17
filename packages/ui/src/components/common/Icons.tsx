@@ -1,0 +1,186 @@
+import type { SVGProps } from 'react';
+
+// 设计稿里的线性图标，统一 24 视图框，颜色跟随 currentColor
+
+type P = SVGProps<SVGSVGElement> & { size?: number };
+
+function Svg({ size = 16, children, ...rest }: P) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...rest}
+    >
+      {children}
+    </svg>
+  );
+}
+
+export const FolderOutlineIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+  </Svg>
+);
+
+export const NewFolderIcon = (p: P) => (
+  <Svg strokeWidth={1.8} {...p}>
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <path d="M12 11v5M9.5 13.5h5" />
+  </Svg>
+);
+
+export const NewConnectionIcon = (p: P) => (
+  <Svg strokeWidth={1.6} {...p}>
+    <rect x="2.5" y="5" width="15" height="13" rx="2" />
+    <path d="M6 10l2.5 2-2.5 2M10.5 14h3.5M19.5 3v6M16.5 6h6" />
+  </Svg>
+);
+
+export const CloseIcon = (p: P) => (
+  <Svg strokeWidth={3} {...p}>
+    <path d="M6 6l12 12M18 6L6 18" />
+  </Svg>
+);
+
+export const PlusIcon = (p: P) => (
+  <Svg strokeWidth={2} {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </Svg>
+);
+
+export const SidebarIcon = (p: P) => (
+  <Svg {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M9 4v16" />
+  </Svg>
+);
+
+export const MenuIcon = (p: P) => (
+  <Svg strokeWidth={2} {...p}>
+    <path d="M4 7h16M4 12h16M4 17h16" />
+  </Svg>
+);
+
+export const PaletteIcon = (p: P) => (
+  <Svg strokeWidth={1.8} {...p}>
+    <path d="M12 3a9 9 0 1 0 0 18c.9 0 1.5-.7 1.5-1.5 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.8.7-1.5 1.5-1.5H16a5 5 0 0 0 5-5c0-4.3-4-7.8-9-7.8z" />
+    <circle cx="7.5" cy="11" r="1" />
+    <circle cx="10.5" cy="7" r="1" />
+    <circle cx="15" cy="7" r="1" />
+  </Svg>
+);
+
+export const UpIcon = (p: P) => (
+  <Svg strokeWidth={2} {...p}>
+    <path d="M12 19V5M6 11l6-6 6 6" />
+  </Svg>
+);
+
+export const RefreshIcon = (p: P) => (
+  <Svg strokeWidth={2} {...p}>
+    <path d="M20 11a8 8 0 1 0-2.3 5.7" />
+    <path d="M20 5v6h-6" />
+  </Svg>
+);
+
+export const EditIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M4 20h4L19 9l-4-4L4 16z" />
+    <path d="M13.5 6.5l4 4" />
+  </Svg>
+);
+
+export const TrashIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13" />
+  </Svg>
+);
+
+export const CollapseAllIcon = (p: P) => (
+  <Svg {...p}>
+    <rect x="4" y="4" width="16" height="16" rx="2" />
+    <path d="M8.5 12h7" />
+  </Svg>
+);
+
+export const ExpandAllIcon = (p: P) => (
+  <Svg {...p}>
+    <rect x="4" y="4" width="16" height="16" rx="2" />
+    <path d="M8.5 12h7M12 8.5v7" />
+  </Svg>
+);
+
+export const ImportIcon = (p: P) => (
+  <Svg strokeWidth={1.8} {...p}>
+    <path d="M12 4v10M8 10l4 4 4-4" />
+    <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+  </Svg>
+);
+
+export const ExportIcon = (p: P) => (
+  <Svg strokeWidth={1.8} {...p}>
+    <path d="M12 14V4M8 8l4-4 4 4" />
+    <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+  </Svg>
+);
+
+/** 文件夹实心图标；fill 默认跟随 --folder 变量 */
+export function FolderFillIcon({ size = 16, fill = 'var(--folder)', ...rest }: P & { fill?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...rest}>
+      <path d="M2.5 6.5a2 2 0 0 1 2-2h4.6l2 2.2h8.4a2 2 0 0 1 2 2v9.8a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2z" fill={fill} />
+    </svg>
+  );
+}
+
+/** 服务器（终端窗口）图标 */
+export function ServerIcon({ size = 16, fill = '#3A3A40', ...rest }: P & { fill?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...rest}>
+      <rect x="2.5" y="4" width="19" height="16" rx="3" fill={fill} />
+      <path d="M7 9.5l3 2.5-3 2.5M12 15h5" fill="none" stroke="#FFFFFF" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export const FileIcon = (p: P) => (
+  <Svg strokeWidth={1.6} {...p}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <path d="M14 3v5h5" />
+  </Svg>
+);
+
+/** 展开 / 折叠的小三角 */
+export function DisclosureIcon({ open, size = 9 }: { open: boolean; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.12s' }}
+    >
+      <path d="M8 4l10 8-10 8z" />
+    </svg>
+  );
+}
+
+export const SortIcon = () => (
+  <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 6l8 10H4z" />
+  </svg>
+);
+
+export const CheckIcon = (p: P) => (
+  <Svg strokeWidth={2.4} {...p}>
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </Svg>
+);

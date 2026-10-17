@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>新标签页</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.ap-light,.ap-auto{--win:#E4E4E7;--bar:#F6F6F7;--side:#F0F0F2;--content:#FFFFFF;--zebra:#F5F5F7;--line:#D4D4D8;--line2:#E5E5E8;--text:#1D1D1F;--muted:#5C5C63;--field:#FFFFFF;--fieldline:#C8C8CD;--hover:rgba(0,0,0,0.06);--track:#E1E1E5;--ok:#1A7F37;--warn:#B25E00;--up:#C2410C;--down:#15803D;color-scheme:light}
+.ap-dark{--win:#19191B;--bar:#28282B;--side:#212124;--content:#1C1C1E;--zebra:#232326;--line:#3A3A3F;--line2:#2F2F33;--text:#ECECEE;--muted:#A3A3AA;--field:#2C2C2F;--fieldline:#4A4A50;--hover:rgba(255,255,255,0.07);--track:#36363B;--ok:#32D74B;--warn:#FF9F0A;--up:#FF9F0A;--down:#32D74B;color-scheme:dark}
+@media (prefers-color-scheme: dark){.ap-auto{--win:#19191B;--bar:#28282B;--side:#212124;--content:#1C1C1E;--zebra:#232326;--line:#3A3A3F;--line2:#2F2F33;--text:#ECECEE;--muted:#A3A3AA;--field:#2C2C2F;--fieldline:#4A4A50;--hover:rgba(255,255,255,0.07);--track:#36363B;--ok:#32D74B;--warn:#FF9F0A;--up:#FF9F0A;--down:#32D74B;color-scheme:dark}}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font:inherit;color:inherit}
+.tb{display:grid;place-items:center;width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;flex:0 0 auto}
+.tb:hover{background:var(--hover);color:var(--text)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:22px;box-sizing:border-box;padding:0 10px;border:1px solid var(--fieldline);border-radius:5px;background:var(--field);color:var(--text);font-size:12px;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn:disabled{opacity:0.5;cursor:default}
+.qrow:hover{background:var(--hover)}
+.scroll::-webkit-scrollbar{width:10px;height:10px}
+.scroll::-webkit-scrollbar-thumb{background:var(--track);border-radius:10px;border:2px solid transparent;background-clip:content-box}
+</style>
+</helmet>
+<div class="{{apClass}}" style="--accent: {{accent}}; min-height: 100vh; display: flex; flex-wrap: wrap; background: var(--content); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 12px">
+
+<aside aria-label="服务器状态" style="flex: 1 1 232px; min-width: 0; box-sizing: border-box; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column">
+<div aria-hidden="true" style="display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; flex: 0 0 auto">
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57"></span>
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E"></span>
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840"></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 9px; padding: 2px 12px 14px">
+<div style="display: flex; justify-content: space-between; align-items: center"><span>同步状态</span><span style="display: flex; align-items: center; gap: 5px; color: var(--muted)"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--ok)"></span>已同步</span></div>
+<div style="display: flex; justify-content: space-between; align-items: center"><span>IP</span><span style="color: var(--muted)">-</span></div>
+<button type="button" class="btn" disabled style="width: 100%">系统信息</button>
+<div style="display: flex; flex-direction: column; gap: 4px; color: var(--muted)"><span>运行 -</span><span>负载 -</span></div>
+<div style="display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 6px 6px">
+<span>CPU</span><div style="height: 16px; border-radius: 4px; background: var(--track); display: flex; align-items: center; justify-content: space-between; padding: 0 6px; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11px; color: var(--muted)"><span>0%</span><span></span></div>
+<span>内存</span><div style="height: 16px; border-radius: 4px; background: var(--track); display: flex; align-items: center; justify-content: space-between; padding: 0 6px; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11px; color: var(--muted)"><span>0%</span><span>0/0</span></div>
+<span>交换</span><div style="height: 16px; border-radius: 4px; background: var(--track); display: flex; align-items: center; justify-content: space-between; padding: 0 6px; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11px; color: var(--muted)"><span>0%</span><span>0/0</span></div>
+</div>
+<div style="border: 1px solid var(--line); border-radius: 5px; background: var(--content); overflow: hidden">
+<div style="display: grid; grid-template-columns: 50px 42px minmax(0, 1fr); gap: 4px; padding: 3px 6px; background: var(--bar); border-bottom: 1px solid var(--line2); color: var(--muted)"><span>内存</span><span>CPU</span><span>命令</span></div>
+<div style="height: 110px; display: grid; place-items: center; color: var(--muted)">未连接</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; justify-content: space-between; color: var(--muted)"><span><span style="color: var(--up)">↑</span> 0B/s  <span style="color: var(--down)">↓</span> 0B/s</span><span>网卡 ▾</span></div>
+<div style="height: 54px; border: 1px solid var(--line2); border-radius: 5px; background: repeating-linear-gradient(to bottom, transparent 0, transparent 17px, var(--line2) 17px, var(--line2) 18px)"></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; justify-content: space-between; color: var(--muted)"><span>延迟 -- ms</span><span>本机 → 服务器</span></div>
+<div style="height: 36px; border: 1px solid var(--line2); border-radius: 5px; background: repeating-linear-gradient(to bottom, transparent 0, transparent 17px, var(--line2) 17px, var(--line2) 18px)"></div>
+</div>
+<div style="border: 1px solid var(--line); border-radius: 5px; background: var(--content); overflow: hidden">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 4px; padding: 3px 6px; background: var(--bar); border-bottom: 1px solid var(--line2); color: var(--muted)"><span>路径</span><span>可用 / 大小</span></div>
+<div style="height: 60px"></div>
+</div>
+</div>
+</aside>
+
+<div style="flex: 999 1 600px; min-width: 0; display: flex; flex-direction: column">
+<div style="display: flex; align-items: flex-end; gap: 2px; height: 38px; padding: 0 6px; background: var(--win); border-bottom: 1px solid var(--line)">
+<a href="Manager.dc.html" class="tb" aria-label="连接管理器" title="连接管理器（⌘O）" style="margin: 0 4px 4px 0; color: var(--text)">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+</a>
+<div style="display: flex; align-items: center; gap: 7px; flex: 0 1 210px; min-width: 120px; height: 31px; margin-bottom: -1px; padding: 0 6px 0 12px; box-sizing: border-box; border: 1px solid var(--line); border-bottom: 0; border-radius: 7px 7px 0 0; background: var(--content)">
+<span style="font-family: 'SF Mono', Menlo, Consolas, monospace; color: var(--muted)">1</span>
+<span style="flex: 1 1 auto">新标签页</span>
+<button type="button" class="tb" aria-label="关闭标签页" style="width: 18px; height: 18px; border-radius: 50%">
+<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+</button>
+</div>
+<button type="button" class="tb" aria-label="新标签页" style="width: 26px; height: 26px; margin: 0 0 3px 4px; border-radius: 50%">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+</button>
+<button type="button" class="tb" aria-label="菜单" style="margin: 0 0 4px auto">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+</button>
+</div>
+
+<main style="flex: 1 1 auto; display: flex; justify-content: center; padding: 64px 24px 40px">
+<section aria-label="快速连接" style="width: 100%; max-width: 860px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; align-self: flex-start">
+<div style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px 0 14px; background: var(--bar); border-bottom: 1px solid var(--line)">
+<strong style="font-weight: 600; font-size: 13px">快速连接</strong>
+<span style="color: var(--muted)">最近连接过的服务器，点一下就连</span>
+<a href="Manager.dc.html" class="btn" style="margin-left: auto">连接管理器…</a>
+<button type="button" class="btn" onClick="{{clear}}">清空</button>
+</div>
+<sc-if value="{{hasRecent}}" hint-placeholder-val="{{ true }}">
+<div>
+<div style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 110px 100px; height: 22px; align-items: center; padding: 0 14px; border-bottom: 1px solid var(--line2); color: var(--muted)"><span>名称</span><span>位置</span><span>用户名</span><span>上次连接</span></div>
+<div class="scroll" style="max-height: 440px; overflow-y: auto">
+<sc-for list="{{recent}}" as="r" hint-placeholder-count="8">
+<a href="Main.dc.html" class="qrow" style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 110px 100px; height: 28px; align-items: center; padding: 0 14px; background: {{r.bg}}">
+<span style="display: flex; align-items: center; gap: 8px; min-width: 0">
+<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="flex: 0 0 auto"><rect x="2.5" y="4" width="19" height="16" rx="3" fill="#3A3A40"></rect><path d="M7 9.5l3 2.5-3 2.5M12 15h5" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis">{{r.name}}</span>
+</span>
+<span style="color: var(--muted)">{{r.path}}</span>
+<span style="color: var(--muted)">{{r.user}}</span>
+<span style="color: var(--muted)">{{r.when}}</span>
+</a>
+</sc-for>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{noRecent}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 40px 16px; text-align: center; color: var(--muted)">还没有最近连接。点左上角的文件夹图标打开连接管理器。</div>
+</sc-if>
+</section>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"appearance":{"editor":"enum","options":["跟随系统","浅色","深色"],"default":"跟随系统"},"accent":{"editor":"color","options":["#0068D6","#7A4FD1","#C25E00","#6E6E73"],"default":"#0068D6"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { cleared: false };
+  }
+
+  renderVals() {
+    var self = this;
+    var ap = this.props.appearance ?? '跟随系统';
+    var apClass = ap === '浅色' ? 'ap-light' : (ap === '深色' ? 'ap-dark' : 'ap-auto');
+    var accent = this.props.accent ?? '#0068D6';
+
+    var recent = this.state.cleared ? [] : [
+      { name: 'prod-web-01', path: '/生产', user: 'dev', when: '2 分钟前' },
+      { name: 'db-master', path: '/生产', user: 'root', when: '15 分钟前' },
+      { name: 'home-nas', path: '/家里', user: 'admin', when: '昨天' },
+      { name: '东京-1', path: '/海外 VPS', user: 'root', when: '2 天前' },
+      { name: 'staging-api', path: '/测试', user: 'deploy', when: '3 天前' },
+      { name: 'bastion', path: '/', user: 'ops', when: '1 周前' },
+      { name: '新加坡-arm', path: '/海外 VPS', user: 'ubuntu', when: '1 周前' },
+      { name: 'router', path: '/家里/网络设备', user: 'root', when: '2 周前' },
+      { name: 'raspberry-pi', path: '/家里', user: 'pi', when: '2 周前' }
+    ].map(function (r, i) { return Object.assign({ bg: i % 2 === 1 ? 'var(--zebra)' : 'transparent' }, r); });
+
+    return {
+      apClass: apClass,
+      accent: accent,
+      recent: recent,
+      hasRecent: recent.length > 0,
+      noRecent: recent.length === 0,
+      clear: function () { self.setState({ cleared: true }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

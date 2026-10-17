@@ -1,0 +1,33 @@
+# 示例 ssh config（全部是假地址）
+ServerAliveInterval 30
+Include ~/.ssh/conf.d/*
+
+Host web
+    HostName 192.0.2.10
+    User deploy
+    Port 22
+
+Host db db-alt
+  HostName=198.51.100.20
+  Port 2222
+  User dbadmin
+  IdentityFile ~/.ssh/db_ed25519
+  IdentityFile ~/.ssh/db_rsa
+  ProxyJump ops@bastion.example.com:22
+
+Host "quoted host"
+    HostName 203.0.113.9   # 行尾注释
+
+Host *.example.com
+    User wildcard
+
+Match host bastion exec "true"
+    User matched
+
+Host bastion
+    HostName bastion.example.com
+    ProxyCommand nc -X connect %h %p
+
+Host *
+    User fallback
+    IdentityFile ~/.ssh/id_ed25519

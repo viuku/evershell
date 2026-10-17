@@ -1,0 +1,23 @@
+/* 网页端专属：中转设置弹窗的表单。其余样式都在 @evershell/ui 里 */
+
+.relay {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 8px 10px;
+  align-items: start;
+  padding: 4px 20px 14px;
+}
+
+.relay__hint {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.relay__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 6px;
+}

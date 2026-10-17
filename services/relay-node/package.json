@@ -1,0 +1,11 @@
+{
+  "name": "@evershell/relay-node",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

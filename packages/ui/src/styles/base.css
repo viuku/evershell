@@ -1,0 +1,450 @@
+/* 颜色变量和基础控件，取自设计稿（Main / NewTab / Manager 三份合并）。默认跟随系统深浅色。 */
+
+.ap-light,
+.ap-auto {
+  --win: #e4e4e7;
+  --bar: #f6f6f7;
+  --side: #f0f0f2;
+  --content: #ffffff;
+  --sheet: #f4f4f6;
+  --zebra: #f5f5f7;
+  --line: #d4d4d8;
+  --line2: #e5e5e8;
+  --text: #1d1d1f;
+  --muted: #5c5c63;
+  --field: #ffffff;
+  --fieldline: #c8c8cd;
+  --hover: rgba(0, 0, 0, 0.06);
+  --seg: #e2e2e5;
+  --segon: #ffffff;
+  --track: #e1e1e5;
+  --ok: #1a7f37;
+  --warn: #b25e00;
+  --danger: #c62828;
+  --up: #c2410c;
+  --down: #15803d;
+  --folder: #5aa7f0;
+  --server: #3a3a40;
+  --scrim: rgba(0, 0, 0, 0.16);
+  --shadow: 0 14px 36px rgba(0, 0, 0, 0.18);
+  color-scheme: light;
+}
+
+.ap-dark {
+  --win: #19191b;
+  --bar: #28282b;
+  --side: #212124;
+  --content: #1c1c1e;
+  --sheet: #2a2a2d;
+  --zebra: #232326;
+  --line: #3a3a3f;
+  --line2: #2f2f33;
+  --text: #ececee;
+  --muted: #a3a3aa;
+  --field: #2c2c2f;
+  --fieldline: #4a4a50;
+  --hover: rgba(255, 255, 255, 0.07);
+  --seg: #333337;
+  --segon: #5b5b60;
+  --track: #36363b;
+  --ok: #32d74b;
+  --warn: #ff9f0a;
+  --danger: #ff6b6b;
+  --up: #ff9f0a;
+  --down: #32d74b;
+  --folder: #5fa8ee;
+  --server: #3a3a40;
+  --scrim: rgba(0, 0, 0, 0.4);
+  --shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ap-auto {
+    --win: #19191b;
+    --bar: #28282b;
+    --side: #212124;
+    --content: #1c1c1e;
+    --sheet: #2a2a2d;
+    --zebra: #232326;
+    --line: #3a3a3f;
+    --line2: #2f2f33;
+    --text: #ececee;
+    --muted: #a3a3aa;
+    --field: #2c2c2f;
+    --fieldline: #4a4a50;
+    --hover: rgba(255, 255, 255, 0.07);
+    --seg: #333337;
+    --segon: #5b5b60;
+    --track: #36363b;
+    --ok: #32d74b;
+    --warn: #ff9f0a;
+    --danger: #ff6b6b;
+    --up: #ff9f0a;
+    --down: #32d74b;
+    --folder: #5fa8ee;
+    --server: #3a3a40;
+    --scrim: rgba(0, 0, 0, 0.4);
+    --shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 最外层只提供主题变量和字体，不参与布局 */
+.app-root {
+  --accent: #0068d6;
+  --mono: 'SF Mono', Menlo, Consolas, monospace;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  display: contents;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.app {
+  height: 100%;
+  display: flex;
+  background: var(--content);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.35;
+  user-select: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+input,
+textarea {
+  user-select: text;
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* 工具栏图标按钮 */
+.tb {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.tb:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.tb:disabled {
+  opacity: 0.4;
+  background: transparent;
+  color: var(--muted);
+}
+
+.tb--sm {
+  width: 24px;
+  height: 24px;
+}
+
+/* 普通按钮 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--fieldline);
+  border-radius: 5px;
+  background: var(--field);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background: var(--hover);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+}
+
+.btn:disabled:hover {
+  background: var(--field);
+}
+
+.btn-primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: var(--accent);
+  filter: brightness(1.1);
+}
+
+.btn-primary:disabled:hover {
+  background: var(--accent);
+  filter: none;
+}
+
+.btn-danger {
+  border-color: transparent;
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.btn-danger:hover {
+  background: var(--danger);
+  filter: brightness(1.1);
+}
+
+.btn--xs {
+  height: 18px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.btn--row {
+  height: 19px;
+}
+
+/* 输入框 */
+.field {
+  height: 22px;
+  min-width: 0;
+  padding: 0 7px;
+  border: 1px solid var(--fieldline);
+  border-radius: 5px;
+  background: var(--field);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+
+.field:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.field::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.field[readonly] {
+  color: var(--text);
+}
+
+textarea.field {
+  height: auto;
+  padding: 5px 7px;
+  resize: vertical;
+}
+
+select.field {
+  padding-right: 20px;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+}
+
+/* 复选框行 */
+.check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.check input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* 分段控件 */
+.seg {
+  display: flex;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--seg);
+}
+
+.seg__item {
+  height: 20px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.seg__item--on {
+  background: var(--segon);
+  box-shadow:
+    0 0 0 0.5px rgba(0, 0, 0, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.seg--small .seg__item {
+  height: 18px;
+  padding: 0 10px;
+  font-size: 11.5px;
+}
+
+/* 滚动条 */
+.scroll {
+  overflow: auto;
+}
+
+.scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.scroll::-webkit-scrollbar-thumb {
+  background: var(--track);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 表格类列表的通用样式：表头 + 斑马纹行 */
+.grid-head {
+  display: grid;
+  height: 22px;
+  align-items: center;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.grid-head--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--content);
+}
+
+.grid-head > span + span {
+  padding-left: 8px;
+  border-left: 1px solid var(--line2);
+}
+
+.grid-row {
+  display: grid;
+  align-items: center;
+  width: 100%;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: default;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.grid-row:nth-child(even of .grid-row) {
+  background: var(--zebra);
+}
+
+.grid-row--on,
+.grid-row--on:nth-child(even of .grid-row) {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.grid-row--on .muted {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.grid-row > span + span {
+  padding-left: 8px;
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  padding: 40px 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* 带横线的网格背景，给曲线图用 */
+.grid-bg {
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 13px, var(--line2) 13px, var(--line2) 14px);
+}

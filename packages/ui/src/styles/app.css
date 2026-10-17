@@ -1,0 +1,443 @@
+/* 应用骨架：左侧状态栏 + 右侧主列；标签栏、底部状态条、菜单、弹窗 */
+
+.app__main {
+  flex: 1 1 600px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- 标签栏 ---------- */
+
+.tabbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 38px;
+  flex: 0 0 auto;
+  padding: 0 6px;
+  background: var(--win);
+  border-bottom: 1px solid var(--line);
+}
+
+.tabbar__manager {
+  margin: 0 2px 4px 0;
+  color: var(--text);
+}
+
+.tabbar__tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 38px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.tabbar__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  flex: 0 1 200px;
+  min-width: 120px;
+  height: 31px;
+  margin-bottom: -1px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 7px 7px 0 0;
+  background: transparent;
+}
+
+.tab--on {
+  border-color: var(--line);
+  background: var(--tab-on, var(--content));
+}
+
+.tab__pick {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 4px 0 11px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+}
+
+.tab--on .tab__pick {
+  color: var(--tab-on-fg, var(--text));
+}
+
+.tab--on .tab__num,
+.tab--on .tab__close {
+  color: var(--tab-on-dim, var(--muted));
+}
+
+/* 新标签页没有终端，用内容区的底色 */
+.tab--on.tab--newtab {
+  background: var(--content);
+}
+
+.tab--on.tab--newtab .tab__pick {
+  color: var(--text);
+}
+
+.tab--on.tab--newtab .tab__num,
+.tab--on.tab--newtab .tab__close {
+  color: var(--muted);
+}
+
+.tab__num {
+  font-family: var(--mono);
+  color: var(--muted);
+}
+
+.tab__dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.tab__dot--connected {
+  background: var(--ok);
+}
+
+.tab__dot--connecting {
+  background: var(--warn);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.tab__dot--closed,
+.tab__dot--error {
+  background: var(--warn);
+}
+
+.tab__dot--error {
+  background: var(--danger);
+}
+
+.tab__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tab__close {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.tabbar__new {
+  width: 26px;
+  height: 26px;
+  margin: 0 0 3px 4px;
+  border-radius: 50%;
+}
+
+.tabbar__tool {
+  margin-bottom: 4px;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ---------- 底部状态条 ---------- */
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  min-height: 22px;
+  padding: 0 10px;
+  background: var(--bar);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  flex: 0 0 auto;
+}
+
+.footer__status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text);
+}
+
+.footer__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.footer__dot--connected {
+  background: var(--ok);
+}
+
+.footer__dot--connecting,
+.footer__dot--closed {
+  background: var(--warn);
+}
+
+.footer__dot--error {
+  background: var(--danger);
+}
+
+.footer__right {
+  margin-left: auto;
+  font-family: var(--mono);
+}
+
+/* ---------- 下拉菜单 / 右键菜单 ---------- */
+
+.dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.dropdown__pop {
+  position: absolute;
+  z-index: 40;
+  min-width: 180px;
+}
+
+.dropdown__pop--down {
+  top: calc(100% + 4px);
+}
+
+.dropdown__pop--up {
+  bottom: calc(100% + 4px);
+}
+
+.dropdown__pop--left {
+  left: 0;
+}
+
+.dropdown__pop--right {
+  right: 0;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 160px;
+}
+
+.menu {
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bar);
+  box-shadow: var(--shadow);
+  font-size: 12.5px;
+}
+
+.menu__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 24px;
+  padding: 0 8px 0 4px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.menu__item:hover:not(:disabled),
+.menu__item:focus-visible {
+  background: var(--accent);
+  color: #ffffff;
+  outline: none;
+}
+
+.menu__item:hover:not(:disabled) .menu__hint,
+.menu__item:focus-visible .menu__hint {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.menu__item:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.menu__item--danger {
+  color: var(--danger);
+}
+
+.menu__check {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  flex: 0 0 auto;
+}
+
+.menu__text {
+  flex: 1 1 auto;
+}
+
+.menu__hint {
+  margin-left: 16px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.menu__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--line);
+}
+
+.menu__label {
+  padding: 4px 8px 2px 24px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* ---------- 模态窗 ---------- */
+
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--scrim);
+}
+
+.modal {
+  width: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--content);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  outline: none;
+}
+
+.modal--sheet {
+  background: var(--sheet);
+}
+
+.modal__head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  flex: 0 0 auto;
+}
+
+.modal--window .modal__head {
+  background: var(--bar);
+}
+
+.modal__lights {
+  position: absolute;
+  left: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.modal__light {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--track);
+}
+
+.modal__light--close {
+  background: #ff5f57;
+}
+
+.modal__light--close:hover {
+  filter: brightness(0.9);
+}
+
+.modal__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.modal__extra {
+  position: absolute;
+  right: 12px;
+}
+
+/* 小对话框正文 */
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 16px 14px;
+}
+
+.dialog-body > label {
+  color: var(--muted);
+}
+
+.dialog-body > .field,
+.dialog-body .keypick {
+  width: 100%;
+}
+
+.dialog-message {
+  margin: 0;
+  line-height: 1.5;
+  user-select: text;
+}
+
+.dialog-error {
+  color: var(--danger);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 6px;
+}
+
+/* 内嵌在面板里的错误提示条 */
+.inline-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border-bottom: 1px solid var(--line2);
+}
+
+.inline-error .tb {
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+}

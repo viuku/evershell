@@ -1,0 +1,327 @@
+/* 左侧服务器状态栏 */
+
+.sidebar {
+  flex: 0 0 232px;
+  width: 232px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--side);
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+}
+
+/* 顶部留 38px 和标签栏对齐（桌面端以后用系统窗口按钮时正好放在这里） */
+.sidebar__head {
+  height: 38px;
+  flex: 0 0 auto;
+}
+
+.sidebar__body {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 2px 12px 14px;
+}
+
+.sidebar__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  min-height: 18px;
+}
+
+.sidebar__sync {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sidebar__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.sidebar__ip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sidebar__ipText {
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+
+.sidebar__info {
+  width: 100%;
+}
+
+.sidebar__kv {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar__load {
+  font-size: 11.5px;
+}
+
+.sidebar__unsupported {
+  padding: 14px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* 仪表条 */
+.sidebar__meters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.meter {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.meter__track {
+  position: relative;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.meter__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+  transition: width 0.4s ease;
+}
+
+.meter__fill--warn {
+  background: color-mix(in srgb, var(--warn) 40%, transparent);
+}
+
+.meter__text {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+  padding: 0 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+/* 进程 / 磁盘表 */
+.sidebar__table {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--content);
+  overflow: hidden;
+}
+
+.sidebar__th,
+.sidebar__tr {
+  display: grid;
+  gap: 4px;
+  padding: 0 6px;
+  align-items: center;
+}
+
+.sidebar__th {
+  padding: 3px 6px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--line2);
+  color: var(--muted);
+}
+
+.sidebar__tr {
+  font-size: 11px;
+}
+
+.sidebar__tr:nth-child(even of .sidebar__tr) {
+  background: var(--zebra);
+}
+
+.sidebar__th--procs,
+.sidebar__tr--procs {
+  grid-template-columns: 46px 40px minmax(0, 1fr);
+}
+
+.sidebar__tr--procs {
+  height: 18px;
+}
+
+.sidebar__th--disks,
+.sidebar__tr--disks {
+  grid-template-columns: minmax(0, 1fr) 92px;
+}
+
+.sidebar__tr--disks {
+  height: 19px;
+}
+
+.sidebar__placeholder {
+  height: 110px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.sidebar__placeholder--short {
+  height: 60px;
+}
+
+.warn {
+  color: var(--warn);
+}
+
+.up {
+  color: var(--up);
+}
+
+.down {
+  color: var(--down);
+}
+
+/* 曲线图 */
+.sidebar__chart {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar__chartHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  white-space: pre;
+}
+
+.sidebar__nic {
+  height: 18px;
+  max-width: 90px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: var(--font);
+}
+
+.sidebar__nicText {
+  font-family: var(--font);
+}
+
+.sidebar__netPlot {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 4px;
+}
+
+.sidebar__axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 56px;
+  font-size: 10px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.sidebar__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 56px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sidebar__bars--ping {
+  height: 28px;
+}
+
+.sidebar__barPair {
+  flex: 1 1 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+}
+
+.sidebar__bar {
+  flex: 1 1 0;
+  min-width: 0;
+  opacity: 0.8;
+  transition: height 0.3s ease;
+}
+
+.sidebar__bar.up {
+  background: var(--up);
+}
+
+.sidebar__bar.down {
+  background: var(--down);
+}
+
+.sidebar__bar.accent {
+  background: var(--accent);
+  opacity: 0.55;
+}
+
+.sidebar__emptyPlot {
+  border: 1px solid var(--line2);
+  border-radius: 5px;
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 17px, var(--line2) 17px, var(--line2) 18px);
+}
+
+.sidebar__emptyPlot--net {
+  height: 54px;
+}
+
+.sidebar__emptyPlot--ping {
+  height: 36px;
+}
+
+/* 系统信息弹窗 */
+.sysinfo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.sysinfo__row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.sysinfo__row dt {
+  color: var(--muted);
+  text-align: right;
+}
+
+.sysinfo__row dd {
+  margin: 0;
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+}

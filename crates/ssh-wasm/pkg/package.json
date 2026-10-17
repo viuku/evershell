@@ -1,0 +1,7 @@
+{
+  "name": "@evershell/ssh-wasm",
+  "private": true,
+  "type": "module",
+  "main": "ssh_wasm.js",
+  "types": "ssh_wasm.d.ts"
+}

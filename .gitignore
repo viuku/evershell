@@ -1,0 +1,14 @@
+target/
+node_modules/
+dist/
+.wrangler/
+*.local
+.DS_Store
+# wasm-bindgen 产物不进仓库，只保留 package.json 让 npm workspace 能解析
+crates/ssh-wasm/pkg/*
+!crates/ssh-wasm/pkg/package.json
+.dev.vars
+# 本机个人配置和环境变量
+.claude/settings.local.json
+.env
+.env.*

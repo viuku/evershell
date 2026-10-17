@@ -1,0 +1,322 @@
+/* 底部四个分页 */
+
+.bottom {
+  position: relative;
+  flex: 0 0 280px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+
+.splitter {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  z-index: 3;
+  cursor: row-resize;
+}
+
+.splitter:hover,
+.splitter--on {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.bottom__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 8px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+
+.bottom__follow {
+  margin-left: auto;
+}
+
+.bottom__offline {
+  flex: 1 1 auto;
+}
+
+/* ---------- 文件 ---------- */
+
+.files {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+}
+
+.files__tree {
+  flex: 0 0 170px;
+  min-width: 0;
+  padding: 4px;
+  background: var(--side);
+  border-right: 1px solid var(--line);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.tree__row {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  border-radius: 5px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.tree__row:hover {
+  background: var(--hover);
+}
+
+.tree__row--on,
+.tree__row--on:hover {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.tree__toggle {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 22px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.tree__pick {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 2px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font-size: 11.5px;
+  overflow: hidden;
+}
+
+.tree__pick svg {
+  flex: 0 0 auto;
+}
+
+.tree__loading {
+  opacity: 0.6;
+}
+
+.files__main {
+  flex: 1 1 420px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.files__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line2);
+  flex: 0 0 auto;
+}
+
+.files__path {
+  flex: 1 1 200px;
+}
+
+.files__table {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.files__inner {
+  min-width: 560px;
+}
+
+.files__cols {
+  grid-template-columns: minmax(0, 1fr) 80px 96px 92px 70px;
+}
+
+.files__row {
+  height: 21px;
+}
+
+.files__row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.files__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.files__name svg {
+  flex: 0 0 auto;
+}
+
+.files__right {
+  text-align: right;
+  padding-right: 8px;
+}
+
+.files__perm {
+  font-size: 11px;
+}
+
+/* ---------- 快捷命令 ---------- */
+
+.snips {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.snips__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line2);
+  flex: 0 0 auto;
+}
+
+.snips__new {
+  margin-left: auto;
+}
+
+.snips__table {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.snips__inner,
+.hist__inner,
+.xfer__inner {
+  min-width: 560px;
+}
+
+.snips__cols {
+  grid-template-columns: 140px minmax(0, 1fr) 70px 64px;
+}
+
+.snips__row,
+.hist__row {
+  height: 24px;
+}
+
+.snips__cmd,
+.hist__cmd {
+  font-size: 11.5px;
+  user-select: text;
+}
+
+.snips__send,
+.hist__send {
+  justify-self: end;
+}
+
+/* ---------- 历史 ---------- */
+
+.hist {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.hist__cols {
+  grid-template-columns: 64px minmax(0, 1fr) 100px 76px;
+}
+
+/* ---------- 传输 ---------- */
+
+.xfer {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.xfer__cols {
+  grid-template-columns: 28px minmax(0, 1.2fr) minmax(0, 1.4fr) 120px 150px;
+}
+
+.xfer__row {
+  height: 26px;
+}
+
+.xfer__route {
+  font-size: 11px;
+}
+
+.xfer__progress {
+  display: flex;
+  align-items: center;
+  padding-right: 10px;
+}
+
+.xfer__track {
+  flex: 1 1 auto;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.xfer__fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.2s linear;
+}
+
+.xfer__fill--error {
+  background: var(--danger);
+}
+
+.xfer__error {
+  color: var(--danger);
+}
+
+/* 弹窗里的表单：左标签右控件 */
+.form {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 8px 10px;
+  align-items: start;
+  padding: 4px 20px 14px;
+}
+
+.lbl {
+  text-align: right;
+  font-size: 12px;
+  padding-top: 3px;
+}
+
+.form__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 6px;
+}

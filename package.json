@@ -1,0 +1,9 @@
+{
+  "name": "evershell",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "crates/ssh-wasm/pkg"
+  ]
+}

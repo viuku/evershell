@@ -1,0 +1,172 @@
+diff -ruN -x Cargo.toml.orig -x benches -x examples -x Cargo.lock -x .DS_Store -x LICENSE a/russh/Cargo.toml b/russh/Cargo.toml
+--- a/russh/Cargo.toml	2026-10-17 20:29:57
++++ b/russh/Cargo.toml	2026-10-17 07:09:30
+@@ -455,3 +455,8 @@
+ 
+ [target."cfg(windows)".dependencies.pageant]
+ version = "0.2"
++
++# 本仓库补丁：wasm32 下的定时器（见 src/rt_time.rs）
++[target.'cfg(target_arch = "wasm32")'.dependencies.futures-timer]
++version = "3.0.3"
++features = ["wasm-bindgen"]
+diff -ruN -x Cargo.toml.orig -x benches -x examples -x Cargo.lock -x .DS_Store -x LICENSE a/russh/src/client/encrypted.rs b/russh/src/client/encrypted.rs
+--- a/russh/src/client/encrypted.rs	2026-10-17 20:29:57
++++ b/russh/src/client/encrypted.rs	2026-10-17 20:20:34
+@@ -505,13 +505,18 @@
+                 debug!("channel_close");
+                 let channel_num = map_err!(ChannelId::decode(&mut r))?;
+                 map_err!(ensure_end(&r))?;
+-                if !self.common.is_established_channel(channel_num) {
++                // 本仓库补丁：我们自己先发了 CHANNEL_CLOSE 的 channel 已经不在协议状态表里，
++                // 但服务器回的 CHANNEL_CLOSE 仍要转给 Channel，否则 `Channel::wait()` 永远不会结束。
++                let established = self.common.is_established_channel(channel_num);
++                if !established && !self.channels.contains_key(&channel_num) {
+                     return Ok(());
+                 }
+-                if let Some(ref mut enc) = self.common.encrypted {
+-                    // The CHANNEL_CLOSE message must be sent to the server at this point or the session
+-                    // will not be released.
+-                    enc.close(channel_num)?;
++                if established {
++                    if let Some(ref mut enc) = self.common.encrypted {
++                        // The CHANNEL_CLOSE message must be sent to the server at this point or the session
++                        // will not be released.
++                        enc.close(channel_num)?;
++                    }
+                 }
+                 // Forward the close to the channel before removing it, so that
+                 // consumers waiting on `Channel::wait()` receive an explicit
+diff -ruN -x Cargo.toml.orig -x benches -x examples -x Cargo.lock -x .DS_Store -x LICENSE a/russh/src/client/mod.rs b/russh/src/client/mod.rs
+--- a/russh/src/client/mod.rs	2026-10-17 20:29:57
++++ b/russh/src/client/mod.rs	2026-10-17 07:09:23
+@@ -745,7 +745,7 @@
+             })
+             .await
+             .map_err(|_| crate::Error::SendError)?;
+-        let _ = tokio::time::timeout(Duration::from_secs(1), receiver).await;
++        let _ = crate::rt_time::timeout(Duration::from_secs(1), receiver).await;
+         Ok(())
+     }
+ 
+@@ -1356,11 +1356,11 @@
+         std::mem::swap(&mut opening_cipher, &mut self.common.remote_to_local);
+ 
+         let keepalive_timer =
+-            crate::future_or_pending(self.common.config.keepalive_interval, tokio::time::sleep);
++            crate::future_or_pending(self.common.config.keepalive_interval, crate::rt_time::sleep);
+         pin!(keepalive_timer);
+ 
+         let inactivity_timer =
+-            crate::future_or_pending(self.common.config.inactivity_timeout, tokio::time::sleep);
++            crate::future_or_pending(self.common.config.inactivity_timeout, crate::rt_time::sleep);
+         pin!(inactivity_timer);
+ 
+         let reading = start_reading(stream_read, buffer, opening_cipher);
+@@ -1375,7 +1375,7 @@
+             // window-blocked.
+             let can_receive_outbound = !self.kex.active() && !self.common.has_any_pending_data();
+             let rekey_timer =
+-                crate::future_or_pending(self.rekey_time_remaining(), tokio::time::sleep);
++                crate::future_or_pending(self.rekey_time_remaining(), crate::rt_time::sleep);
+             pin!(rekey_timer);
+             tokio::select! {
+                 r = &mut reading => {
+@@ -1518,7 +1518,7 @@
+                     self.common.config.keepalive_interval,
+                 )
+             {
+-                sleep.as_mut().reset(tokio::time::Instant::now() + d);
++                crate::rt_time::reset(sleep.as_mut(), d);
+             }
+             if !sent_keepalive
+                 && let (futures::future::Either::Right(ref mut sleep), Some(d)) = (
+@@ -1526,7 +1526,7 @@
+                     self.common.config.inactivity_timeout,
+                 )
+             {
+-                sleep.as_mut().reset(tokio::time::Instant::now() + d);
++                crate::rt_time::reset(sleep.as_mut(), d);
+             }
+         }
+ 
+diff -ruN -x Cargo.toml.orig -x benches -x examples -x Cargo.lock -x .DS_Store -x LICENSE a/russh/src/lib.rs b/russh/src/lib.rs
+--- a/russh/src/lib.rs	2026-10-17 20:29:57
++++ b/russh/src/lib.rs	2026-10-17 07:10:11
+@@ -6,6 +6,8 @@
+ )]
+ #![allow(clippy::single_match, clippy::upper_case_acronyms)]
+ #![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
++// 本仓库补丁：wasm32 下服务端相关代码用不到，上游会产生一批 dead_code 警告
++#![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
+ // length checked
+ // Copyright 2016 Pierre-Étienne Meunier
+ //
+diff -ruN -x Cargo.toml.orig -x benches -x examples -x Cargo.lock -x .DS_Store -x LICENSE a/russh/src/lib_inner.rs b/russh/src/lib_inner.rs
+--- a/russh/src/lib_inner.rs	2026-10-17 20:29:57
++++ b/russh/src/lib_inner.rs	2026-10-17 07:09:23
+@@ -41,6 +41,7 @@
+ pub use sshbuffer::SshId;
+ 
+ mod helpers;
++mod rt_time;
+ 
+ pub(crate) use helpers::map_err;
+ 
+diff -ruN -x Cargo.toml.orig -x benches -x examples -x Cargo.lock -x .DS_Store -x LICENSE a/russh/src/rt_time.rs b/russh/src/rt_time.rs
+--- a/russh/src/rt_time.rs	1970-01-01 07:30:00
++++ b/russh/src/rt_time.rs	2026-10-17 07:09:23
+@@ -0,0 +1,53 @@
++//! 定时器抽象（本仓库补丁，见 vendor/README.md）。
++//!
++//! tokio 的定时器依赖 `std::time::Instant`，在 wasm32-unknown-unknown 上会直接 panic，
++//! 所以 wasm32 下改用 futures-timer（底层是浏览器的 setTimeout）。原生平台行为不变。
++
++use std::future::Future;
++use std::pin::Pin;
++use std::time::Duration;
++
++#[cfg(not(target_arch = "wasm32"))]
++pub(crate) use tokio::time::{Sleep, sleep};
++
++#[cfg(not(target_arch = "wasm32"))]
++pub(crate) fn reset(sleep: Pin<&mut Sleep>, after: Duration) {
++    sleep.reset(tokio::time::Instant::now() + after);
++}
++
++/// 超时返回 None
++#[cfg(not(target_arch = "wasm32"))]
++pub(crate) async fn timeout<F: Future>(after: Duration, fut: F) -> Option<F::Output> {
++    tokio::time::timeout(after, fut).await.ok()
++}
++
++#[cfg(target_arch = "wasm32")]
++pub(crate) struct Sleep(futures_timer::Delay);
++
++#[cfg(target_arch = "wasm32")]
++pub(crate) fn sleep(after: Duration) -> Sleep {
++    Sleep(futures_timer::Delay::new(after))
++}
++
++#[cfg(target_arch = "wasm32")]
++impl Future for Sleep {
++    type Output = ();
++    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<()> {
++        Pin::new(&mut self.0).poll(cx)
++    }
++}
++
++#[cfg(target_arch = "wasm32")]
++pub(crate) fn reset(mut sleep: Pin<&mut Sleep>, after: Duration) {
++    sleep.0.reset(after);
++}
++
++#[cfg(target_arch = "wasm32")]
++pub(crate) async fn timeout<F: Future>(after: Duration, fut: F) -> Option<F::Output> {
++    use futures::future::{Either, select};
++    let fut = std::pin::pin!(fut);
++    match select(fut, futures_timer::Delay::new(after)).await {
++        Either::Left((out, _)) => Some(out),
++        Either::Right(_) => None,
++    }
++}
