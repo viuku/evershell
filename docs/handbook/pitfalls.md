@@ -1,8 +1,10 @@
-# 踩过的坑
+# 已知坑
 
-第三方库、平台和本机环境里已经查清楚的问题。碰到奇怪现象先在这里搜症状（报错原文、关键词），别再去翻依赖源码。
+> **管什么**：第三方库、平台里已经查清楚的问题，以及还没解决的已知问题。
+> **什么时候更新**：新查清一个坑就加一条，写上日期；坑不存在了（上游修了、代码删了）就删掉那条。
+> **上次复核**：2026-10-18
 
-每条的格式：**症状** → **原因** → **现在的处理**（在哪）→ 什么时候能去掉。新查清一个坑就加一条，写上日期；坑不存在了（上游修了、代码删了）就删掉那条。环境和 shell 的小毛病在 [environment.md](environment.md#claude-环境里的怪癖)，这里只放跟代码有关的。
+碰到奇怪现象先在这里搜症状（报错原文、关键词），别再去翻依赖源码。每条的格式：**症状** → **原因** → **现在的处理**（在哪）→ 什么时候能去掉。环境和 shell 的小毛病在 [environment.md](environment.md#claude-环境里的怪癖)，安全方面的已知缺口在 [security.md](security.md#已知缺口2026-10-18)，这里只放跟代码有关的。
 
 ## 还没解决的
 
@@ -10,7 +12,7 @@
 
 - **症状**：连上所有者的服务器那一秒，桌面端日志出现 `WARN russh_sftp::client Bad message: packet length limit exceeded`，文件面板可能用不了。本机 test-sshd 上不出现。
 - **推测的原因（没确认）**：服务器的登录脚本（`~/.bashrc` 之类）在非交互会话里往标准输出打印了文字，混进 SFTP 数据流，russh-sftp 把开头几个字节当成包长，长度超限。russh 的 `into_stream` 只读标准输出不读标准错误，所以是标准输出上的文字。
-- **复现**：`scripts/test-sshd.sh start --noisy`（SFTP 启动前先打印一行字），然后 `eval "$(scripts/test-sshd.sh env --noisy)" && cargo test -p ssh-core --test real_server sftp_roundtrip`。
+- **复现**：`scripts/test-sshd.sh start --noisy`（SFTP 启动前先打印一行字），然后 `eval "$(scripts/test-sshd.sh env --noisy)" && cargo test -p ssh-core --test real_server sftp_roundtrip`（按名字子串匹配，全名 `sftp_roundtrip_in_tmpdir`）。
 - **打算的处理**：在 `crates/ssh-core/src/sftp.rs` 打开 SFTP 时识别这种情况，给出中文提示“服务器登录时输出了文字，干扰了文件传输”，并告诉用户怎么改登录脚本。
 
 ### 全屏时收起侧栏，标签栏左边空一段（2026-10-18）
@@ -41,9 +43,9 @@ ring 用 getrandom 0.2，russh 和 vault 用 0.3。wasm32 下 0.3 要开 `wasm_j
 - **处理**：`vendor/russh` 是打了补丁的 russh 0.64.1，根 `Cargo.toml` 的 `[patch.crates-io]` 指过去。同一个补丁还修了 CHANNEL_CLOSE（客户端先关的通道收不到退出事件）。改动和升级步骤见 [vendor/README.md](../../vendor/README.md)。
 - **注意**：升级 russh 必须重新打补丁；上游修好后删掉 vendor 和 `[patch.crates-io]`。
 
-### 内核里起后台任务用 `crate::spawn`，不要直接 `tokio::spawn`
+### 内核里起后台任务、计时，都要走内核自己的函数
 
-`crates/ssh-core/src/lib.rs` 的 `spawn` 在原生平台转给 `tokio::spawn`（必须在 tokio 运行时里调用），在 wasm32 上转给 `spawn_local`。直接写 `tokio::spawn` 或 `std::thread` 会让 WASM 编不过或跑不起来。
+`crates/ssh-core/src/lib.rs` 里有三个按平台区分的函数：`spawn`（原生转给 `tokio::spawn`，WASM 转给 `spawn_local`）、`now`（原生 `std::time::Instant`，WASM 用 web-time）、`sleep`（原生 tokio，WASM 用浏览器定时器）。直接写 `tokio::spawn`、`std::thread`、`std::time::Instant`、`tokio::time`，原生平台照样能编能跑，到浏览器里才编不过或 panic，只有 `scripts/check.sh web` 才发现得了。`scripts/check-guards.sh` 会拦这几种写法。
 
 ### 浏览器的 WebSocket 不能跨线程（M0）
 
@@ -55,7 +57,7 @@ russh 要求字节流能跨线程（`Send`），浏览器的 WebSocket 不行。
 
 - **症状**：连上服务器后应用直接消失。日志：`there is no reactor running, must be called from the context of a Tokio 1.x runtime`，接着 `fatal runtime error: failed to initiate panic`。
 - **原因**：不带 `async` 的 `#[tauri::command]` 跑在主线程上，那里没有 tokio 运行时。当时 `ssh_monitor_start` 是同步命令，一路调到内核的 `spawn` 就崩了。
-- **规矩**：命令只要会直接或间接用到 tokio（spawn、网络、计时），就写成 `async fn`。现在只有不碰 tokio 的几个（写入、调整窗口、关闭、停监控）是同步的，改它们时留意。
+- **规矩**：命令只要会直接或间接用到 tokio（spawn、网络、计时），就写成 `async fn`。现在只有不碰 tokio 的几个（写入、调整窗口、关闭、停监控）是同步的，改它们时留意。这条没法用 grep 判断，靠测试：`apps/desktop/src-tauri/tests/session.rs` 连 test-sshd 跑的就是真实的命令路径。
 
 ### invoke 的参数名和数据怎么传
 
@@ -75,11 +77,13 @@ russh 要求字节流能跨线程（`Send`），浏览器的 WebSocket 不行。
 - **症状**：系统是深色模式，窗口顶部却是一条白色标题栏。
 - **已经查清，别再去翻 tao / wry 源码**：同一台机器上普通 AppKit 窗口的标题栏是深色的，Tauri 窗口就算在代码里强制设成深色也还是浅色。Clash Verge Rev（也是 Tauri）同样中招。是 Tauri 在 macOS 27 上的毛病。
 - **处理**：不用系统标题栏。`apps/desktop/src-tauri/tauri.macos.conf.json` 里 `titleBarStyle: Overlay`、`hiddenTitle`、`trafficLightPosition`，界面一直画到顶；可拖动的空白处用 `packages/ui/src/core/platform.ts` 的 `dragRegion` 标记，`capabilities/default.json` 加了 `core:window:allow-start-dragging`；侧栏收起时标签栏给红绿灯让出 78px（`apps/desktop/src/main.tsx` 只在 Mac 上传这个值）。
-- 调红绿灯位置只改 `trafficLightPosition`，改完用 `scripts/mac-preview.sh` 截图、`mac-window.sh shot --crop` 放大看对齐。
+- 调红绿灯位置只改 `trafficLightPosition`，改完用 `scripts/mac-preview.sh` 截图、`scripts/mac-window.sh shot --crop` 放大看对齐。
 
 ### 调试版和正式版共用所有者的真实数据
 
-应用标识都是 `dev.evershell.desktop`（发布后不能再改，钥匙串和数据目录都挂在它下面），所以 `tauri dev`、调试版 .app、`build/EverShell.app` 读写的是同一份连接列表（WebView 的 localStorage）、同一个保险箱（应用数据目录下的 `vault.json`）和同一批钥匙串条目。
+应用标识都是 `dev.evershell.desktop`（发布后不能再改，钥匙串和数据目录都挂在它下面），所以 `tauri dev`、调试版 .app、`build/EverShell.app` 读写的是同一份连接列表（WebView 的本地存储）、同一个保险箱（应用数据目录下的 `vault.json`）和同一批钥匙串条目（全部清单见 [data.md](data.md#本机存了什么)）。
+
+同类项目（GitButler、Yaak）给开发构建单独一个应用标识来避免这个问题（调研附录 A 3.3）。要做的话会改应用配置，并且开发版要重新存一遍测试用的连接，做之前问所有者。
 
 - 自己开的调试版只看不动：不连接、不保存、不删除连接。
 - 保险箱的异常情况（钥匙对不上、文件损坏）用 `apps/desktop/src-tauri/src/secrets.rs` 里的单元测试测，它们用临时目录和假钥匙串。别在真实数据上试，打不开的保险箱会被改名备份、换成新的，所有者要重新输密码。
@@ -90,7 +94,7 @@ russh 要求字节流能跨线程（`Send`），浏览器的 WebSocket 不行。
 
 ### 自动化工具操作不了原生窗口
 
-往 Tauri 窗口后台发按键会丢键，模拟拖动也带不动窗口；全屏控制要所有者批准，他不会点（两次都等到超时）。原生窗口只截图，交互放到网页版 `?mock` 里测，或者请所有者试。
+往 Tauri 窗口后台发按键会丢键，模拟拖动也带不动窗口；“控制电脑”的授权所有者不会点。原生窗口只截图，交互放到网页版 `?mock` 里测，或者请所有者试（[quality.md](quality.md#b-原生窗口只截图不操作)）。
 
 ## 网页端和中转
 
@@ -104,19 +108,24 @@ russh 要求字节流能跨线程（`Send`），浏览器的 WebSocket 不行。
 
 ## 界面
 
-### 颜色变量写了两遍
+### 颜色要一起改的几处
 
-`packages/ui/src/styles/base.css` 里深色变量出现两次：`.ap-dark`（应用里手动选深色）和 `@media (prefers-color-scheme: dark)` 里的 `.ap-auto`（跟随系统）。改深色要两处一起改，浅色只有 `.ap-light, .ap-auto` 一处。终端的颜色不在这里，在 `packages/ui/src/core/terminal-appearance.ts`（预设、配色，浅色终端底色 `#EEF0F3` 和选中标签同色）。
+- `packages/ui/src/styles/base.css` 里深色变量出现两次：`.ap-dark`（应用里手动选深色）和 `@media (prefers-color-scheme: dark)` 里的 `.ap-auto`（跟随系统）。改深色要两处一起改；浅色只有 `.ap-light, .ap-auto` 一处。
+- **选中标签的文字颜色写死在 `packages/ui/src/App.tsx`**：`--tab-on-fg`、`--tab-on-dim` 直接写了 `--text`、`--muted` 的颜色值，`app.css` 用它们画选中标签。只改 base.css，选中标签上的字不会变。而且它们是**按终端底色的深浅**取值，不是按界面深浅，所以“只改深色”也会改到“浅色界面 + 深色终端预设”时选中标签上的字。
+- **标签栏底色 `--strip`** 要和 `packages/ui/src/core/terminal-appearance.ts` 的 `STRIP_COLORS` 同步（base.css 开头的注释写了原因）。
+- 终端本身的颜色不在 base.css，在 `terminal-appearance.ts`（预设、配色；浅色终端底色 `#EEF0F3` 和选中标签同色）。
+- 改之前先全局搜一遍颜色值，看有没有别的地方也写死了：`grep -rniI --exclude-dir={node_modules,dist,target} "a3a3aa" packages apps`（换成你要改的值）。
+- 验证深色时两组都要看，做法见 [quality.md](quality.md#a-网页版-mock界面改动的主力) 第 4、5 步。
 
 ### 应用里的“外观”设置会盖过系统
 
-界面深浅色存在 localStorage 的 `evershell.appearance-mode`（跟随系统 / 浅色 / 深色）。用浏览器的深浅色模拟验证时，要保证它是“跟随系统”，否则模拟不起作用；验证时手动改过就改回去。
+界面深浅色存在本地存储的 `evershell.appearance-mode`（跟随系统 / 浅色 / 深色，存的是 JSON 字符串）。用浏览器的深浅色模拟验证时要保证它是“跟随系统”，否则模拟不起作用；验证时手动改过就改回去。怎么查、怎么改见 [quality.md](quality.md#a-网页版-mock界面改动的主力) 第 3 步。
 
 ## 测试
 
 ### 连真服务器的测试没配环境会“通过”
 
-`crates/ssh-core/tests/real_server.rs` 和 `apps/desktop/src-tauri/tests/session.rs` 没有 `SSH_E2E_*` 环境变量时打印“跳过”然后算通过。先 `scripts/test-sshd.sh start`，`scripts/check.sh` 会自动带上并提示用没用上。
+`crates/ssh-core/tests/real_server.rs` 和 `apps/desktop/src-tauri/tests/session.rs` 没有 `SSH_E2E_*` 环境变量时打印“跳过”然后算通过。先开 test-sshd，见 [quality.md](quality.md#c-rust-测试和本机测试服务器)。
 
 ### 本机测试服务器是 macOS
 

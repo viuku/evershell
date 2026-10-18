@@ -47,7 +47,8 @@ while :; do
     exit 1
   fi
   ok=1
-  if [ -n "$port" ] && ! nc -z 127.0.0.1 "$port" 2>/dev/null; then ok=; fi
+  # 开发服务器有的只听 IPv6 的 ::1（比如 vite），两个都试
+  if [ -n "$port" ] && ! nc -z 127.0.0.1 "$port" 2>/dev/null && ! nc -z ::1 "$port" 2>/dev/null; then ok=; fi
   if [ -n "$match" ] && ! strip "$log" | grep -E -q -- "$match"; then ok=; fi
   if [ -n "$window" ]; then
     wid=$(scripts/mac-window.sh id ${pid:+--pid "$pid"} 2>/dev/null) || wid=

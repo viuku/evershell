@@ -1,11 +1,12 @@
 #!/bin/sh
 # 按改动范围跑检查。每步一行结果，失败时打印出错的部分，完整日志在 target/check-logs/（设了 CARGO_TARGET_DIR 就在它下面）。
 #
-#   scripts/check.sh ui        界面：packages/ui 类型检查 + 单元测试，网页端、桌面端前端类型检查
-#   scripts/check.sh core      内核：ssh-core、vault 的测试和 clippy，再检查能不能编成 WASM
-#   scripts/check.sh desktop   桌面端 Rust（Tauri 命令、会话、保险箱）：测试和 clippy
-#   scripts/check.sh web       网页端链路：重编 WASM 包；test-sshd 在跑的话再跑一遍无界面端到端测试
-#   scripts/check.sh docs      说明书里写到的路径是否都还在
+#   scripts/check.sh ui        界面：守则检查、packages/ui 类型检查 + 单元测试、网页端和桌面端前端类型检查（约 3 秒）
+#   scripts/check.sh core      内核：守则检查、ssh-core 和 vault 的测试与 clippy、能不能编成 WASM、桌面端还能不能编过（增量约 30 秒）
+#   scripts/check.sh desktop   桌面端 Rust（Tauri 命令、会话、保险箱）：测试和 clippy（增量约 30 秒）
+#   scripts/check.sh web       网页端链路：重编 WASM 包；test-sshd 在跑的话再跑一遍无界面端到端测试（约 20 秒）
+#                              注意它会重写 crates/ssh-wasm/pkg，本文件夹开着的网页版会跟着刷新
+#   scripts/check.sh docs      规范体系（CLAUDE.md、docs/handbook）里的路径、链接、锚点是否都对得上
 #   scripts/check.sh all       以上全部
 # 可以一次给多个：scripts/check.sh ui core
 #
@@ -71,6 +72,7 @@ done
 for scope in "$@"; do
   case "$scope" in
     ui)
+      step "守则检查" scripts/check-guards.sh
       step "ui 类型检查" npm run typecheck -w @evershell/ui
       step "ui 单元测试" npm test -w @evershell/ui
       step "web 类型检查" npm run typecheck -w @evershell/web
@@ -78,10 +80,12 @@ for scope in "$@"; do
       ;;
     core)
       real_server
+      step "守则检查" scripts/check-guards.sh
       step "内核测试" cargo test -p ssh-core -p vault
       step "内核 clippy" clippy -p ssh-core -p vault
       step "WASM 编译检查 ssh-wasm" cargo check -p ssh-wasm --target wasm32-unknown-unknown
       step "WASM 编译检查 vault" cargo check -p vault --target wasm32-unknown-unknown
+      step "桌面端编译检查" cargo check -p evershell-desktop --tests
       ;;
     desktop)
       real_server
@@ -95,7 +99,7 @@ for scope in "$@"; do
       if [ -n "$SSH_E2E_ADDR" ]; then step "网页端到端测试" run_e2e; fi
       ;;
     docs)
-      step "说明书路径检查" scripts/check-docs.sh
+      step "规范体系检查" scripts/check-docs.sh
       ;;
     *)
       echo "不认识的范围：$scope（ui / core / desktop / web / docs / all）"
