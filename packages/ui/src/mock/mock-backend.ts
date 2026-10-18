@@ -21,6 +21,7 @@ import { browserDownload } from '../core/browser-download';
 // 主机含 rekey → 信任过一次指纹后再连，服务器换一把钥匙（看“指纹变了”的警告）；
 // 主机含 flaky → 连上 8 秒后像网络断了一样断开（看断线提示）。
 // 服务器指纹和真的一样要先确认：第一次连每台服务器都会弹确认框。
+// 密码留空时只有主机含 nopass 能连上（模拟不要密码的服务器），其他主机和真服务器一样报认证失败，界面再弹框要密码。
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -296,7 +297,7 @@ export function createMockBackend(): SshBackend {
       await delay(400 + Math.random() * 500);
       if (/fail/i.test(opts.host)) throw new Error('连接超时：服务器无响应');
       const hostKey = checkHostKey(opts);
-      if (opts.auth.type === 'password' && opts.auth.password === 'wrong') {
+      if (opts.auth.type === 'password' && (opts.auth.password === 'wrong' || (opts.auth.password === '' && !/nopass/i.test(opts.host)))) {
         throw new Error('认证失败：用户名、密码或私钥不正确');
       }
       if (!opts.user) throw new Error('用户名不能为空');

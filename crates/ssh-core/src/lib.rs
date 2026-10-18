@@ -34,6 +34,7 @@ pub enum Error {
     Ssh(#[from] russh::Error),
     #[error("私钥无法解析: {0}")]
     Key(#[from] russh::keys::Error),
+    /// 界面按开头的「认证失败」认出这种错误（packages/ui/src/core/connect.ts 的 isAuthFailure），改文案要一起改
     #[error("认证失败：用户名、密码或私钥不正确")]
     AuthFailed,
     /// 服务器指纹没通过校验，连接在发送密码之前就停下了。界面据此弹确认框或警告
@@ -48,6 +49,7 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub enum Auth {
+    /// 空字符串表示没有密码：只在服务器不要认证时能连上，空密码本身不会发出去
     Password(String),
     PrivateKey {
         pem: String,
@@ -288,7 +290,15 @@ impl Connection {
             }
         };
 
+        // 先用 none 方式（RFC 4252 5.2 节）问服务器要不要认证，OpenSSH 和 FinalShell 用的 JSch 都这么做。
+        // 不需要认证的服务器、没设密码的账号（OpenSSH 的 PermitEmptyPasswords、dropbear 的 -B）
+        // 在这一步就放行，密码和私钥都不用发出去
+        let none = handle.authenticate_none(user).await?;
         let auth = match auth {
+            _ if none.success() => none,
+            // 空密码只靠上面的 none。真把空密码发给要密码的服务器，它的日志里会多一条密码错误，
+            // fail2ban 这类工具会算进封禁次数
+            Auth::Password(password) if password.is_empty() => none,
             Auth::Password(password) => handle.authenticate_password(user, password).await?,
             Auth::PrivateKey { pem, passphrase } => {
                 let key = decode_secret_key(&pem, passphrase.as_deref())?;

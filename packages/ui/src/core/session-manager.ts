@@ -1,6 +1,7 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal, type IDisposable, type ITheme } from '@xterm/xterm';
 import { HostKeyError, type AuthConfig, type ConnectOptions, type HostKeyProblem, type MonitorSnapshot, type SshBackend, type SshSession } from '../types';
+import { isAuthFailure, isBlankPassword, type ConnectTarget } from './connect';
 import { FileBrowser } from './file-browser';
 import { pushHistory } from './history-store';
 import { applyHostKeyDecision, KnownHostsStore, withTrustOnce, type AskableHostKeyProblem, type HostKeyDecision } from './known-hosts';
@@ -111,6 +112,9 @@ interface Entry {
   cwdFromOsc: boolean;
 }
 
+/** 不带密码没连上时向用户要密码；返回 null 表示取消 */
+export type PasswordPrompt = (target: ConnectTarget) => Promise<string | null>;
+
 export interface TerminalLook {
   theme: ITheme;
   fontSize: number;
@@ -137,6 +141,7 @@ export class SessionManager {
   /** 服务器指纹记录，连接前读出来交给后端校验 */
   readonly knownHosts: KnownHostsStore;
   private hostKeyPrompt: HostKeyPrompt = async () => 'cancel';
+  private passwordPrompt: PasswordPrompt = async () => null;
 
   constructor(
     private readonly backend: SshBackend,
@@ -149,6 +154,11 @@ export class SessionManager {
   /** 界面挂上确认框；没挂时一律当作不连 */
   setHostKeyPrompt(prompt: HostKeyPrompt): void {
     this.hostKeyPrompt = prompt;
+  }
+
+  /** 界面挂上密码框；没挂时服务器要密码就当作取消 */
+  setPasswordPrompt(prompt: PasswordPrompt): void {
+    this.passwordPrompt = prompt;
   }
 
   readonly subscribe = (listener: () => void): (() => void) => {
@@ -419,6 +429,10 @@ export class SessionManager {
         return;
       }
       const message = errorMessage(err);
+      if (isAuthFailure(message) && isBlankPassword(entry.options.auth)) {
+        void this.askPassword(entry, trustOnce);
+        return;
+      }
       this.update(info.id, { status: 'error', error: message });
       term.write(`\r\n\x1b[31m连接失败：${message}\x1b[0m\r\n`);
     }
@@ -449,6 +463,21 @@ export class SessionManager {
       this.update(info.id, { status: 'error', error: new HostKeyError(problem).message });
       term.write(`\r\n\x1b[33m[已取消连接：主机 ${where} ${what}]\x1b[0m\r\n`);
     }
+  }
+
+  /** 不带密码没连上，说明服务器要密码：问用户要，拿到后重连。问的时候标签保持“连接中”。
+   *  `trustOnce` 原样带回重连，免得“只接受本次”的主机密钥再问一遍 */
+  private async askPassword(entry: Entry, trustOnce = ''): Promise<void> {
+    const { term, info } = entry;
+    const password = await this.passwordPrompt(info).catch(() => null);
+    if (!this.entries.has(info.id)) return;
+    if (password === null) {
+      this.update(info.id, { status: 'closed', error: '连接已取消' });
+      term.write('\r\n\x1b[90m[连接已取消]\x1b[0m\r\n');
+      return;
+    }
+    entry.options = { ...entry.options, auth: { type: 'password', password } };
+    void this.connect(entry, trustOnce);
   }
 
   private teardown(entry: Entry): void {

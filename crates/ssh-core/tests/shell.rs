@@ -2,7 +2,7 @@
 //! 心跳断线检测和终端输出回压。
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use russh::keys::ssh_key::LineEnding;
@@ -43,13 +43,28 @@ fn pem(key: &PrivateKey) -> String {
     key.to_openssh(LineEnding::LF).unwrap().to_string()
 }
 
+/// 服务端收到过哪些认证请求（只记方式，不记密码），按到达顺序
+#[derive(Clone, Default)]
+struct AuthLog(Arc<Mutex<Vec<&'static str>>>);
+
+impl AuthLog {
+    fn push(&self, method: &'static str) {
+        self.0.lock().unwrap().push(method);
+    }
+
+    fn methods(&self) -> Vec<&'static str> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+/// 账号：tester 要密码 secret 或测试私钥；nopass 没设密码，
+/// 像开了 PermitEmptyPasswords 的 OpenSSH 一样，在 none 这一步就放行
 #[derive(Clone)]
 struct EchoServer {
     allowed_keys: Vec<PublicKey>,
-    /// 收到过几次密码认证请求
-    password_attempts: Arc<std::sync::atomic::AtomicUsize>,
     /// 收到 Ctrl-C 时置位，让 flood 停下
     interrupted: Arc<AtomicBool>,
+    auth_log: AuthLog,
 }
 
 impl server::Server for EchoServer {
@@ -62,8 +77,17 @@ impl server::Server for EchoServer {
 impl server::Handler for EchoServer {
     type Error = russh::Error;
 
+    async fn auth_none(&mut self, user: &str) -> Result<server::Auth, Self::Error> {
+        self.auth_log.push("none");
+        if user == "nopass" {
+            Ok(server::Auth::Accept)
+        } else {
+            Ok(server::Auth::reject())
+        }
+    }
+
     async fn auth_password(&mut self, user: &str, password: &str) -> Result<server::Auth, Self::Error> {
-        self.password_attempts.fetch_add(1, Ordering::SeqCst);
+        self.auth_log.push("password");
         if user == "tester" && password == "secret" {
             Ok(server::Auth::Accept)
         } else {
@@ -176,27 +200,27 @@ impl server::Handler for EchoServer {
 }
 
 async fn start_server() -> u16 {
-    start_server_counting().await.0
+    start_server_logged().await.0
 }
 
-/// 同 start_server，另外返回密码认证次数的计数器
-async fn start_server_counting() -> (u16, Arc<std::sync::atomic::AtomicUsize>) {
+/// 同 [`start_server`]，另外返回服务端收到的认证请求记录
+async fn start_server_logged() -> (u16, AuthLog) {
     let config = Arc::new(server::Config {
         keys: vec![keys().host.clone()],
         auth_rejection_time: Duration::from_millis(10),
         auth_rejection_time_initial: Some(Duration::ZERO),
         ..Default::default()
     });
+    let auth_log = AuthLog::default();
     let mut server = EchoServer {
         allowed_keys: vec![keys().ed25519.public_key().clone(), keys().rsa.public_key().clone()],
         interrupted: Arc::new(AtomicBool::new(false)),
-        password_attempts: Default::default(),
+        auth_log: auth_log.clone(),
     };
-    let attempts = server.password_attempts.clone();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     tokio::spawn(async move { server.run_on_socket(config, &listener).await });
-    (port, attempts)
+    (port, auth_log)
 }
 
 /// 一直读，直到累计输出里出现 `needle`
@@ -220,8 +244,12 @@ fn accept_any() -> ConnectConfig {
 }
 
 async fn connect(port: u16, auth: Auth) -> ssh_core::Result<Connection> {
+    connect_as(port, "tester", auth).await
+}
+
+async fn connect_as(port: u16, user: &str, auth: Auth) -> ssh_core::Result<Connection> {
     let stream = connect_tcp("127.0.0.1", port).await?;
-    Connection::connect(stream, "tester", auth, &ConnectConfig::new(HostKeyCheck::AcceptAny)).await
+    Connection::connect(stream, user, auth, &ConnectConfig::new(HostKeyCheck::AcceptAny)).await
 }
 
 async fn open_shell(conn: &Connection) -> (Shell, UnboundedReceiver<ShellEvent>) {
@@ -265,9 +293,41 @@ async fn password_login_echo_resize_and_exit() {
 
 #[tokio::test]
 async fn wrong_password_is_auth_failed() {
-    let port = start_server().await;
+    let (port, log) = start_server_logged().await;
     let err = connect(port, Auth::Password("nope".into())).await.err().unwrap();
     assert!(matches!(err, Error::AuthFailed), "{err}");
+    // 和 OpenSSH 一样先问一句要不要认证，再发密码
+    assert_eq!(log.methods(), ["none", "password"]);
+}
+
+/// 密码留空，服务器不要密码：直接进去
+#[tokio::test]
+async fn empty_password_logs_in_when_server_needs_none() {
+    let (port, log) = start_server_logged().await;
+    let conn = connect_as(port, "nopass", Auth::Password(String::new())).await.unwrap();
+    let (shell, mut rx) = open_shell(&conn).await;
+    shell.write(b"no password").await.unwrap();
+    read_until(&mut rx, "no password").await;
+    assert_eq!(log.methods(), ["none"]);
+    conn.disconnect().await.unwrap();
+}
+
+/// 服务器不要密码时，保存过的密码也不会发出去
+#[tokio::test]
+async fn saved_password_is_not_sent_when_server_needs_none() {
+    let (port, log) = start_server_logged().await;
+    connect_as(port, "nopass", Auth::Password("leftover".into())).await.unwrap();
+    assert_eq!(log.methods(), ["none"]);
+}
+
+/// 密码留空，服务器要密码：认证失败，而且空密码不会真的发出去。
+/// 发了的话服务器日志里会多一条密码错误，fail2ban 这类工具会算进封禁次数
+#[tokio::test]
+async fn empty_password_is_not_sent_to_server_that_needs_one() {
+    let (port, log) = start_server_logged().await;
+    let err = connect(port, Auth::Password(String::new())).await.err().unwrap();
+    assert!(matches!(err, Error::AuthFailed), "{err}");
+    assert_eq!(log.methods(), ["none"]);
 }
 
 #[tokio::test]
@@ -653,7 +713,7 @@ fn server_host_key() -> HostKey {
 
 #[tokio::test]
 async fn unknown_server_stops_before_password_is_sent() {
-    let (port, attempts) = start_server_counting().await;
+    let (port, log) = start_server_logged().await;
     let err = connect_checked(port, "").await.err().expect("没记过的服务器不能直接连上");
     let Error::HostKey(problem) = err else { panic!("应是指纹问题：{err}") };
     let HostKeyProblem::Unknown { host, port: p, key, other_types } = *problem else {
@@ -662,18 +722,18 @@ async fn unknown_server_stops_before_password_is_sent() {
     assert_eq!((host.as_str(), p), ("127.0.0.1", port));
     assert_eq!(key, server_host_key());
     assert!(other_types.is_empty());
-    assert_eq!(attempts.load(Ordering::SeqCst), 0, "指纹没确认之前不能把密码发出去");
+    assert_eq!(log.methods().iter().filter(|m| **m == "password").count(), 0, "指纹没确认之前不能把密码发出去");
 
     // 记下以后就能连上，密码这时才发出去
     let line = known_hosts::line_for("127.0.0.1", port, &key);
     let conn = connect_checked(port, &format!("# 别的记录\nother.example {}\n{line}\n", key.openssh)).await.unwrap();
     assert_eq!(conn.host_key_fingerprint(), Some(key.fingerprint.as_str()));
-    assert_eq!(attempts.load(Ordering::SeqCst), 1);
+    assert_eq!(log.methods().iter().filter(|m| **m == "password").count(), 1);
 }
 
 #[tokio::test]
 async fn changed_or_revoked_key_is_blocked() {
-    let (port, attempts) = start_server_counting().await;
+    let (port, log) = start_server_logged().await;
     // 记录里同一台服务器是另一把 Ed25519：指纹变了
     let other = HostKey::from_public_key(keys().ed25519.public_key());
     let recorded = known_hosts::line_for("127.0.0.1", port, &other);
@@ -696,7 +756,7 @@ async fn changed_or_revoked_key_is_blocked() {
     let kh = format!("{}\n@revoked * {}\n", known_hosts::line_for("127.0.0.1", port, &host), host.openssh);
     let err = connect_checked(port, &kh).await.err().unwrap();
     assert!(matches!(&err, Error::HostKey(p) if matches!(**p, HostKeyProblem::Revoked { .. })), "{err}");
-    assert_eq!(attempts.load(Ordering::SeqCst), 0, "被拦下时不能发出密码");
+    assert_eq!(log.methods().iter().filter(|m| **m == "password").count(), 0, "被拦下时不能发出密码");
 }
 
 #[test]
