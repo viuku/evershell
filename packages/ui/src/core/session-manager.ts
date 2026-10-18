@@ -1,6 +1,7 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal, type IDisposable, type ITheme } from '@xterm/xterm';
 import type { AuthConfig, ConnectOptions, MonitorSnapshot, SshBackend, SshSession } from '../types';
+import { isAuthFailure, isBlankPassword, type ConnectTarget } from './connect';
 import { FileBrowser } from './file-browser';
 import { pushHistory } from './history-store';
 import { normalizePath } from './paths';
@@ -108,6 +109,9 @@ interface Entry {
   cwdFromOsc: boolean;
 }
 
+/** 不带密码没连上时向用户要密码；返回 null 表示取消 */
+export type PasswordPrompt = (target: ConnectTarget) => Promise<string | null>;
+
 export interface TerminalLook {
   theme: ITheme;
   fontSize: number;
@@ -127,12 +131,18 @@ export class SessionManager {
   private snapshot: WorkspaceSnapshot = { tabs: [], activeId: null };
   private seq = 0;
   private look: TerminalLook;
+  private passwordPrompt: PasswordPrompt = async () => null;
 
   constructor(
     private readonly backend: SshBackend,
     look: TerminalLook,
   ) {
     this.look = look;
+  }
+
+  /** 界面挂上密码框；没挂时服务器要密码就当作取消 */
+  setPasswordPrompt(prompt: PasswordPrompt): void {
+    this.passwordPrompt = prompt;
   }
 
   readonly subscribe = (listener: () => void): (() => void) => {
@@ -388,9 +398,27 @@ export class SessionManager {
     } catch (err) {
       if (!this.entries.has(info.id)) return;
       const message = errorMessage(err);
+      if (isAuthFailure(message) && isBlankPassword(entry.options.auth)) {
+        void this.askPassword(entry);
+        return;
+      }
       this.update(info.id, { status: 'error', error: message });
       term.write(`\r\n\x1b[31m连接失败：${message}\x1b[0m\r\n`);
     }
+  }
+
+  /** 不带密码没连上，说明服务器要密码：问用户要，拿到后重连。问的时候标签保持“连接中” */
+  private async askPassword(entry: Entry): Promise<void> {
+    const { term, info } = entry;
+    const password = await this.passwordPrompt(info).catch(() => null);
+    if (!this.entries.has(info.id)) return;
+    if (password === null) {
+      this.update(info.id, { status: 'closed', error: '连接已取消' });
+      term.write('\r\n\x1b[90m[连接已取消]\x1b[0m\r\n');
+      return;
+    }
+    entry.options = { ...entry.options, auth: { type: 'password', password } };
+    void this.connect(entry);
   }
 
   private teardown(entry: Entry): void {

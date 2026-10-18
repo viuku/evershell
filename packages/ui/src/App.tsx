@@ -16,7 +16,7 @@ import { SessionView } from './components/SessionView';
 import { MonitorSidebar } from './components/sidebar/MonitorSidebar';
 import { StatusBar } from './components/StatusBar';
 import { TabBar } from './components/TabBar';
-import { resolveAuth } from './core/connect';
+import { askServerPassword, resolveAuth } from './core/connect';
 import { hostsStore, touchServerConnected, type ServerRecord } from './core/hosts-store';
 import { exportConnections } from './core/importers/export';
 import { pushRecent } from './core/recents-store';
@@ -65,6 +65,7 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
 
   const manager = useMemo(() => new SessionManager(backend, lookRef.current), [backend]);
   useEffect(() => manager.applyLook(look), [manager, look]);
+  useEffect(() => manager.setPasswordPrompt((target) => askServerPassword(target, backend.secrets, dialogs)), [manager, backend, dialogs]);
   // 启动时默认打开一个新标签页
   useEffect(() => {
     if (manager.getSnapshot().tabs.length === 0) manager.openNewTab();

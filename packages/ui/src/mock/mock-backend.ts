@@ -13,7 +13,8 @@ import { MockFs } from './mock-fs';
 import { browserDownload } from '../core/browser-download';
 
 // 不连服务器也能完整预览界面的假后端。网页端 URL 带 ?mock 时使用。
-// 约定几个特殊输入方便测试：主机含 fail → 连接失败；密码 wrong → 认证失败；主机含 bsd → 监控不支持。
+// 约定几个特殊输入方便测试：主机含 fail → 连接失败；密码 wrong → 认证失败；主机含 bsd → 监控不支持；
+// 密码留空时只有主机含 nopass 能连上（模拟不要密码的服务器），其他主机和真服务器一样报认证失败，界面再弹框要密码。
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -242,7 +243,7 @@ export function createMockBackend(): SshBackend {
     async connect(opts: ConnectOptions, handlers: ShellHandlers): Promise<SshSession> {
       await delay(400 + Math.random() * 500);
       if (/fail/i.test(opts.host)) throw new Error('连接超时：服务器无响应');
-      if (opts.auth.type === 'password' && opts.auth.password === 'wrong') {
+      if (opts.auth.type === 'password' && (opts.auth.password === 'wrong' || (opts.auth.password === '' && !/nopass/i.test(opts.host)))) {
         throw new Error('认证失败：用户名、密码或私钥不正确');
       }
       if (!opts.user) throw new Error('用户名不能为空');

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { secretKeys } from '../../core/connect';
+import { isAuthFailure, isBlankPassword, secretKeys } from '../../core/connect';
 import {
   addServer,
   DEFAULT_ADVANCED,
@@ -124,7 +124,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
     return null;
   };
 
-  /** 组装认证信息；编辑时留空就用保险箱里保存的 */
+  /** 组装认证信息；编辑时留空就用保险箱里保存的，都没有就不带密码试 */
   const buildAuth = async (serverId: string | null): Promise<AuthConfig | null> => {
     if (form.auth === 'password') {
       if (form.password) return { type: 'password', password: form.password };
@@ -132,7 +132,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
         const saved = await secrets.get(secretKeys.password(serverId)).catch(() => null);
         if (saved !== null) return { type: 'password', password: saved };
       }
-      return null;
+      return { type: 'password', password: '' };
     }
     if (form.privateKey.trim()) return { type: 'key', privateKey: form.privateKey, passphrase: form.passphrase || undefined };
     if (serverId && secrets.available) {
@@ -153,7 +153,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
     }
     const auth = await buildAuth(editing?.id ?? null);
     if (!auth) {
-      setError(form.auth === 'password' ? '请填写密码后再测试' : '请选择私钥后再测试');
+      setError('请选择私钥后再测试');
       return;
     }
     setTest({ kind: 'running' });
@@ -167,7 +167,8 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
       setTest({ kind: 'ok', ms, fingerprint: session.hostKeyFingerprint });
       session.close();
     } catch (e) {
-      setTest({ kind: 'fail', message: e instanceof Error ? e.message : String(e) });
+      const message = e instanceof Error ? e.message : String(e);
+      setTest({ kind: 'fail', message: isBlankPassword(auth) && isAuthFailure(message) ? '服务器要密码，请填上密码再测' : message });
     }
   };
 

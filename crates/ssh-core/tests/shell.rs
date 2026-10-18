@@ -1,6 +1,6 @@
 //! 用 russh 自带的服务端起一个回显 shell，验证 ssh-core 的握手、认证、PTY、收发和 exec。
 
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use russh::keys::ssh_key::LineEnding;
@@ -36,9 +36,26 @@ fn pem(key: &PrivateKey) -> String {
     key.to_openssh(LineEnding::LF).unwrap().to_string()
 }
 
+/// 服务端收到过哪些认证请求（只记方式，不记密码），按到达顺序
+#[derive(Clone, Default)]
+struct AuthLog(Arc<Mutex<Vec<&'static str>>>);
+
+impl AuthLog {
+    fn push(&self, method: &'static str) {
+        self.0.lock().unwrap().push(method);
+    }
+
+    fn methods(&self) -> Vec<&'static str> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+/// 账号：tester 要密码 secret 或测试私钥；nopass 没设密码，
+/// 像开了 PermitEmptyPasswords 的 OpenSSH 一样，在 none 这一步就放行
 #[derive(Clone)]
 struct EchoServer {
     allowed_keys: Vec<PublicKey>,
+    auth_log: AuthLog,
 }
 
 impl server::Server for EchoServer {
@@ -51,7 +68,17 @@ impl server::Server for EchoServer {
 impl server::Handler for EchoServer {
     type Error = russh::Error;
 
+    async fn auth_none(&mut self, user: &str) -> Result<server::Auth, Self::Error> {
+        self.auth_log.push("none");
+        if user == "nopass" {
+            Ok(server::Auth::Accept)
+        } else {
+            Ok(server::Auth::reject())
+        }
+    }
+
     async fn auth_password(&mut self, user: &str, password: &str) -> Result<server::Auth, Self::Error> {
+        self.auth_log.push("password");
         if user == "tester" && password == "secret" {
             Ok(server::Auth::Accept)
         } else {
@@ -144,19 +171,26 @@ impl server::Handler for EchoServer {
 }
 
 async fn start_server() -> u16 {
+    start_server_logged().await.0
+}
+
+/// 同 [`start_server`]，另外返回服务端收到的认证请求记录
+async fn start_server_logged() -> (u16, AuthLog) {
     let config = Arc::new(server::Config {
         keys: vec![keys().host.clone()],
         auth_rejection_time: Duration::from_millis(10),
         auth_rejection_time_initial: Some(Duration::ZERO),
         ..Default::default()
     });
+    let auth_log = AuthLog::default();
     let mut server = EchoServer {
         allowed_keys: vec![keys().ed25519.public_key().clone(), keys().rsa.public_key().clone()],
+        auth_log: auth_log.clone(),
     };
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     tokio::spawn(async move { server.run_on_socket(config, &listener).await });
-    port
+    (port, auth_log)
 }
 
 /// 一直读，直到累计输出里出现 `needle`
@@ -176,8 +210,12 @@ async fn read_until(rx: &mut UnboundedReceiver<ShellEvent>, needle: &str) -> Str
 }
 
 async fn connect(port: u16, auth: Auth) -> ssh_core::Result<Connection> {
+    connect_as(port, "tester", auth).await
+}
+
+async fn connect_as(port: u16, user: &str, auth: Auth) -> ssh_core::Result<Connection> {
     let stream = connect_tcp("127.0.0.1", port).await?;
-    Connection::connect(stream, "tester", auth).await
+    Connection::connect(stream, user, auth).await
 }
 
 async fn open_shell(conn: &Connection) -> (Shell, UnboundedReceiver<ShellEvent>) {
@@ -221,9 +259,41 @@ async fn password_login_echo_resize_and_exit() {
 
 #[tokio::test]
 async fn wrong_password_is_auth_failed() {
-    let port = start_server().await;
+    let (port, log) = start_server_logged().await;
     let err = connect(port, Auth::Password("nope".into())).await.err().unwrap();
     assert!(matches!(err, Error::AuthFailed), "{err}");
+    // 和 OpenSSH 一样先问一句要不要认证，再发密码
+    assert_eq!(log.methods(), ["none", "password"]);
+}
+
+/// 密码留空，服务器不要密码：直接进去
+#[tokio::test]
+async fn empty_password_logs_in_when_server_needs_none() {
+    let (port, log) = start_server_logged().await;
+    let conn = connect_as(port, "nopass", Auth::Password(String::new())).await.unwrap();
+    let (shell, mut rx) = open_shell(&conn).await;
+    shell.write(b"no password").await.unwrap();
+    read_until(&mut rx, "no password").await;
+    assert_eq!(log.methods(), ["none"]);
+    conn.disconnect().await.unwrap();
+}
+
+/// 服务器不要密码时，保存过的密码也不会发出去
+#[tokio::test]
+async fn saved_password_is_not_sent_when_server_needs_none() {
+    let (port, log) = start_server_logged().await;
+    connect_as(port, "nopass", Auth::Password("leftover".into())).await.unwrap();
+    assert_eq!(log.methods(), ["none"]);
+}
+
+/// 密码留空，服务器要密码：认证失败，而且空密码不会真的发出去。
+/// 发了的话服务器日志里会多一条密码错误，fail2ban 这类工具会算进封禁次数
+#[tokio::test]
+async fn empty_password_is_not_sent_to_server_that_needs_one() {
+    let (port, log) = start_server_logged().await;
+    let err = connect(port, Auth::Password(String::new())).await.err().unwrap();
+    assert!(matches!(err, Error::AuthFailed), "{err}");
+    assert_eq!(log.methods(), ["none"]);
 }
 
 #[tokio::test]
