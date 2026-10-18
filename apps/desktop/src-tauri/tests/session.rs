@@ -1,10 +1,10 @@
 //! 通过会话管理层连真实的 OpenSSH。默认跳过，设置环境变量后运行：
 //! SSH_E2E_ADDR=127.0.0.1:2222 SSH_E2E_USER=me SSH_E2E_KEY=/path/to/key cargo test -p evershell-desktop --test session
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use evershell_desktop_lib::session::{ConnectParams, Error, SessionManager};
-use ssh_core::{Auth, ShellEvent};
+use ssh_core::{Auth, HostKeyProblem, OUTPUT_ACK_BATCH, OUTPUT_HIGH_WATER, ShellEvent, known_hosts};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 
 /// 一直读，直到累计输出里出现 `needle`
@@ -38,23 +38,34 @@ async fn real_openssh_through_session_manager() {
 
     let manager = SessionManager::new();
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let params = ConnectParams {
+    let params = |known_hosts: String| ConnectParams {
         host: host.into(),
         port: port.parse().unwrap(),
-        user,
-        auth: Auth::PrivateKey { pem, passphrase: None },
+        user: user.clone(),
+        auth: Auth::PrivateKey { pem: pem.clone(), passphrase: None },
         cols: 80,
         rows: 24,
+        known_hosts,
     };
+
+    // 没记过这台服务器：连接在认证之前停下，带回服务器的指纹
+    let err = manager.connect(params(String::new()), |_| {}).await.err().expect("没记过的服务器不能直接连上");
+    let Error::Ssh(ssh_core::Error::HostKey(problem)) = err else { panic!("应是指纹问题：{err}") };
+    let HostKeyProblem::Unknown { host: h, port: p, key, .. } = *problem else {
+        panic!("应是首次连接：{problem}");
+    };
+    assert!(key.fingerprint.starts_with("SHA256:"), "{key:?}");
+    let known = known_hosts::line_for(&h, p, &key);
+
     let connected = manager
-        .connect(params, move |ev| {
+        .connect(params(known), move |ev| {
             let _ = tx.send(ev);
         })
         .await
         .unwrap();
     let id = connected.id.clone();
     let fp = connected.fingerprint.expect("应返回服务器指纹");
-    assert!(fp.starts_with("SHA256:"), "{fp}");
+    assert_eq!(fp, key.fingerprint);
 
     manager.write(&id, b"echo M0_$((40+2))\r".to_vec()).unwrap();
     read_until(&mut rx, "M0_42").await;
@@ -90,7 +101,7 @@ async fn real_openssh_through_session_manager() {
 
     manager.close(&id).unwrap();
     tokio::time::timeout(Duration::from_secs(5), async {
-        while !matches!(rx.recv().await, Some(ShellEvent::Exit(_)) | None) {}
+        while !matches!(rx.recv().await, Some(ShellEvent::Exit { .. }) | None) {}
     })
     .await
     .expect("关闭后应收到 Exit");
@@ -122,8 +133,137 @@ async fn connect_refused_reports_chinese_error() {
         auth: Auth::Password("x".into()),
         cols: 80,
         rows: 24,
+        known_hosts: String::new(),
     };
     let err = manager.connect(params, |_| {}).await.err().unwrap();
     assert!(matches!(err, Error::Ssh(ssh_core::Error::Io(_))), "{err}");
     assert!(err.to_string().starts_with("网络错误"), "{err}");
+}
+
+/// 连本机测试服务器的参数，指纹记录里已经有它（先探一次拿到指纹）
+async fn e2e_params() -> Option<ConnectParams> {
+    let (Ok(addr), Ok(user), Ok(key)) = (
+        std::env::var("SSH_E2E_ADDR"),
+        std::env::var("SSH_E2E_USER"),
+        std::env::var("SSH_E2E_KEY"),
+    ) else {
+        eprintln!("跳过：未设置 SSH_E2E_ADDR / SSH_E2E_USER / SSH_E2E_KEY");
+        return None;
+    };
+    let (host, port) = addr.rsplit_once(':').unwrap();
+    let mut params = ConnectParams {
+        host: host.into(),
+        port: port.parse().unwrap(),
+        user,
+        auth: Auth::PrivateKey { pem: std::fs::read_to_string(key).unwrap(), passphrase: None },
+        cols: 80,
+        rows: 24,
+        known_hosts: String::new(),
+    };
+    let probe = ConnectParams { auth: Auth::Password(String::new()), ..clone_params(&params) };
+    match SessionManager::new().connect(probe, |_| {}).await {
+        Err(Error::Ssh(ssh_core::Error::HostKey(problem))) => match *problem {
+            HostKeyProblem::Unknown { host, port, key, .. } => params.known_hosts = known_hosts::line_for(&host, port, &key),
+            p => panic!("探指纹时应得到首次连接，实际 {p}"),
+        },
+        other => panic!("探指纹时应得到首次连接，实际 {:?}", other.err().map(|e| e.to_string())),
+    }
+    Some(params)
+}
+
+fn clone_params(p: &ConnectParams) -> ConnectParams {
+    ConnectParams {
+        host: p.host.clone(),
+        port: p.port,
+        user: p.user.clone(),
+        auth: Auth::Password(String::new()),
+        cols: p.cols,
+        rows: p.rows,
+        known_hosts: p.known_hosts.clone(),
+    }
+}
+
+/// 界面不回执时输出停在水位线附近；这时关掉会话也不能卡住（关之前要放开限速）
+#[tokio::test(flavor = "multi_thread")]
+async fn unacked_output_pauses_and_close_still_works() {
+    let Some(params) = e2e_params().await else { return };
+    let manager = SessionManager::new();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let id = manager
+        .connect(params, move |ev| {
+            let _ = tx.send(ev);
+        })
+        .await
+        .unwrap()
+        .id;
+    manager.write(&id, b"yes\r".to_vec()).unwrap();
+
+    let mut got = 0;
+    while let Ok(Some(ShellEvent::Data(d))) = tokio::time::timeout(Duration::from_millis(800), rx.recv()).await {
+        got += d.len();
+    }
+    assert!(got >= OUTPUT_HIGH_WATER / 2, "应该先收到一批输出，实际 {got}");
+    assert!(got <= OUTPUT_HIGH_WATER + 64 * 1024, "不回执时不应一直收，实际 {got}");
+
+    // 回执之后接着来
+    manager.ack(&id, got).unwrap();
+    let more = tokio::time::timeout(Duration::from_secs(2), rx.recv()).await.unwrap();
+    assert!(matches!(more, Some(ShellEvent::Data(_))), "{more:?}");
+
+    manager.close(&id).unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !matches!(rx.recv().await, Some(ShellEvent::Exit { .. }) | None) {}
+    })
+    .await
+    .expect("输出暂停时关闭不应卡住");
+}
+
+/// 经会话管理层跑 `yes`，按批回执（和界面一样），Ctrl-C 后 1 秒内停
+#[tokio::test(flavor = "multi_thread")]
+async fn yes_then_ctrl_c_through_session_manager() {
+    let Some(params) = e2e_params().await else { return };
+    let manager = SessionManager::new();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let id = manager
+        .connect(params, move |ev| {
+            let _ = tx.send(ev);
+        })
+        .await
+        .unwrap()
+        .id;
+
+    let mut pending = 0;
+    let mut drain = async |rx: &mut UnboundedReceiver<ShellEvent>, needle: &str, limit: Duration| {
+        let deadline = Instant::now() + limit;
+        let mut tail = String::new();
+        while Instant::now() < deadline {
+            let Ok(Some(ShellEvent::Data(d))) = tokio::time::timeout(Duration::from_millis(200), rx.recv()).await else {
+                continue;
+            };
+            pending += d.len();
+            if pending >= OUTPUT_ACK_BATCH {
+                manager.ack(&id, pending).unwrap();
+                pending = 0;
+            }
+            tail.push_str(&String::from_utf8_lossy(&d));
+            if !needle.is_empty() && tail.contains(needle) {
+                return true;
+            }
+            if tail.len() > 4096 {
+                tail = tail.split_off(tail.len() - 64);
+            }
+        }
+        needle.is_empty()
+    };
+
+    manager.write(&id, b"stty -echoctl; yes\r".to_vec()).unwrap();
+    drain(&mut rx, "", Duration::from_secs(3)).await;
+    manager.write(&id, b"\x03".to_vec()).unwrap();
+    let pressed = Instant::now();
+    manager.write(&id, b"echo FLOW_$((40+2))_DONE\r".to_vec()).unwrap();
+    assert!(drain(&mut rx, "FLOW_42_DONE", Duration::from_secs(30)).await, "没看到 Ctrl-C 后的标记");
+    let latency = pressed.elapsed();
+    eprintln!("经会话管理层：Ctrl-C 后 {latency:?} 停下");
+    assert!(latency < Duration::from_secs(1), "Ctrl-C 后 {latency:?} 才停");
+    manager.close(&id).unwrap();
 }

@@ -1,8 +1,10 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal, type IDisposable, type ITheme } from '@xterm/xterm';
-import type { AuthConfig, ConnectOptions, MonitorSnapshot, SshBackend, SshSession } from '../types';
+import { HostKeyError, type AuthConfig, type ConnectOptions, type HostKeyProblem, type MonitorSnapshot, type SshBackend, type SshSession } from '../types';
 import { FileBrowser } from './file-browser';
 import { pushHistory } from './history-store';
+import { applyHostKeyDecision, KnownHostsStore, withTrustOnce, type AskableHostKeyProblem, type HostKeyDecision } from './known-hosts';
+import { AckBatcher } from './output-ack';
 import { normalizePath } from './paths';
 import { Store } from './store';
 
@@ -18,6 +20,7 @@ export interface SessionInfo {
   user: string;
   status: SessionStatus;
   fingerprint: string | null;
+  /** 连接失败的原因，或连接中途断掉的原因（心跳超时等）；正常结束为 null */
   error: string | null;
   exitCode: number | null;
   cols: number;
@@ -113,6 +116,10 @@ export interface TerminalLook {
   fontSize: number;
 }
 
+export type { AskableHostKeyProblem, HostKeyDecision } from './known-hosts';
+/** 由界面提供：弹“安全警告”框，返回用户的决定 */
+export type HostKeyPrompt = (problem: AskableHostKeyProblem) => Promise<HostKeyDecision>;
+
 const encoder = new TextEncoder();
 const FONT_FAMILY = '"SF Mono", Menlo, Monaco, Consolas, "Cascadia Mono", "Liberation Mono", monospace';
 
@@ -127,12 +134,21 @@ export class SessionManager {
   private snapshot: WorkspaceSnapshot = { tabs: [], activeId: null };
   private seq = 0;
   private look: TerminalLook;
+  /** 服务器指纹记录，连接前读出来交给后端校验 */
+  readonly knownHosts: KnownHostsStore;
+  private hostKeyPrompt: HostKeyPrompt = async () => 'cancel';
 
   constructor(
     private readonly backend: SshBackend,
     look: TerminalLook,
   ) {
     this.look = look;
+    this.knownHosts = new KnownHostsStore(backend.secrets);
+  }
+
+  /** 界面挂上确认框；没挂时一律当作不连 */
+  setHostKeyPrompt(prompt: HostKeyPrompt): void {
+    this.hostKeyPrompt = prompt;
   }
 
   readonly subscribe = (listener: () => void): (() => void) => {
@@ -346,8 +362,11 @@ export class SessionManager {
 
   // ---------- 内部 ----------
 
-  private async connect(entry: Entry): Promise<void> {
+  /** `trustOnce`：用户选了“只连这一次”时临时加上的一行指纹记录，不保存 */
+  private async connect(entry: Entry, trustOnce = ''): Promise<void> {
     const { term, info } = entry;
+    const knownHosts = await this.knownHosts.load();
+    if (!this.entries.has(info.id)) return;
     const opts: ConnectOptions = {
       host: entry.options.host,
       port: entry.options.port,
@@ -355,17 +374,24 @@ export class SessionManager {
       auth: entry.options.auth,
       cols: term.cols,
       rows: term.rows,
+      knownHosts: withTrustOnce(knownHosts, trustOnce),
     };
+    const acks = new AckBatcher();
     try {
       const session = await this.backend.connect(opts, {
         onData: (data) => {
-          if (this.entries.has(info.id)) term.write(data);
+          // 画完再回执，后端据此决定要不要继续读，大量输出时内存不涨、Ctrl-C 马上停
+          if (this.entries.has(info.id)) term.write(data, () => acks.done(data.length));
         },
-        onExit: (code) => {
+        onExit: (code, reason) => {
           if (!this.entries.has(info.id)) return;
           this.teardown(entry);
-          this.update(info.id, { status: 'closed', exitCode: code });
-          term.write(`\r\n\x1b[90m[会话已结束${code === null ? '' : `，退出码 ${code}`}]\x1b[0m\r\n`);
+          this.update(info.id, { status: 'closed', exitCode: code, error: reason });
+          term.write(
+            reason
+              ? `\r\n\x1b[33m[连接已断开：${reason}]\x1b[0m\r\n`
+              : `\r\n\x1b[90m[会话已结束${code === null ? '' : `，退出码 ${code}`}]\x1b[0m\r\n`,
+          );
         },
       });
       if (!this.entries.has(info.id)) {
@@ -374,6 +400,7 @@ export class SessionManager {
         return;
       }
       entry.session = session;
+      acks.attach((n) => session.ack(n));
       entry.inputListeners = [
         term.onData((text) => session.write(encoder.encode(text))),
         term.onBinary((text) => session.write(Uint8Array.from(text, (c) => c.charCodeAt(0)))),
@@ -387,9 +414,40 @@ export class SessionManager {
       this.update(info.id, { status: 'connected', fingerprint: session.hostKeyFingerprint, error: null });
     } catch (err) {
       if (!this.entries.has(info.id)) return;
+      if (err instanceof HostKeyError) {
+        void this.resolveHostKey(entry, err.problem);
+        return;
+      }
       const message = errorMessage(err);
       this.update(info.id, { status: 'error', error: message });
       term.write(`\r\n\x1b[31m连接失败：${message}\x1b[0m\r\n`);
+    }
+  }
+
+  /** 主机密钥没通过：问用户，按决定记下密钥后重连，或者停在这里。问的时候标签保持“连接中” */
+  private async resolveHostKey(entry: Entry, problem: HostKeyProblem): Promise<void> {
+    const { term, info } = entry;
+    // 被吊销的密钥没有商量余地，不弹框
+    const decision: HostKeyDecision =
+      problem.kind === 'revoked' ? 'cancel' : await this.hostKeyPrompt(problem).catch(() => 'cancel' as const);
+    if (!this.entries.has(info.id)) return;
+    try {
+      const outcome = await applyHostKeyDecision(this.knownHosts, problem, decision);
+      if (outcome.retry) return void this.connect(entry, outcome.trustOnce);
+    } catch (err) {
+      const message = `保存主机密钥失败：${errorMessage(err)}`;
+      this.update(info.id, { status: 'error', error: message });
+      term.write(`\r\n\x1b[31m${message}\x1b[0m\r\n`);
+      return;
+    }
+    if (problem.kind === 'unknown') {
+      this.update(info.id, { status: 'closed', error: '连接已取消' });
+      term.write('\r\n\x1b[90m[连接已取消]\x1b[0m\r\n');
+    } else {
+      const where = problem.port === 22 ? problem.host : `${problem.host}:${problem.port}`;
+      const what = problem.kind === 'changed' ? '密钥已经改变' : '的密钥已被吊销';
+      this.update(info.id, { status: 'error', error: new HostKeyError(problem).message });
+      term.write(`\r\n\x1b[33m[已取消连接：主机 ${where} ${what}]\x1b[0m\r\n`);
     }
   }
 

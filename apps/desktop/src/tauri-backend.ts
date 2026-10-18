@@ -1,6 +1,8 @@
+import { HostKeyError } from '@evershell/ui';
 import type {
   ConnectOptions,
   FileEntry,
+  HostKeyProblem,
   MonitorSnapshot,
   SecretStore,
   SshBackend,
@@ -16,7 +18,7 @@ interface ConnectReply {
 }
 
 /** 远端输出是原始字节（ArrayBuffer），退出事件是一条 JSON */
-type ShellEvent = ArrayBuffer | Uint8Array | { exit: number | null };
+type ShellEvent = ArrayBuffer | Uint8Array | { exit: number | null; reason: string | null };
 
 /** 原始字节请求（write / upload）的元数据放在请求头里 */
 const SESSION_HEADER = 'x-session';
@@ -32,6 +34,16 @@ function rethrow(err: unknown): never {
   throw err instanceof Error ? err : new Error(String(err));
 }
 
+/** ssh_connect 的错误是 { kind: 'message', message } 或 { kind: 'hostKey', problem }，见 commands.rs 的 ConnectError */
+function connectError(err: unknown): never {
+  if (err && typeof err === 'object' && 'kind' in err) {
+    const e = err as { kind: string; message?: string; problem?: HostKeyProblem };
+    if (e.kind === 'hostKey' && e.problem) throw new HostKeyError(e.problem);
+    if (typeof e.message === 'string') throw new Error(e.message);
+  }
+  rethrow(err);
+}
+
 class TauriSession implements SshSession {
   // 每次 invoke 是一个独立的 fetch，到达顺序没有保证；串成一条链，上一条确认后再发下一条
   private chain: Promise<unknown> = Promise.resolve();
@@ -43,6 +55,11 @@ class TauriSession implements SshSession {
 
   write(data: Uint8Array): void {
     this.enqueue(() => invoke('ssh_write', data, { headers: { [SESSION_HEADER]: this.id } }));
+  }
+
+  // 回执不进 chain：输出暂停时 Rust 那边的按键可能也在等，回执排在按键后面就会互等
+  ack(bytes: number): void {
+    invoke('ssh_ack', { id: this.id, bytes }).catch(() => {});
   }
 
   resize(cols: number, rows: number): void {
@@ -127,9 +144,9 @@ export const tauriBackend: SshBackend = {
     onEvent.onmessage = (msg) => {
       if (msg instanceof ArrayBuffer) handlers.onData(new Uint8Array(msg));
       else if (msg instanceof Uint8Array) handlers.onData(msg);
-      else handlers.onExit(msg.exit);
+      else handlers.onExit(msg.exit, msg.reason ?? null);
     };
-    const reply = await call<ConnectReply>('ssh_connect', { opts, onEvent });
+    const reply = await invoke<ConnectReply>('ssh_connect', { opts, onEvent }).catch(connectError);
     return new TauriSession(reply.id, reply.fingerprint);
   },
   secrets,

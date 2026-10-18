@@ -24,6 +24,17 @@ const url = `${RELAY}/relay?target=${encodeURIComponent(TARGET)}&token=${encodeU
 const decoder = new TextDecoder();
 let output = '';
 let exitCode;
+// 输出要回执，否则积压到上限（约 256KB）后 WASM 就不再读；这里没有界面要画，收到就回执。
+// 连接建好之前到的输出先记着，建好后一并回执
+let session;
+let unacked = 0;
+const ack = (n) => {
+  unacked += n;
+  if (session) {
+    session.ack(unacked);
+    unacked = 0;
+  }
+};
 const waitFor = (pred, what, ms = 10_000) =>
   new Promise((resolve, reject) => {
     const started = Date.now();
@@ -39,17 +50,37 @@ const assert = (cond, msg) => {
 };
 
 const t0 = performance.now();
-const session = await WebSession.connect(
+// 先不带指纹记录连一次：应在认证前停下、带回服务器指纹；记下后再正式连
+const [targetHost, targetPort] = [TARGET.slice(0, TARGET.lastIndexOf(':')), Number(TARGET.slice(TARGET.lastIndexOf(':') + 1))];
+const knownHost = await WebSession.connect(url, targetHost, targetPort, '', SSH_USER, SSH_PASSWORD ?? null, null, null, 80, 24, () => {}, () => {})
+  .then(() => {
+    throw new Error('没记过的服务器不应直接连上');
+  })
+  .catch((e) => {
+    assert(e?.kind === 'hostKey' && e.problem?.kind === 'unknown', `应是首次连接的指纹确认：${e}`);
+    const name = targetPort === 22 ? targetHost : `[${targetHost}]:${targetPort}`;
+    return `${name} ${e.problem.key.openssh}`;
+  });
+console.log('没记过的服务器在认证前停下，拿到指纹');
+
+session = await WebSession.connect(
   url,
+  targetHost,
+  targetPort,
+  knownHost,
   SSH_USER,
   SSH_PASSWORD ?? null,
   SSH_KEY ? readFileSync(SSH_KEY, 'utf8') : null,
   null,
   100,
   30,
-  (data) => (output += decoder.decode(data, { stream: true })),
+  (data) => {
+    output += decoder.decode(data, { stream: true });
+    ack(data.length);
+  },
   (code) => (exitCode = code),
 );
+ack(0);
 console.log(`已连接（${(performance.now() - t0).toFixed(0)}ms），服务器指纹 ${session.hostKeyFingerprint}`);
 
 session.write(new TextEncoder().encode('stty size; echo WEB_$((40+2))\r'));
@@ -79,6 +110,19 @@ session.write(new TextEncoder().encode('head -c 1500000 /dev/zero | base64; echo
 await waitFor(() => output.includes('STREAM_2'), '2MB 流式输出', 60_000);
 const mb = output.length / 1e6;
 console.log(`流式输出 ${mb.toFixed(1)}MB 用时 ${(performance.now() - t1).toFixed(0)}ms`);
+
+// 回压：yes 跑 2 秒后 Ctrl-C，紧跟一行标记，看到标记的时间就是停下来的时间
+output = '';
+session.write(new TextEncoder().encode('stty -echoctl; yes\r'));
+await new Promise((r) => setTimeout(r, 2000));
+const pressed = performance.now();
+session.write(new Uint8Array([3]));
+session.write(new TextEncoder().encode('echo FLOW_$((40+2))_DONE\r'));
+await waitFor(() => output.includes('FLOW_42_DONE'), 'Ctrl-C 后的标记', 30_000);
+const stopMs = performance.now() - pressed;
+assert(stopMs < 1000, `Ctrl-C 后 ${stopMs.toFixed(0)}ms 才停`);
+console.log(`yes 2 秒收到 ${(output.length / 1e6).toFixed(1)}MB，Ctrl-C 后 ${stopMs.toFixed(0)}ms 停下`);
+output = '';
 
 // 监控：连续两次采样
 const snapshots = [];

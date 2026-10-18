@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use ssh_core::{Auth, Connection, FileKind, TransferProgress, connect_tcp};
+use ssh_core::{Auth, ConnectConfig, Connection, FileKind, HostKeyCheck, TransferProgress, connect_tcp};
 
 async fn connect() -> Option<(Connection, String)> {
     let (Ok(addr), Ok(user), Ok(key)) = (
@@ -20,7 +20,9 @@ async fn connect() -> Option<(Connection, String)> {
     let (host, port) = addr.rsplit_once(':').unwrap();
     let stream = connect_tcp(host, port.parse().unwrap()).await.unwrap();
     let pem = std::fs::read_to_string(key).unwrap();
-    let conn = Connection::connect(stream, &user, Auth::PrivateKey { pem, passphrase: None })
+    // 本机测试服务器，不校验指纹（指纹校验在 tests/shell.rs 和桌面端测试里测）
+    let cfg = ConnectConfig::new(HostKeyCheck::AcceptAny);
+    let conn = Connection::connect(stream, &user, Auth::PrivateKey { pem, passphrase: None }, &cfg)
         .await
         .unwrap();
     Some((conn, user))
@@ -184,4 +186,218 @@ async fn sftp_roundtrip_in_tmpdir() {
     let again = conn.sftp().await.unwrap();
     assert_eq!(again.home_dir().await.unwrap(), home);
     conn.disconnect().await.unwrap();
+}
+
+/// 上传先写 `<文件名>.evershell-part` 再改名盖过去。要在本机看 inode、权限位和符号链接，只在 Unix 上跑
+#[cfg(unix)]
+mod upload {
+    use std::io;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+
+    use ssh_core::TransferProgress;
+    use tokio::io::{AsyncRead, ReadBuf};
+
+    use super::{connect, pseudo_random};
+
+    /// 每个测试一个目录（测试是并行跑的），放在本机 $TMPDIR 下
+    fn fresh_dir(name: &str) -> String {
+        let tmp = std::env::temp_dir();
+        let tmp = tmp.to_str().unwrap().trim_end_matches('/');
+        let dir = format!("{tmp}/ssh-core-e2e-{}-{name}", std::process::id());
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir(&dir).unwrap();
+        dir
+    }
+
+    fn write_file(path: &str, data: &[u8], mode: u32) {
+        std::fs::write(path, data).unwrap();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+    }
+
+    fn mode(path: &str) -> u32 {
+        std::fs::metadata(path).unwrap().mode() & 0o7777
+    }
+
+    fn inode(path: &str) -> u64 {
+        std::fs::metadata(path).unwrap().ino()
+    }
+
+    /// 目录里的文件名（排好序），用来确认没留下 .evershell-part
+    fn names(dir: &str) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// 先给出 `data`，给完再读就报错：模拟传到一半本地文件读不下去
+    struct FailAfter {
+        data: Vec<u8>,
+        pos: usize,
+    }
+
+    impl AsyncRead for FailAfter {
+        fn poll_read(self: Pin<&mut Self>, _: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
+            let this = self.get_mut();
+            let rest = &this.data[this.pos..];
+            if rest.is_empty() {
+                return Poll::Ready(Err(io::Error::other("模拟读取失败")));
+            }
+            let n = rest.len().min(buf.remaining());
+            buf.put_slice(&rest[..n]);
+            this.pos += n;
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    #[tokio::test]
+    async fn sftp_upload_overwrite_keeps_mode() {
+        let Some((conn, _)) = connect().await else { return };
+        let sftp = conn.sftp().await.unwrap();
+        let dir = fresh_dir("overwrite");
+        let file = format!("{dir}/site.conf");
+        write_file(&file, b"old content\n", 0o640);
+        let before = inode(&file);
+
+        // 300KB：跨多个 32KB 块、超过 16 个在途窗口
+        let data = pseudo_random(300 * 1024 + 7, 7);
+        let mut progress = Vec::new();
+        sftp.upload(&file, &data[..], data.len() as u64, |p| progress.push(p))
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(&file).unwrap(), data, "内容应换成新的");
+        assert_eq!(progress.last().unwrap(), &TransferProgress { done: data.len() as u64, total: data.len() as u64 });
+        assert_eq!(mode(&file), 0o640, "权限位应保留");
+        assert_ne!(inode(&file), before, "应是临时文件改名盖过去，不是原地截断重写");
+        assert_eq!(names(&dir), ["site.conf"], "不应留下临时文件");
+
+        // 目标是目录时报错，什么都不动
+        let err = sftp.upload(&dir, &b"x"[..], 1, |_| {}).await.err().unwrap();
+        assert!(err.to_string().contains("目录"), "{err}");
+        assert_eq!(names(&dir), ["site.conf"]);
+
+        std::fs::remove_dir_all(&dir).unwrap();
+        conn.disconnect().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sftp_upload_failure_keeps_original() {
+        let Some((conn, _)) = connect().await else { return };
+        let sftp = conn.sftp().await.unwrap();
+        let dir = fresh_dir("fail");
+        let file = format!("{dir}/data.bin");
+        let original = pseudo_random(100 * 1024, 1);
+        write_file(&file, &original, 0o644);
+        let before = inode(&file);
+
+        // 先给 700KB 再报错：超过一整个在途窗口（16 × 32KB），出错前已经有数据写进临时文件
+        let src = FailAfter { data: pseudo_random(700 * 1024, 2), pos: 0 };
+        let err = sftp
+            .upload(&file, src, 1024 * 1024, |_| {})
+            .await
+            .expect_err("源读不下去，上传应报错");
+        assert!(err.to_string().contains("模拟读取失败"), "{err}");
+        assert_eq!(std::fs::read(&file).unwrap(), original, "原文件应一字不差");
+        assert_eq!(inode(&file), before);
+        assert_eq!(names(&dir), ["data.bin"], "临时文件应已清掉");
+
+        std::fs::remove_dir_all(&dir).unwrap();
+        conn.disconnect().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sftp_upload_new_file() {
+        let Some((conn, _)) = connect().await else { return };
+        let sftp = conn.sftp().await.unwrap();
+        let dir = fresh_dir("new");
+        let file = format!("{dir}/new.txt");
+        let empty = format!("{dir}/empty.txt");
+
+        let data = b"hello evershell\n";
+        let mut progress = Vec::new();
+        sftp.upload(&file, &data[..], data.len() as u64, |p| progress.push(p))
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(&file).unwrap(), data);
+        assert_eq!(progress.last().unwrap(), &TransferProgress { done: 16, total: 16 });
+        // 新文件的权限照服务器默认（受 umask 影响），至少自己能读写
+        assert_eq!(mode(&file) & 0o600, 0o600, "{:o}", mode(&file));
+
+        // 空文件也要建出来
+        sftp.upload(&empty, &b""[..], 0, |_| {}).await.unwrap();
+        assert_eq!(std::fs::read(&empty).unwrap(), b"");
+        assert_eq!(names(&dir), ["empty.txt", "new.txt"], "不应留下临时文件");
+
+        std::fs::remove_dir_all(&dir).unwrap();
+        conn.disconnect().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sftp_upload_through_symlink() {
+        let Some((conn, _)) = connect().await else { return };
+        let sftp = conn.sftp().await.unwrap();
+        let dir = fresh_dir("symlink");
+        let real = format!("{dir}/real.txt");
+        let link = format!("{dir}/link.txt");
+        write_file(&real, b"old content\n", 0o600);
+        symlink("real.txt", &link).unwrap();
+        let before = inode(&real);
+
+        sftp.upload(&link, &b"new content\n"[..], 12, |_| {}).await.unwrap();
+        assert_eq!(std::fs::read(&real).unwrap(), b"new content\n", "内容应写进链接指向的文件");
+        assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(), "链接本身应还是链接");
+        assert_eq!(std::fs::read_link(&link).unwrap(), std::path::Path::new("real.txt"));
+        assert_eq!(inode(&real), before, "应写穿链接原地改写，不换文件");
+        assert_eq!(mode(&real), 0o600);
+        assert_eq!(names(&dir), ["link.txt", "real.txt"], "不应留下临时文件");
+
+        std::fs::remove_dir_all(&dir).unwrap();
+        conn.disconnect().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sftp_upload_without_posix_rename() {
+        let Some((conn, _)) = connect().await else { return };
+        let sftp = conn.sftp().await.unwrap().without_posix_rename();
+        let dir = fresh_dir("no-posix-rename");
+        let file = format!("{dir}/run.sh");
+        // 0775：组的写位一般会被服务器的 umask 去掉，看传完能不能补回来
+        write_file(&file, b"#!/bin/sh\necho old\n", 0o775);
+        let before = inode(&file);
+
+        let data = pseudo_random(64 * 1024 + 1, 5);
+        sftp.upload(&file, &data[..], data.len() as u64, |_| {}).await.unwrap();
+        assert_eq!(std::fs::read(&file).unwrap(), data, "内容应换成新的");
+        assert_eq!(mode(&file), 0o775, "权限位应保留");
+        assert_ne!(inode(&file), before, "应是先删目标再改名");
+        assert_eq!(names(&dir), ["run.sh"], "不应留下临时文件");
+
+        std::fs::remove_dir_all(&dir).unwrap();
+        conn.disconnect().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sftp_upload_replaces_stale_part() {
+        let Some((conn, _)) = connect().await else { return };
+        let sftp = conn.sftp().await.unwrap();
+        let dir = fresh_dir("stale-part");
+        let file = format!("{dir}/app.conf");
+        let decoy = format!("{dir}/decoy.txt");
+        write_file(&file, b"old content\n", 0o644);
+        write_file(&decoy, b"decoy\n", 0o644);
+        // 上次中断留下的残件，而且是指向别的文件的符号链接：不能顺着它把别的文件截断
+        symlink("decoy.txt", format!("{file}.evershell-part")).unwrap();
+
+        sftp.upload(&file, &b"new content\n"[..], 12, |_| {}).await.unwrap();
+        assert_eq!(std::fs::read(&file).unwrap(), b"new content\n");
+        assert_eq!(std::fs::read(&decoy).unwrap(), b"decoy\n", "残件指向的文件不应被动到");
+        assert_eq!(names(&dir), ["app.conf", "decoy.txt"], "残件应已清掉");
+
+        std::fs::remove_dir_all(&dir).unwrap();
+        conn.disconnect().await.unwrap();
+    }
 }

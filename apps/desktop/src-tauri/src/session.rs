@@ -3,13 +3,14 @@
 //! Tauri 的 async 命令在多线程运行时上并发执行，连续两次 write 可能被调换顺序。
 //! 所以终端操作只把请求投进队列，由会话专属的任务按投递顺序执行。
 //! 监控和 SFTP 走各自的 channel，不经过这个队列，直接用 [`SessionManager::connection`]。
+//! 终端输出的回执（[`SessionManager::ack`]）也不进队列，原因见 [`ssh_core::OutputAck`]。
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use ssh_core::{Auth, Connection, MonitorHandle, MonitorSnapshot, ShellEvent};
+use ssh_core::{Auth, ConnectConfig, Connection, HostKeyCheck, MonitorHandle, MonitorSnapshot, OutputAck, ShellEvent};
 use tokio::sync::mpsc;
 
 pub type SessionId = String;
@@ -29,6 +30,8 @@ pub struct ConnectParams {
     pub auth: Auth,
     pub cols: u32,
     pub rows: u32,
+    /// 服务器指纹记录，OpenSSH known_hosts 格式；对不上时连接在发密码前中止（ssh_core::Error::HostKey）
+    pub known_hosts: String,
 }
 
 pub struct Connected {
@@ -44,6 +47,7 @@ enum Op {
 
 struct Entry {
     ops: mpsc::UnboundedSender<Op>,
+    output: OutputAck,
     conn: Arc<Connection>,
     /// 正在跑的监控采样；会话移除时一起丢弃，循环随之停止
     monitor: Option<MonitorHandle>,
@@ -61,13 +65,19 @@ impl SessionManager {
     }
 
     /// 建立连接、登录并打开 shell。远端输出和退出事件通过 `on_event` 送出，`Exit` 之后不再有事件。
+    /// 输出显示完要调 [`Self::ack`] 回执，否则积压到上限后就不再送新的输出。
     /// 内部会 spawn 任务，必须在 tokio 运行时里调用。
     pub async fn connect<F>(&self, params: ConnectParams, on_event: F) -> Result<Connected, Error>
     where
         F: Fn(ShellEvent) + Send + 'static,
     {
         let stream = ssh_core::connect_tcp(&params.host, params.port).await?;
-        let conn = Arc::new(Connection::connect(stream, &params.user, params.auth).await?);
+        let cfg = ConnectConfig::new(HostKeyCheck::KnownHosts {
+            host: params.host.clone(),
+            port: params.port,
+            known_hosts: params.known_hosts,
+        });
+        let conn = Arc::new(Connection::connect(stream, &params.user, params.auth, &cfg).await?);
         let fingerprint = conn.host_key_fingerprint().map(str::to_owned);
         let (shell, mut events) = conn
             .open_shell("xterm-256color", params.cols, params.rows)
@@ -79,6 +89,7 @@ impl SessionManager {
             id.clone(),
             Entry {
                 ops: tx,
+                output: shell.output_ack(),
                 conn: conn.clone(),
                 monitor: None,
             },
@@ -111,7 +122,7 @@ impl SessionManager {
         let ev_id = id.clone();
         tokio::spawn(async move {
             while let Some(ev) = events.recv().await {
-                let exited = matches!(ev, ShellEvent::Exit(_));
+                let exited = matches!(ev, ShellEvent::Exit { .. });
                 on_event(ev);
                 if exited {
                     break;
@@ -133,7 +144,19 @@ impl SessionManager {
         self.send(id, Op::Resize(cols, rows))
     }
 
+    /// 界面显示完了 `bytes` 字节输出
+    pub fn ack(&self, id: &str, bytes: usize) -> Result<(), Error> {
+        let sessions = self.sessions.lock().unwrap();
+        let entry = sessions.get(id).ok_or(Error::NotFound)?;
+        entry.output.ack(bytes);
+        Ok(())
+    }
+
     pub fn close(&self, id: &str) -> Result<(), Error> {
+        // 输出暂停着的时候 russh 处理不了断开请求，先放开；之后的输出界面也不会再看
+        if let Some(entry) = self.sessions.lock().unwrap().get(id) {
+            entry.output.release();
+        }
         self.send(id, Op::Close)
     }
 

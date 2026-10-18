@@ -184,3 +184,14 @@ export const CheckIcon = (p: P) => (
     <path d="M5 12.5l4.5 4.5L19 7.5" />
   </Svg>
 );
+
+/** 黄色三角感叹号，和 Mac 警告框里的一样（主机密钥确认用） */
+export function CautionIcon({ size = 32, ...rest }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" {...rest}>
+      <path d="M20 4 37 35H3Z" fill="#F5A524" stroke="#F5A524" strokeWidth={4} strokeLinejoin="round" />
+      <rect x="18.1" y="13" width="3.8" height="13" rx="1.9" fill="#fff" />
+      <circle cx="20" cy="30.4" r="2.2" fill="#fff" />
+    </svg>
+  );
+}

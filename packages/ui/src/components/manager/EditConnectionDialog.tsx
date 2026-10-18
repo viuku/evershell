@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { secretKeys } from '../../core/connect';
+import { applyHostKeyDecision, KnownHostsStore, withTrustOnce } from '../../core/known-hosts';
 import {
   addServer,
   DEFAULT_ADVANCED,
@@ -14,8 +15,8 @@ import {
 } from '../../core/hosts-store';
 import { newId } from '../../core/storage';
 import { useStore } from '../../core/store';
-import type { AuthConfig, SshBackend } from '../../types';
-import { KeyPicker } from '../common/Dialogs';
+import { HostKeyError, type AuthConfig, type SshBackend } from '../../types';
+import { KeyPicker, useDialogs } from '../common/Dialogs';
 import { Modal } from '../common/Modal';
 import { Segmented } from '../common/Segmented';
 
@@ -96,6 +97,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
   const [error, setError] = useState<string | null>(null);
   const [hasSavedSecret, setHasSavedSecret] = useState(false);
   const secrets = backend.secrets;
+  const dialogs = useDialogs();
   const editing = target.mode === 'edit' ? target.server : null;
 
   // 编辑时看看保险箱里有没有已保存的密码 / 私钥，决定占位文案
@@ -157,17 +159,36 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
       return;
     }
     setTest({ kind: 'running' });
-    const started = performance.now();
-    try {
-      const session = await backend.connect(
-        { host: form.host.trim(), port: portNumber, user: form.user.trim(), auth, cols: 80, rows: 24 },
-        { onData() {}, onExit() {} },
-      );
-      const ms = Math.round(performance.now() - started);
-      setTest({ kind: 'ok', ms, fingerprint: session.hostKeyFingerprint });
-      session.close();
-    } catch (e) {
-      setTest({ kind: 'fail', message: e instanceof Error ? e.message : String(e) });
+    const store = new KnownHostsStore(backend.secrets);
+    let trustOnce = '';
+    // 主机密钥没通过时和正式连接一样弹“安全警告”，按决定记下后再试；最多问两次（第一次连接、密钥又变了）
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const started = performance.now();
+      try {
+        const knownHosts = withTrustOnce(await store.load(), trustOnce);
+        const session = await backend.connect(
+          { host: form.host.trim(), port: portNumber, user: form.user.trim(), auth, cols: 80, rows: 24, knownHosts },
+          { onData() {}, onExit() {} },
+        );
+        const ms = Math.round(performance.now() - started);
+        setTest({ kind: 'ok', ms, fingerprint: session.hostKeyFingerprint });
+        session.close();
+        return;
+      } catch (e) {
+        if (e instanceof HostKeyError && e.problem.kind !== 'revoked') {
+          const outcome = await applyHostKeyDecision(store, e.problem, await dialogs.hostKey(e.problem)).catch(
+            () => ({ retry: false }) as const,
+          );
+          if (outcome.retry) {
+            trustOnce = outcome.trustOnce;
+            continue;
+          }
+          setTest({ kind: 'fail', message: e.problem.kind === 'unknown' ? '已取消：没有接受主机密钥' : e.message });
+          return;
+        }
+        setTest({ kind: 'fail', message: e instanceof Error ? e.message : String(e) });
+        return;
+      }
     }
   };
 

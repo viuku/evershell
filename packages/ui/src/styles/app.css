@@ -497,6 +497,39 @@
   padding-top: 6px;
 }
 
+/* 主机密钥确认：照 FinalShell 的“安全警告”，左边警告图标，右边几行文字 */
+.hostkey {
+  display: flex;
+  gap: 12px;
+}
+
+.hostkey__icon {
+  flex: 0 0 auto;
+}
+
+.hostkey__text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.hostkey__text p {
+  margin: 0;
+  line-height: 1.5;
+  user-select: text;
+}
+
+.hostkey__fp {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.hostkey__default {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
 /* 内嵌在面板里的错误提示条 */
 .inline-error {
   display: flex;

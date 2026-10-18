@@ -9,7 +9,9 @@ use std::time::Duration;
 
 use js_sys::{Function, Uint8Array};
 use serde::Serialize;
-use ssh_core::{Auth, Connection, MonitorHandle, Sftp, ShellEvent, TransferProgress};
+use ssh_core::{
+    Auth, ConnectConfig, Connection, HostKeyCheck, MonitorHandle, OutputAck, Sftp, ShellEvent, TransferProgress,
+};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 use tokio::sync::{mpsc, oneshot};
 use wasm_bindgen::prelude::*;
@@ -26,6 +28,7 @@ enum Cmd {
 #[wasm_bindgen]
 pub struct WebSession {
     cmds: mpsc::UnboundedSender<Cmd>,
+    output: OutputAck,
     conn: Arc<Connection>,
     fingerprint: Option<String>,
     monitor: RefCell<Option<MonitorHandle>>,
@@ -35,9 +38,15 @@ pub struct WebSession {
 impl WebSession {
     /// `relay_url` 是完整的中转地址（含目标主机和令牌）。
     /// `private_key` 有值时用私钥认证，否则用 `password`。
+    /// `on_data(bytes)` 收到的输出显示完要调 [`WebSession::ack`] 回执；`on_exit(code, reason)` 见 ShellEvent::Exit。
+    /// `host`、`port` 是 SSH 服务器（查 known_hosts 用），`known_hosts` 是 OpenSSH 格式的指纹记录。
+    /// 指纹没通过时抛出 `{ kind: 'hostKey', problem }`（problem 见 types.ts 的 HostKeyProblem），其它错误抛 Error
     #[allow(clippy::too_many_arguments)]
     pub async fn connect(
         relay_url: String,
+        host: String,
+        port: u16,
+        known_hosts: String,
         user: String,
         password: Option<String>,
         private_key: Option<String>,
@@ -46,7 +55,7 @@ impl WebSession {
         rows: u32,
         on_data: Function,
         on_exit: Function,
-    ) -> Result<WebSession, JsError> {
+    ) -> Result<WebSession, JsValue> {
         console_error_panic_hook::set_once();
 
         let stream = open_relay(&relay_url).await?;
@@ -54,12 +63,25 @@ impl WebSession {
             Some(pem) => Auth::PrivateKey { pem, passphrase },
             None => Auth::Password(password.unwrap_or_default()),
         };
-        let conn = Arc::new(Connection::connect(stream, &user, auth).await.map_err(js_err)?);
+        let cfg = ConnectConfig::new(HostKeyCheck::KnownHosts { host, port, known_hosts });
+        let conn = match Connection::connect(stream, &user, auth, &cfg).await {
+            Ok(c) => Arc::new(c),
+            Err(ssh_core::Error::HostKey(problem)) => {
+                #[derive(Serialize)]
+                struct HostKeyThrow {
+                    kind: &'static str,
+                    problem: ssh_core::HostKeyProblem,
+                }
+                return Err(to_js(&HostKeyThrow { kind: "hostKey", problem: *problem })?);
+            }
+            Err(e) => return Err(js_err(e).into()),
+        };
         let fingerprint = conn.host_key_fingerprint().map(str::to_owned);
         let (shell, mut events) = conn
             .open_shell("xterm-256color", cols, rows)
             .await
             .map_err(js_err)?;
+        let output = shell.output_ack();
 
         spawn_local(async move {
             while let Some(event) = events.recv().await {
@@ -67,9 +89,10 @@ impl WebSession {
                     ShellEvent::Data(data) => {
                         let _ = on_data.call1(&JsValue::NULL, &Uint8Array::from(&data[..]));
                     }
-                    ShellEvent::Exit(code) => {
+                    ShellEvent::Exit { code, reason } => {
                         let code = code.map_or(JsValue::NULL, JsValue::from);
-                        let _ = on_exit.call1(&JsValue::NULL, &code);
+                        let reason = reason.map_or(JsValue::NULL, JsValue::from);
+                        let _ = on_exit.call2(&JsValue::NULL, &code, &reason);
                     }
                 }
             }
@@ -97,6 +120,7 @@ impl WebSession {
 
         Ok(WebSession {
             cmds,
+            output,
             conn,
             fingerprint,
             monitor: RefCell::new(None),
@@ -116,9 +140,16 @@ impl WebSession {
         let _ = self.cmds.send(Cmd::Resize(cols, rows));
     }
 
+    /// 界面显示完了 `bytes` 字节输出（见 ssh_core::OutputAck）
+    pub fn ack(&self, bytes: u32) {
+        self.output.ack(bytes as usize);
+    }
+
     /// 断开整条连接
     pub fn close(&self) {
         *self.monitor.borrow_mut() = None;
+        // 输出暂停着的时候 russh 处理不了断开请求，先放开
+        self.output.release();
         let _ = self.cmds.send(Cmd::Close);
     }
 

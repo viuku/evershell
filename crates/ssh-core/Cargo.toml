@@ -11,6 +11,10 @@ russh-sftp = "3.0"
 tokio = { workspace = true, features = ["sync", "io-util", "macros"] }
 futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
 serde = { version = "1", features = ["derive"] }
+# known_hosts 里哈希过的主机名（HMAC-SHA1）和 base64，版本跟 russh 用的一致
+data-encoding = "2.11"
+hmac = "0.13"
+sha1 = "0.11"
 thiserror = { workspace = true }
 log = { workspace = true }
 

@@ -6,18 +6,25 @@
 //! 一条 [`Connection`] 完成握手和认证后，可以在上面打开交互 shell、执行命令、
 //! 开 SFTP 会话和监控采样，它们各自走独立的 SSH channel，互不干扰。
 
+mod flow;
+pub mod known_hosts;
 pub mod monitor;
 pub mod sftp;
 
+use std::borrow::Cow;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-use russh::client::{self, Handle, Msg};
+use russh::client::{self, DisconnectReason, Handle, Msg};
 use russh::keys::{HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate, decode_secret_key};
-use russh::{ChannelMsg, ChannelWriteHalf, Disconnect};
+use russh::{ChannelMsg, ChannelWriteHalf, Disconnect, Preferred};
+use serde::Serialize;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
 
+pub use flow::{OUTPUT_ACK_BATCH, OUTPUT_HIGH_WATER, OutputAck};
+pub use known_hosts::{HostKey, KnownEntry};
 pub use monitor::{MonitorHandle, MonitorSnapshot};
 pub use sftp::{FileEntry, FileKind, Sftp, TransferProgress};
 
@@ -29,6 +36,9 @@ pub enum Error {
     Key(#[from] russh::keys::Error),
     #[error("认证失败：用户名、密码或私钥不正确")]
     AuthFailed,
+    /// 服务器指纹没通过校验，连接在发送密码之前就停下了。界面据此弹确认框或警告
+    #[error("{0}")]
+    HostKey(Box<HostKeyProblem>),
     #[error("网络错误: {0}")]
     Io(#[from] std::io::Error),
     #[error("{0}")]
@@ -47,10 +57,86 @@ pub enum Auth {
 
 #[derive(Debug)]
 pub enum ShellEvent {
-    /// 远端输出，stdout 和 stderr 合在一起，与真实终端一致
+    /// 远端输出，stdout 和 stderr 合在一起，与真实终端一致。界面处理完要回执，见 [`OutputAck`]
     Data(Vec<u8>),
-    /// 会话结束；远端没给退出码时为 None
-    Exit(Option<u32>),
+    /// 会话结束。`code` 是远端给的退出码（没给时为 None）；
+    /// `reason` 是整条连接断掉的原因（心跳超时、服务器断开、网络出错），正常退出或自己关闭时为 None
+    Exit { code: Option<u32>, reason: Option<String> },
+}
+
+/// 怎么校验服务器指纹
+#[derive(Debug, Clone)]
+pub enum HostKeyCheck {
+    /// 按 known_hosts 记录校验（OpenSSH 格式，见 [`known_hosts`]）。
+    /// 没记过、对不上、被吊销都会在发送密码之前中止，返回 [`Error::HostKey`]
+    KnownHosts {
+        host: String,
+        port: u16,
+        known_hosts: String,
+    },
+    /// 什么钥匙都接受、只记下指纹。只给连本机测试服务器的测试用，正式连接不能用
+    AcceptAny,
+}
+
+/// 指纹校验没通过的具体情况
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum HostKeyProblem {
+    /// 第一次连这台服务器。`other_types`：记过的其它类型的钥匙（通常为空）
+    Unknown {
+        host: String,
+        port: u16,
+        key: HostKey,
+        other_types: Vec<KnownEntry>,
+    },
+    /// 和记过的同类型钥匙对不上
+    Changed {
+        host: String,
+        port: u16,
+        key: HostKey,
+        recorded: Vec<KnownEntry>,
+    },
+    /// 这把钥匙在记录里被标为吊销
+    Revoked { host: String, port: u16, key: HostKey },
+}
+
+impl std::fmt::Display for HostKeyProblem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Unknown { .. } => "需要确认主机密钥",
+            Self::Changed { .. } => "主机密钥已改变，已取消连接",
+            Self::Revoked { .. } => "主机密钥已被吊销，已取消连接",
+        })
+    }
+}
+
+/// 连接参数里除了地址和认证以外的部分
+#[derive(Debug, Clone)]
+pub struct ConnectConfig {
+    pub host_key: HostKeyCheck,
+    /// 多久没收到服务器的任何数据就发一次心跳；None 表示不发
+    pub keepalive_interval: Option<Duration>,
+    /// 连续几次心跳没有回应就判定断线
+    pub keepalive_max: usize,
+}
+
+impl ConnectConfig {
+    /// 心跳和 OpenSSH 的 `ServerAliveInterval 15`、`ServerAliveCountMax 3` 一样：
+    /// 静默 15 秒发一次，三次都没回应、第四次到点时判定断线（约 1 分钟）。
+    /// 心跳走加密通道，不会像 TCP keepalive 那样被中间设备伪造
+    pub fn new(host_key: HostKeyCheck) -> Self {
+        Self {
+            host_key,
+            keepalive_interval: Some(Duration::from_secs(15)),
+            keepalive_max: 3,
+        }
+    }
+
+    /// 从服务器最后一次有动静到判定断线大约多久
+    fn dead_after(&self) -> Option<Duration> {
+        self.keepalive_interval
+            .map(|i| i * (self.keepalive_max as u32 + 1))
+    }
 }
 
 /// `exec` 的结果
@@ -69,7 +155,13 @@ impl ExecOutput {
 }
 
 struct Client {
+    host_key: HostKeyCheck,
+    /// 指纹没通过时的详情，连接失败后转成 Error::HostKey
+    problem: Arc<Mutex<Option<HostKeyProblem>>>,
     fingerprint: Arc<Mutex<Option<String>>>,
+    /// 连接断掉的原因，由 russh 在会话结束、关闭各 channel 之前写入
+    close_reason: Arc<Mutex<Option<String>>>,
+    dead_after: Option<Duration>,
 }
 
 impl client::Handler for Client {
@@ -79,15 +171,78 @@ impl client::Handler for Client {
         &mut self,
         server_key: &PublicKeyOrCertificate,
     ) -> std::result::Result<bool, Self::Error> {
-        // TODO(M1): 对照 known_hosts 校验，首次连接时让用户确认指纹
-        let fp = match server_key {
-            PublicKeyOrCertificate::PublicKey { key, .. } => key.fingerprint(HashAlg::Sha256),
-            PublicKeyOrCertificate::Certificate(cert) => {
-                cert.public_key().fingerprint(HashAlg::Sha256)
-            }
+        // 默认不请求证书（Preferred::host_key_certificates 为空），服务器给的是普通公钥；
+        // 真给了证书也只按里面的公钥校验，不认证书机构
+        let server = server_key.public_key();
+        *self.fingerprint.lock().unwrap() = Some(server.fingerprint(HashAlg::Sha256).to_string());
+        let HostKeyCheck::KnownHosts { host, port, known_hosts } = &self.host_key else {
+            return Ok(true);
         };
-        *self.fingerprint.lock().unwrap() = Some(fp.to_string());
-        Ok(true)
+        let (host, port, key) = (host.clone(), *port, HostKey::from_public_key(&server));
+        let problem = match known_hosts::check(known_hosts, &host, port, &server) {
+            known_hosts::Verdict::Trusted => return Ok(true),
+            known_hosts::Verdict::Unknown { other_types } => HostKeyProblem::Unknown { host, port, key, other_types },
+            known_hosts::Verdict::Changed { recorded } => HostKeyProblem::Changed { host, port, key, recorded },
+            known_hosts::Verdict::Revoked => HostKeyProblem::Revoked { host, port, key },
+        };
+        log::warn!("服务器指纹没通过校验：{problem}");
+        *self.problem.lock().unwrap() = Some(problem);
+        Ok(false)
+    }
+
+    async fn disconnected(
+        &mut self,
+        reason: DisconnectReason<Self::Error>,
+    ) -> std::result::Result<(), Self::Error> {
+        let text = match &reason {
+            DisconnectReason::ReceivedDisconnect(info) if info.message.is_empty() => {
+                Some("服务器断开了连接".to_string())
+            }
+            DisconnectReason::ReceivedDisconnect(info) => {
+                Some(format!("服务器断开了连接：{}", info.message))
+            }
+            // 自己调 disconnect() 结束时 russh 也走这里，不算异常
+            DisconnectReason::Error(russh::Error::Disconnect) => None,
+            DisconnectReason::Error(russh::Error::KeepaliveTimeout) => Some(match self.dead_after {
+                Some(d) => format!(
+                    "{}没有收到服务器响应，可能网络断了或电脑休眠过",
+                    describe_secs(d.as_secs())
+                ),
+                None => "服务器没有响应心跳，可能网络断了".to_string(),
+            }),
+            DisconnectReason::Error(russh::Error::IO(e)) => Some(format!("网络连接中断：{e}")),
+            DisconnectReason::Error(e) => Some(format!("连接出错：{e}")),
+        };
+        if let Some(text) = text {
+            log::info!("连接断开：{text}");
+            *self.close_reason.lock().unwrap() = Some(text);
+        }
+        Ok(())
+    }
+}
+
+/// 记录里有这台服务器的钥匙时，让服务器优先出示那些类型（其余顺序照 russh 默认），
+/// 免得记的是 RSA、服务器默认先给 Ed25519，被当成没见过的服务器
+fn preferred_for(check: &HostKeyCheck) -> Preferred {
+    let mut preferred = Preferred::default();
+    if let HostKeyCheck::KnownHosts { host, port, known_hosts } = check {
+        let known = known_hosts::known_algorithms(known_hosts, host, *port);
+        if !known.is_empty() {
+            let is_known = |a: &russh::keys::Algorithm| known.iter().any(|k| known_hosts::same_family(k.clone(), a));
+            let (mut first, rest): (Vec<_>, Vec<_>) = preferred.key.iter().cloned().partition(is_known);
+            first.extend(rest);
+            preferred.key = Cow::Owned(first);
+        }
+    }
+    preferred
+}
+
+/// 60 → "约 1 分钟"，45 → "45 秒"
+fn describe_secs(secs: u64) -> String {
+    if secs >= 60 && secs.is_multiple_of(60) {
+        format!("约 {} 分钟", secs / 60)
+    } else {
+        format!("{secs} 秒")
     }
 }
 
@@ -95,22 +250,43 @@ impl client::Handler for Client {
 pub struct Connection {
     handle: Handle<Client>,
     host_key_fingerprint: Option<String>,
+    close_reason: Arc<Mutex<Option<String>>>,
     // SFTP 会话按需打开一次，之后共用
     sftp: tokio::sync::Mutex<Option<Sftp>>,
 }
 
 impl Connection {
-    /// 在给定的字节流上完成 SSH 握手和认证。
-    pub async fn connect<S>(stream: S, user: &str, auth: Auth) -> Result<Self>
+    /// 在给定的字节流上完成 SSH 握手、指纹校验和认证。
+    /// 指纹没通过时在发送密码之前就返回 [`Error::HostKey`]。
+    pub async fn connect<S>(stream: S, user: &str, auth: Auth, cfg: &ConnectConfig) -> Result<Self>
     where
         S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     {
-        let config = Arc::new(client::Config::default());
+        let config = Arc::new(client::Config {
+            keepalive_interval: cfg.keepalive_interval,
+            keepalive_max: cfg.keepalive_max,
+            preferred: preferred_for(&cfg.host_key),
+            ..Default::default()
+        });
+        let problem = Arc::new(Mutex::new(None));
         let fingerprint = Arc::new(Mutex::new(None));
+        let close_reason = Arc::new(Mutex::new(None));
         let client = Client {
+            host_key: cfg.host_key.clone(),
+            problem: problem.clone(),
             fingerprint: fingerprint.clone(),
+            close_reason: close_reason.clone(),
+            dead_after: cfg.dead_after(),
         };
-        let mut handle = client::connect_stream(config, stream, client).await?;
+        let mut handle = match client::connect_stream(config, stream, client).await {
+            Ok(h) => h,
+            Err(e) => {
+                return Err(match problem.lock().unwrap().take() {
+                    Some(p) => Error::HostKey(Box::new(p)),
+                    None => e.into(),
+                });
+            }
+        };
 
         let auth = match auth {
             Auth::Password(password) => handle.authenticate_password(user, password).await?,
@@ -129,6 +305,7 @@ impl Connection {
         Ok(Self {
             handle,
             host_key_fingerprint,
+            close_reason,
             sftp: tokio::sync::Mutex::new(None),
         })
     }
@@ -139,6 +316,9 @@ impl Connection {
     }
 
     /// 打开一个分配了 PTY 的交互式 shell。远端输出通过返回的接收端逐条送出。
+    ///
+    /// 收到的每条 [`ShellEvent::Data`] 处理完都要用 [`Shell::output_ack`] 回执，
+    /// 没回执的输出超过 [`OUTPUT_HIGH_WATER`] 就不再往下读，直到回执或 [`OutputAck::release`]。
     pub async fn open_shell(
         &self,
         term: &str,
@@ -152,22 +332,35 @@ impl Connection {
         channel.request_shell(false).await?;
         let (mut reader, writer) = channel.split();
 
+        // 接收端不设上限：积压的量由回执控制，最多 OUTPUT_HIGH_WATER 加一条消息
         let (tx, rx) = mpsc::unbounded_channel();
+        let ack = OutputAck::default();
+        let flow = ack.clone();
+        let close_reason = self.close_reason.clone();
         spawn(async move {
             let mut exit_status = None;
-            while let Some(msg) = reader.wait().await {
+            loop {
+                tokio::select! {
+                    _ = flow.wait_room() => {}
+                    // 没人收输出了，不必再读
+                    _ = tx.closed() => break,
+                }
+                let Some(msg) = reader.wait().await else { break };
                 match msg {
                     ChannelMsg::Data { data } | ChannelMsg::ExtendedData { data, .. } => {
+                        flow.sent(data.len());
                         let _ = tx.send(ShellEvent::Data(data.to_vec()));
                     }
                     ChannelMsg::ExitStatus { exit_status: code } => exit_status = Some(code),
                     _ => {}
                 }
             }
-            let _ = tx.send(ShellEvent::Exit(exit_status));
+            // 连接断掉时 russh 先记下原因再关 channel，走到这里原因已经在了
+            let reason = close_reason.lock().unwrap().clone();
+            let _ = tx.send(ShellEvent::Exit { code: exit_status, reason });
         });
 
-        Ok((Shell { writer }, rx))
+        Ok((Shell { writer, ack }, rx))
     }
 
     /// 执行一条命令（不分配 PTY），等它结束后返回全部输出和退出码。
@@ -231,9 +424,15 @@ impl Connection {
 /// 一个交互式 shell 的写入端；输出从 [`Connection::open_shell`] 返回的接收端读。
 pub struct Shell {
     writer: ChannelWriteHalf<Msg>,
+    ack: OutputAck,
 }
 
 impl Shell {
+    /// 回执输出用的句柄，见 [`OutputAck`]
+    pub fn output_ack(&self) -> OutputAck {
+        self.ack.clone()
+    }
+
     pub async fn write(&self, data: &[u8]) -> Result<()> {
         self.writer.data(data).await?;
         Ok(())

@@ -12,11 +12,54 @@ export interface ConnectOptions {
   auth: AuthConfig;
   cols: number;
   rows: number;
+  /** 服务器指纹记录（OpenSSH known_hosts 格式，见 core/known-hosts.ts）。对不上时 connect 抛 HostKeyError */
+  knownHosts: string;
+}
+
+/** 一把服务器公钥，和 crates/ssh-core/src/known_hosts.rs 的 HostKey 对应 */
+export interface HostKeyInfo {
+  /** 如 ssh-ed25519 */
+  algorithm: string;
+  /** SHA256: 开头，和 ssh-keygen -l 一样 */
+  fingerprint: string;
+  /** known_hosts 一行里主机名后面的部分 */
+  openssh: string;
+}
+
+/** 指纹记录里和这台服务器有关的一行 */
+export interface KnownHostEntry {
+  key: HostKeyInfo;
+  /** 记录里原样的这一行 */
+  line: string;
+  /** 没有通配和排除，删掉不影响别的服务器 */
+  exact: boolean;
+}
+
+/** 指纹校验没通过的情况，和 Rust 的 HostKeyProblem 对应 */
+export type HostKeyProblem =
+  | { kind: 'unknown'; host: string; port: number; key: HostKeyInfo; otherTypes: KnownHostEntry[] }
+  | { kind: 'changed'; host: string; port: number; key: HostKeyInfo; recorded: KnownHostEntry[] }
+  | { kind: 'revoked'; host: string; port: number; key: HostKeyInfo };
+
+const HOST_KEY_MESSAGE: Record<HostKeyProblem['kind'], string> = {
+  unknown: '需要确认主机密钥',
+  changed: '主机密钥已改变，已取消连接',
+  revoked: '主机密钥已被吊销，已取消连接',
+};
+
+/** 主机密钥没通过校验，连接在发送密码之前就停下了 */
+export class HostKeyError extends Error {
+  constructor(readonly problem: HostKeyProblem) {
+    super(HOST_KEY_MESSAGE[problem.kind]);
+    this.name = 'HostKeyError';
+  }
 }
 
 export interface ShellHandlers {
+  /** 远端输出。画完后要用 SshSession.ack 回执，否则后端积压到上限就不再送（见 core/output-ack.ts） */
   onData(data: Uint8Array): void;
-  onExit(code: number | null): void;
+  /** 会话结束。reason 是整条连接断掉的原因（心跳超时、服务器断开、网络出错），正常退出时为 null */
+  onExit(code: number | null, reason: string | null): void;
 }
 
 /** 一次监控采样。数值都是原始单位（字节、0–100 的百分比），格式化交给界面。 */
@@ -62,6 +105,8 @@ export interface SshSession {
   readonly hostKeyFingerprint: string | null;
   /** 同步调用、不等待，但实现必须保证按调用顺序发出 */
   write(data: Uint8Array): void;
+  /** 回执已经画完的输出字节数。不用排队，可以随时调 */
+  ack(bytes: number): void;
   resize(cols: number, rows: number): void;
   close(): void;
 

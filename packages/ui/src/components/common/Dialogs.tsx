@@ -1,4 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import type { AskableHostKeyProblem, HostKeyDecision } from '../../core/known-hosts';
+import { CautionIcon } from './Icons';
 import { Modal } from './Modal';
 
 // 全局的小对话框：输入一个值、确认、问密码。用 Promise 包起来，调用处写成同步流程。
@@ -52,6 +54,8 @@ interface DialogsApi {
   askPrivateKey(opts: KeyOptions): Promise<KeyResult | null>;
   /** 只是告知，一个“好”按钮 */
   alert(title: string, message: string): Promise<void>;
+  /** 主机密钥没通过校验时的“安全警告”，照 FinalShell：第一次连接给接受并保存 / 只接受本次，密钥变了只给更新 */
+  hostKey(problem: AskableHostKeyProblem): Promise<HostKeyDecision>;
 }
 
 type Pending =
@@ -59,7 +63,8 @@ type Pending =
   | { kind: 'confirm'; opts: ConfirmOptions; resolve(v: boolean): void }
   | { kind: 'password'; opts: PasswordOptions; resolve(v: PasswordResult | null): void }
   | { kind: 'key'; opts: KeyOptions; resolve(v: KeyResult | null): void }
-  | { kind: 'alert'; title: string; message: string; resolve(): void };
+  | { kind: 'alert'; title: string; message: string; resolve(): void }
+  | { kind: 'hostKey'; problem: AskableHostKeyProblem; resolve(v: HostKeyDecision): void };
 
 const Ctx = createContext<DialogsApi | null>(null);
 
@@ -81,6 +86,7 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
       askPassword: (opts) => new Promise((resolve) => push({ kind: 'password', opts, resolve })),
       askPrivateKey: (opts) => new Promise((resolve) => push({ kind: 'key', opts, resolve })),
       alert: (title, message) => new Promise((resolve) => push({ kind: 'alert', title, message, resolve })),
+      hostKey: (problem) => new Promise((resolve) => push({ kind: 'hostKey', problem, resolve })),
     }),
     [push],
   );
@@ -94,6 +100,7 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
       {current?.kind === 'password' && <PasswordDialog key={queue.length} pending={current} done={pop} />}
       {current?.kind === 'key' && <KeyDialog key={queue.length} pending={current} done={pop} />}
       {current?.kind === 'alert' && <AlertDialog key={queue.length} pending={current} done={pop} />}
+      {current?.kind === 'hostKey' && <HostKeyDialog key={queue.length} pending={current} done={pop} />}
     </Ctx.Provider>
   );
 }
@@ -197,6 +204,70 @@ function AlertDialog({ pending, done }: { pending: Extract<Pending, { kind: 'ale
           <button type="button" className="btn btn-primary" data-autofocus onClick={finish}>
             好
           </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function HostKeyDialog({ pending, done }: { pending: Extract<Pending, { kind: 'hostKey' }>; done(): void }) {
+  const { problem } = pending;
+  const finish = (decision: HostKeyDecision) => {
+    pending.resolve(decision);
+    done();
+  };
+  const where = problem.port === 22 ? problem.host : `${problem.host}:${problem.port}`;
+  const changed = problem.kind === 'changed';
+  const old = changed ? [...new Set(problem.recorded.map((r) => r.key.fingerprint))] : [];
+  return (
+    <Modal title="安全警告" onClose={() => finish('cancel')} width={changed ? 520 : 460} tone="sheet">
+      <div className="dialog-body">
+        <div className="hostkey">
+          <CautionIcon className="hostkey__icon" />
+          {changed ? (
+            <div className="hostkey__text">
+              <p>主机 {where} 密钥已经改变，该连接可能被劫持！如果无法确定，建议取消连接。</p>
+              <p className="muted">
+                原来的密钥指纹：
+                {old.map((fp) => (
+                  <span key={fp} className="hostkey__fp">
+                    {fp}
+                  </span>
+                ))}
+              </p>
+              <p>
+                现在的密钥指纹：<span className="hostkey__fp">{problem.key.fingerprint}</span>
+              </p>
+            </div>
+          ) : (
+            <div className="hostkey__text">
+              <p>主机 {where} 密钥未注册过。</p>
+              <p>是否接受该密钥？</p>
+              <p>
+                主机密钥指纹：<span className="hostkey__fp">{problem.key.fingerprint}</span>
+              </p>
+            </div>
+          )}
+        </div>
+        {/* 默认按钮是「取消」：回车不会误放行 */}
+        <div className="dialog-actions">
+          <button type="button" className="btn hostkey__default" data-autofocus onClick={() => finish('cancel')}>
+            取消
+          </button>
+          {changed ? (
+            <button type="button" className="btn" onClick={() => finish('update')}>
+              我已核实，更新密钥
+            </button>
+          ) : (
+            <>
+              <button type="button" className="btn" onClick={() => finish('trust')}>
+                接受并保存
+              </button>
+              <button type="button" className="btn" onClick={() => finish('once')}>
+                只接受本次
+              </button>
+            </>
+          )}
         </div>
       </div>
     </Modal>
