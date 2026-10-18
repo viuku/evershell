@@ -51,7 +51,12 @@ packages/ui  ── 界面和业务逻辑（React + TS），桌面端、网页�
 - **IPC 怎么传数据**：二进制（按键、上传、保存文件）作为请求体直接传，会话号、文件名放请求头；远端输出、监控、传输进度用 `Channel` 推回前端；JS 驼峰参数名对应 Rust 下划线（[pitfalls.md](pitfalls.md#invoke-的参数名和数据怎么传)）。
 - **按键顺序靠两层队列**：前端把 invoke 串成一条链，Rust 每个会话一个写入队列。不要为了简化拿掉。
 - **机密的流向**：现在三个平台都是前端通过 `SecretStore` 取出密码，放进连接参数交给后端。以后要收紧（前端只传连接编号，后端自己取），是 [security.md](security.md) 里的待办，改之前要三个后端一起改。
-- 断线检测、自动重连、终端回压、SFTP 安全上传 2026-10-18 起在一个独立任务里做，做完在这里补约定。要改这几块之前，先用 `git worktree list` 和 App 的关联会话提示看还有没有会话在做，有就先发消息商量（[ai-collaboration.md](ai-collaboration.md#会话之间交接)）。
+- **终端输出回压**：内核读 shell 输出的任务在“界面还没回执的字节 ≥ 256KB”（`OUTPUT_HIGH_WATER`）时停读；界面在 xterm 的 write 回调里确认画完，攒够 32KB（`OUTPUT_ACK_BATCH`）回执一次（`packages/ui/src/core/output-ack.ts`）。回执不能走按键队列，否则两边互相等：桌面端单独一个 `ssh_ack` 命令，网页端是 WASM 的 `ack()`。关会话前先 `OutputAck::release()`，不然暂停中的 russh 处理不了断开请求。暂停时整条连接都会慢，原因见 [pitfalls.md](pitfalls.md#终端输出暂停时整条-ssh-连接都会跟着慢2026-10-18)。
+- **心跳和断线原因**：`ConnectConfig::new` 默认每 15 秒一次、3 次没回应判断断线（和 OpenSSH 一样，实际约 60 秒）。断线原因由内核写进 `ShellEvent::Exit` 的 `reason`，一路传到界面（标签上的橙点、终端里一行原因、状态栏）；正常退出、自己关闭时 `reason` 为空。
+- **主机密钥校验**：正式连接一律 `HostKeyCheck::KnownHosts`，`AcceptAny` 只给连本机测试服务器的测试用。没通过在认证之前就中止（`Error::HostKey`），界面收到 `HostKeyError` 后由 `session-manager.ts` 的 `resolveHostKey` 弹框，用户接受就记下再重连。记录是 OpenSSH known_hosts 格式的文本：桌面端存保险箱条目 `known_hosts`，网页端存浏览器本地存储 `evershell.knownHosts`，连接时整段传给内核（`crates/ssh-core/src/known_hosts.rs` 校验，不用 russh 自带的，原因见 [pitfalls.md](pitfalls.md#russh-自带的-known_hosts-不能用2026-10-18)）。用户选“只接受本次”时，这把密钥只在这次连接里有效（`trustOnce`），之后弹框要密码再重连也会带上，同一次连接不会问两遍主机密钥。
+- **不需要密码的服务器**：没存密码时先不带密码连（SSH 的 none 认证），通过了就不发密码；没通过就报“认证失败”，界面按这个开头认出来，由 `session-manager.ts` 弹框要密码再重连（带上上面的 `trustOnce`）。不发空密码，免得服务器的防暴力破解（比如 fail2ban）记一次失败。规格见 [docs/specs/none-auth.md](../specs/none-auth.md)。
+- **SFTP 上传不毁原文件**：照 WinSCP 的做法，先写同目录的 `<文件名>.evershell-part`，写完 fsync，再用 `posix-rename` 盖过目标；服务器不支持 `posix-rename` 时先删目标再改名（中间有一小段时间目标不存在）。目标是符号链接、临时文件建不出来、或者保不住原文件的所有者时，退回直接覆盖。代码在 `crates/ssh-core/src/sftp.rs` 的 `upload`。
+- **CSP**：在 `apps/desktop/src-tauri/tauri.conf.json` 的 `app.security`，为什么放行内联样式见 [pitfalls.md](pitfalls.md#开了-csp-以后-xtermjs-的样式会被拦2026-10-18)。改 CSP 只在打包出来的应用里生效，验法也在那一条里。
 
 ## 加依赖的门槛
 
@@ -90,7 +95,10 @@ packages/ui  ── 界面和业务逻辑（React + TS），桌面端、网页�
 | 本地保存的设置和数据 | `packages/ui/src/core/storage.ts` 的 `PersistentStore`；全部清单见 [data.md](data.md) | `grep -rn "new PersistentStore" packages/ui/src` |
 | 连接列表、最近连接、快捷命令、历史 | `packages/ui/src/core/*-store.ts` | `ls packages/ui/src/core` |
 | 会话、标签、监控数据怎么流动 | `packages/ui/src/core/session-manager.ts` | |
-| 连接参数（超时、心跳、算法） | 内核 `crates/ssh-core/src/lib.rs` 的 `Connection::connect`（russh 的 `client::Config`）和桌面端的 TCP 连接；网页端在 `crates/ssh-wasm` 里开 WebSocket。2026-10-18 时连接超时、心跳都没设，界面“高级”里的心跳间隔只保存、不生效 | `grep -rnE "Config|timeout|keepalive" crates/ssh-core/src` |
+| 主机密钥校验 | 校验在 `crates/ssh-core/src/known_hosts.rs`；记录存取在 `packages/ui/src/core/known-hosts.ts`；确认框是 `components/common/Dialogs.tsx` 的 `HostKeyDialog` | `grep -rn --exclude-dir={node_modules,dist,target} "HostKeyProblem" crates apps packages` |
+| 心跳、断线原因 | `crates/ssh-core/src/lib.rs` 的 `ConnectConfig` 和 `Client::disconnected` | |
+| 终端回压 | `crates/ssh-core/src/flow.rs` + `packages/ui/src/core/output-ack.ts` | |
+| 连接参数（超时、心跳、算法） | 内核 `crates/ssh-core/src/lib.rs` 的 `ConnectConfig`（心跳默认 15 秒 × 3）和 `Connection::connect`；网页端在 `crates/ssh-wasm` 里开 WebSocket。连接超时还没设；界面“高级”里的心跳间隔只保存、不生效 | `grep -rnE "ConnectConfig|timeout|keepalive" crates/ssh-core/src` |
 | 导入导出 | `packages/ui/src/core/importers/<来源>.ts`，样例在 `__fixtures__`，测试在 `__tests__` | 新来源照现有的抄一份，补样例和测试 |
 | 窗口大小、标题栏、红绿灯 | `apps/desktop/src-tauri/tauri.macos.conf.json`（Mac 专属）、`tauri.conf.json`（共用） | |
 | 窗口权限（拖动等） | `apps/desktop/src-tauri/capabilities/default.json` | |

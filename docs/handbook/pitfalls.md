@@ -47,6 +47,21 @@ ring 用 getrandom 0.2，russh 和 vault 用 0.3。wasm32 下 0.3 要开 `wasm_j
 
 `crates/ssh-core/src/lib.rs` 里有三个按平台区分的函数：`spawn`（原生转给 `tokio::spawn`，WASM 转给 `spawn_local`）、`now`（原生 `std::time::Instant`，WASM 用 web-time）、`sleep`（原生 tokio，WASM 用浏览器定时器）。直接写 `tokio::spawn`、`std::thread`、`std::time::Instant`、`tokio::time`，原生平台照样能编能跑，到浏览器里才编不过或 panic，只有 `scripts/check.sh web` 才发现得了。`scripts/check-guards.sh` 会拦这几种写法。
 
+### 终端输出暂停时，整条 SSH 连接都会跟着慢（2026-10-18）
+
+- **症状**：终端在刷大量输出（`yes`、`cat` 大文件）时，同一条连接上的文件面板、监控也变慢，等终端画完才恢复。
+- **原因**：russh 收到数据就给服务器补窗口，不管程序读没读；程序不读时，它的会话循环卡在往通道缓冲里塞数据那一步，整条连接的所有通道一起停。所以回压（`crates/ssh-core/src/flow.rs`）是靠堵住整个会话循环、再由 TCP 把服务器挡住实现的，不是按通道流控。
+- **影响多大**：Ctrl-C 之后还要画完已经在路上的数据，上限约 2MB 窗口 + russh 每个通道 100 条消息 + 我们的 256KB 水位线。实测本机 OpenSSH 上 `yes` 10 秒、界面按 10MB/s 画，Ctrl-C 后 0.24 秒停下；网页版真 xterm.js 0.36 秒；不限速时要等 100 多秒（测试 `crates/ssh-core/tests/shell.rs` 的 `real_openssh_yes_then_ctrl_c`，设 `EVERSHELL_NO_FLOW=1` 可以看不限速的样子）。
+- **真要按通道流控**：得改 vendor 里的 russh，让它在程序读走数据之后才补窗口。
+
+### OpenSSH 文档说心跳 3 次约 45 秒判死，实际是 60 秒（2026-10-18）
+
+`ServerAliveInterval 15` + `ServerAliveCountMax 3`，ssh_config 手册写“约 45 秒”，但 OpenSSH 源码是第 4 次到点、计数超过 3 才断开，约 60 秒。russh 的 `keepalive_max` 意思一样。EverShell 用同样的数，断线提示写“约 1 分钟”，文案按实际设置算出来，改参数不用改文案。
+
+### russh 自带的 known_hosts 不能用（2026-10-18）
+
+`russh::keys::known_hosts` 直接读写 `~/.ssh/known_hosts` 文件，wasm32 下整个模块都没编进去，也不认 `@revoked`、通配和 `!`。所以主机密钥校验自己写在 `crates/ssh-core/src/known_hosts.rs`，记录由界面存（桌面端保险箱、网页端浏览器），连接时整段传进来。哈希主机名的算法用 macOS 自带 `ssh-keygen -H` 生成的行做了单元测试。
+
 ### 浏览器的 WebSocket 不能跨线程（M0）
 
 russh 要求字节流能跨线程（`Send`），浏览器的 WebSocket 不行。`crates/ssh-wasm` 中间放了一个内存管道，两头各一个任务搬数据。别想着把 WebSocket 直接塞给 russh。
@@ -58,6 +73,14 @@ russh 要求字节流能跨线程（`Send`），浏览器的 WebSocket 不行。
 - **症状**：连上服务器后应用直接消失。日志：`there is no reactor running, must be called from the context of a Tokio 1.x runtime`，接着 `fatal runtime error: failed to initiate panic`。
 - **原因**：不带 `async` 的 `#[tauri::command]` 跑在主线程上，那里没有 tokio 运行时。当时 `ssh_monitor_start` 是同步命令，一路调到内核的 `spawn` 就崩了。
 - **规矩**：命令只要会直接或间接用到 tokio（spawn、网络、计时），就写成 `async fn`。现在只有不碰 tokio 的几个（写入、调整窗口、关闭、停监控）是同步的，改它们时留意。这条没法用 grep 判断，靠测试：`apps/desktop/src-tauri/tests/session.rs` 连 test-sshd 跑的就是真实的命令路径。
+
+### 开了 CSP 以后 xterm.js 的样式会被拦（2026-10-18）
+
+- **症状**：终端没颜色、光标不见。
+- **原因**：xterm.js 的 DOM 渲染器在运行时往页面里插 `<style>`，CSP 的 `style-src` 不放行 `'unsafe-inline'` 就全被拦。而 Tauri 打包时会自动往 `style-src` 加 nonce，浏览器看到 nonce 就忽略 `'unsafe-inline'`。
+- **处理**：`apps/desktop/src-tauri/tauri.conf.json` 的 `style-src` 带 `'unsafe-inline'`，同时 `dangerousDisableAssetCspModification: ["style-src"]` 不让 Tauri 给它加 nonce。`script-src` 照常由 Tauri 加 nonce，禁远程脚本和 eval。
+- **桌面端没有 WASM**，所以 `script-src` 没加 `'wasm-unsafe-eval'`；以后桌面端要加载 WASM 时要加上。
+- **只在打包出来的应用里生效**：`tauri dev` 直接加载 vite 的页面，Tauri 不给它加 CSP。改 CSP 后的验法：`npm run build -w @evershell/web`，用带同样 CSP 头的静态服务器托管 `apps/web/dist`，打开 `?mock` 连一个假会话，看控制台有没有 CSP 报错、终端有没有颜色。
 
 ### invoke 的参数名和数据怎么传
 
@@ -126,6 +149,14 @@ russh 要求字节流能跨线程（`Send`），浏览器的 WebSocket 不行。
 ### 连真服务器的测试没配环境会“通过”
 
 `crates/ssh-core/tests/real_server.rs` 和 `apps/desktop/src-tauri/tests/session.rs` 没有 `SSH_E2E_*` 环境变量时打印“跳过”然后算通过。先开 test-sshd，见 [quality.md](quality.md#c-rust-测试和本机测试服务器)。
+
+### 网页端到端测试报“超时（10s）”（2026-10-18）
+
+`scripts/check.sh web` 的端到端测试要先起 `services/relay-node`。它不在 npm workspaces 里，新 worktree 里 `scripts/setup.sh` 也不装它的依赖，中转起不来（`target/check-logs/relay.log` 里是 `Cannot find package 'ws'`），10 秒后报超时。先 `npm install --prefix services/relay-node`。
+
+### 屏幕锁着时截不了原生窗口（2026-10-18）
+
+`scripts/mac-window.sh shot` 报 `could not create image from window`，`screencapture` 截全屏是黑的：所有者的屏幕锁着或者在休眠。这时只能用 `scripts/mac-window.sh list` 确认进程和窗口在，样子等所有者回来再截，或者请他看。
 
 ### 本机测试服务器是 macOS
 

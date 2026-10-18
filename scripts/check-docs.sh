@@ -13,7 +13,8 @@ FILES = {'Cargo.toml', 'Cargo.lock', 'package.json', 'README.md', 'CLAUDE.md', '
 
 def slug(heading):
     """GitHub 的标题锚点：去掉格式符号和标点，小写，空格换成 -"""
-    text = re.sub(r'[`*_]|\[([^\]]*)\]\([^)]*\)', lambda m: m.group(1) or '', heading).strip().lower()
+    # 下划线 GitHub 会保留（known_hosts → known_hosts），只去掉反引号、星号和链接
+    text = re.sub(r'[`*]|\[([^\]]*)\]\([^)]*\)', lambda m: m.group(1) or '', heading).strip().lower()
     text = re.sub(r'[^\w\- ]', '', text)
     return text.replace(' ', '-')
 

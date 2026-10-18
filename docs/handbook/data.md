@@ -18,6 +18,7 @@
 | 最近连接 | `evershell.recents.v1` | 键名里的 v1 | 没有（只是本机记录，可以不同步） |
 | 终端外观 | `evershell.terminal-appearance.v1`、背景图 `evershell.terminal-bg-image` | 键名里的 v1 | 没有 |
 | 界面状态 | `evershell.appearance-mode`、`evershell.sidebar-open`、`evershell.bottom-height`、`evershell.files.follow`、`evershell.manager.*` | 无 | 本机偏好，不同步 |
+| 主机密钥记录 | 桌面端：保险箱条目 `known_hosts`；网页端：`evershell.knownHosts`（`packages/ui/src/core/known-hosts.ts`） | OpenSSH known_hosts 文本格式 | M2 设计 |
 | 网页端的中转设置 | `evershell.relay`（`apps/web/src/relay-bar.tsx`） | 无 | 不同步 |
 | 网页版 `?mock` 的假保险箱 | `evershell.mock-secrets` | 无 | 只用于预览 |
 | 保险箱（桌面端） | 应用数据目录下的 `vault.json`（Mac 上是 `~/Library/Application Support/dev.evershell.desktop/`）；打不开时旧文件改名为 `vault-unreadable-<时间>.json` | 文件头 `version: 1` | M2 设计 |
