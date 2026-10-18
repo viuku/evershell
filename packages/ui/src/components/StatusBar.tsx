@@ -26,7 +26,7 @@ export function StatusBar({ session, monitor }: { session: SessionInfo | null; m
 
   const where = `${session.user}@${session.host}${session.port === 22 ? '' : `:${session.port}`}`;
   const detail =
-    session.status === 'error' && session.error
+    (session.status === 'error' || session.status === 'closed') && session.error
       ? session.error
       : session.status === 'closed' && session.exitCode !== null
         ? `退出码 ${session.exitCode}`

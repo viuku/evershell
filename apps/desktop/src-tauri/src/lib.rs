@@ -22,6 +22,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::ssh_connect,
             commands::ssh_write,
+            commands::ssh_ack,
             commands::ssh_resize,
             commands::ssh_close,
             commands::ssh_monitor_start,

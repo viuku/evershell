@@ -1,28 +1,68 @@
+import { hostName } from '../core/known-hosts';
 import { readJson, writeJson } from '../core/storage';
-import type {
-  ConnectOptions,
-  MonitorSnapshot,
-  SecretStore,
-  ShellHandlers,
-  SshBackend,
-  SshSession,
-  TransferProgress,
+import {
+  HostKeyError,
+  type ConnectOptions,
+  type HostKeyInfo,
+  type KnownHostEntry,
+  type MonitorSnapshot,
+  type SecretStore,
+  type ShellHandlers,
+  type SshBackend,
+  type SshSession,
+  type TransferProgress,
 } from '../types';
 import { FakeShell } from './fake-shell';
 import { MockFs } from './mock-fs';
 import { browserDownload } from '../core/browser-download';
 
 // 不连服务器也能完整预览界面的假后端。网页端 URL 带 ?mock 时使用。
-// 约定几个特殊输入方便测试：主机含 fail → 连接失败；密码 wrong → 认证失败；主机含 bsd → 监控不支持。
+// 约定几个特殊输入方便测试：主机含 fail → 连接失败；密码 wrong → 认证失败；主机含 bsd → 监控不支持；
+// 主机含 rekey → 信任过一次指纹后再连，服务器换一把钥匙（看“指纹变了”的警告）；
+// 主机含 flaky → 连上 8 秒后像网络断了一样断开（看断线提示）。
+// 服务器指纹和真的一样要先确认：第一次连每台服务器都会弹确认框。
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function randomFingerprint(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return `SHA256:${btoa(String.fromCharCode(...bytes)).replace(/=+$/, '')}`;
+/** 由种子算出一串像 base64 的字符，同一个种子每次一样 */
+function fakeBase64(seed: string, length: number): string {
+  const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let x = 2166136261;
+  for (const ch of seed) x = Math.imul(x ^ ch.charCodeAt(0), 16777619);
+  let out = '';
+  for (let i = 0; i < length; i++) {
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    out += abc[(x >>> 0) % 64];
+  }
+  return out;
+}
+
+function mockKey(openssh: string): HostKeyInfo {
+  return { algorithm: openssh.split(' ')[0] ?? 'ssh-ed25519', fingerprint: `SHA256:${fakeBase64(openssh, 43)}`, openssh };
+}
+
+/** 主机名含 rekey、已经换过钥匙的服务器 */
+const rekeyed = new Set<string>();
+
+/** 假服务器的钥匙按主机名算，同一台每次一样。照真后端的规则对指纹记录，对不上抛 HostKeyError */
+function checkHostKey(opts: ConnectOptions): HostKeyInfo {
+  const name = hostName(opts.host, opts.port);
+  const keyOf = (version: number) => mockKey(`ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI${fakeBase64(`${name}#${version}`, 43)}`);
+  const recorded: KnownHostEntry[] = [];
+  for (const line of opts.knownHosts.split('\n')) {
+    const fields = line.trim().split(/\s+/);
+    if (fields.length < 3 || fields[0]!.startsWith('#') || !fields[0]!.split(',').includes(name)) continue;
+    recorded.push({ key: mockKey(`${fields[1]} ${fields[2]}`), line, exact: true });
+  }
+  if (/rekey/i.test(opts.host) && recorded.some((r) => r.key.openssh === keyOf(1).openssh)) rekeyed.add(name);
+  const key = keyOf(rekeyed.has(name) ? 2 : 1);
+  if (recorded.some((r) => r.key.openssh === key.openssh)) return key;
+  if (recorded.length) throw new HostKeyError({ kind: 'changed', host: opts.host, port: opts.port, key, recorded });
+  throw new HostKeyError({ kind: 'unknown', host: opts.host, port: opts.port, key, otherTypes: [] });
 }
 
 const PROCS = [
@@ -129,7 +169,7 @@ async function simulateTransfer(total: number, onProgress?: (p: TransferProgress
 }
 
 class MockSession implements SshSession {
-  readonly hostKeyFingerprint = randomFingerprint();
+  readonly hostKeyFingerprint: string;
   private readonly shell: FakeShell;
   private readonly monitor: MockMonitor;
   private closed = false;
@@ -139,22 +179,35 @@ class MockSession implements SshSession {
     private readonly fs: MockFs,
     private readonly opts: ConnectOptions,
     handlers: ShellHandlers,
+    hostKey: HostKeyInfo,
   ) {
+    this.hostKeyFingerprint = hostKey.fingerprint;
     this.home = fs.ensureHome(opts.user);
     // IP 原样显示，域名只取第一段
     const hostname = /^[\d.:]+$/.test(opts.host) ? opts.host : opts.host.split('.')[0] || 'server';
     this.shell = new FakeShell(fs, opts.user, hostname, this.home, handlers.onData, (code) => {
       if (this.closed) return;
       this.closed = true;
-      handlers.onExit(code);
+      handlers.onExit(code, null);
     });
     this.monitor = new MockMonitor(!/bsd|unsupported/i.test(opts.host));
     setTimeout(() => this.shell.start(), 50);
+    if (/flaky/i.test(opts.host)) {
+      setTimeout(() => {
+        if (this.closed) return;
+        this.closed = true;
+        this.shell.close();
+        handlers.onExit(null, '约 1 分钟没有收到服务器响应，可能网络断了或电脑休眠过');
+      }, 8000);
+    }
   }
 
   write(data: Uint8Array): void {
     this.shell.input(data);
   }
+
+  // 假终端一次只吐几行，不需要流控
+  ack(): void {}
 
   resize(): void {}
 
@@ -242,11 +295,12 @@ export function createMockBackend(): SshBackend {
     async connect(opts: ConnectOptions, handlers: ShellHandlers): Promise<SshSession> {
       await delay(400 + Math.random() * 500);
       if (/fail/i.test(opts.host)) throw new Error('连接超时：服务器无响应');
+      const hostKey = checkHostKey(opts);
       if (opts.auth.type === 'password' && opts.auth.password === 'wrong') {
         throw new Error('认证失败：用户名、密码或私钥不正确');
       }
       if (!opts.user) throw new Error('用户名不能为空');
-      return new MockSession(fs, opts, handlers);
+      return new MockSession(fs, opts, handlers, hostKey);
     },
   };
 }

@@ -6,12 +6,12 @@ use std::time::{Duration, Instant};
 
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
-use ssh_core::{Auth, FileEntry, MonitorSnapshot, ShellEvent, TransferProgress};
+use ssh_core::{Auth, FileEntry, HostKeyProblem, MonitorSnapshot, ShellEvent, TransferProgress};
 use tauri::ipc::{Channel, InvokeBody, InvokeResponseBody, JavaScriptChannelId, Request};
 use tauri::{AppHandle, Manager, State, Webview};
 
 use crate::secrets::Secrets;
-use crate::session::{ConnectParams, SessionManager};
+use crate::session::{self, ConnectParams, SessionManager};
 
 /// 原始字节请求（write / upload）的元数据放在请求头里，正文留给字节本身
 const SESSION_HEADER: &str = "x-session";
@@ -23,6 +23,7 @@ const PROGRESS_HEADER: &str = "x-progress";
 const NAME_HEADER: &str = "x-name";
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectOpts {
     host: String,
     port: u16,
@@ -30,6 +31,7 @@ pub struct ConnectOpts {
     auth: AuthOpts,
     cols: u32,
     rows: u32,
+    known_hosts: String,
 }
 
 #[derive(Deserialize)]
@@ -50,12 +52,29 @@ pub struct ConnectReply {
     fingerprint: Option<String>,
 }
 
+/// 连接失败。指纹问题单独给出结构化信息，界面据此弹确认框或警告（tauri-backend.ts 的 connectError）
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ConnectError {
+    Message { message: String },
+    HostKey { problem: Box<HostKeyProblem> },
+}
+
+impl From<session::Error> for ConnectError {
+    fn from(e: session::Error) -> Self {
+        match e {
+            session::Error::Ssh(ssh_core::Error::HostKey(problem)) => Self::HostKey { problem },
+            e => Self::Message { message: e.to_string() },
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn ssh_connect(
     state: State<'_, SessionManager>,
     opts: ConnectOpts,
     on_event: Channel<InvokeResponseBody>,
-) -> Result<ConnectReply, String> {
+) -> Result<ConnectReply, ConnectError> {
     let params = ConnectParams {
         host: opts.host,
         port: opts.port,
@@ -69,22 +88,22 @@ pub async fn ssh_connect(
         },
         cols: opts.cols,
         rows: opts.rows,
+        known_hosts: opts.known_hosts,
     };
     let connected = state
         .connect(params, move |ev| {
             // 输出走原始字节，前端拿到 ArrayBuffer；退出事件是一条小 JSON。同一条 Channel 保证顺序
             let body = match ev {
                 ShellEvent::Data(bytes) => InvokeResponseBody::Raw(bytes),
-                ShellEvent::Exit(code) => {
-                    InvokeResponseBody::Json(serde_json::json!({ "exit": code }).to_string())
-                }
+                ShellEvent::Exit { code, reason } => InvokeResponseBody::Json(
+                    serde_json::json!({ "exit": code, "reason": reason }).to_string(),
+                ),
             };
             if let Err(e) = on_event.send(body) {
                 log::debug!("前端已不在，丢弃事件: {e}");
             }
         })
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(ConnectReply {
         id: connected.id,
         fingerprint: connected.fingerprint,
@@ -98,6 +117,12 @@ pub fn ssh_write(state: State<'_, SessionManager>, request: Request<'_>) -> Resu
         return Err("write 只接受原始字节".into());
     };
     state.write(id, data.clone()).map_err(|e| e.to_string())
+}
+
+/// 界面显示完一批终端输出后回执字节数，Rust 侧据此决定要不要继续读，见 ssh_core::OutputAck
+#[tauri::command]
+pub fn ssh_ack(state: State<'_, SessionManager>, id: String, bytes: usize) -> Result<(), String> {
+    state.ack(&id, bytes).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

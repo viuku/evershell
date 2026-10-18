@@ -11,7 +11,7 @@ use russh::client::Handle;
 use russh_sftp::client::RawSftpSession;
 use russh_sftp::client::error::Error as SftpError;
 use russh_sftp::client::rawsession::Limits;
-use russh_sftp::protocol::{File, FileAttributes, FileType, OpenFlags, StatusCode};
+use russh_sftp::protocol::{File, FileAttributes, FileType, OpenFlags, Packet, StatusCode};
 use serde::Serialize;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
@@ -21,6 +21,10 @@ use crate::{Error, Result};
 const CHUNK: usize = 32 * 1024;
 /// 同时在途的读写请求数，避免每个报文都等一个往返
 const WINDOW: usize = 16;
+/// 上传时先写到同目录的 `<文件名>` + 这个后缀，传完再改名成目标名
+const PART_SUFFIX: &str = ".evershell-part";
+/// OpenSSH 扩展：按 POSIX rename(2) 改名，目标已存在时原子地覆盖
+const POSIX_RENAME: &str = "posix-rename@openssh.com";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -55,6 +59,10 @@ pub struct TransferProgress {
 #[derive(Clone)]
 pub struct Sftp {
     raw: Arc<RawSftpSession>,
+    /// 服务器在 init 时报了 posix-rename@openssh.com
+    posix_rename: bool,
+    /// 服务器在 init 时报了 fsync@openssh.com
+    fsync: bool,
 }
 
 impl Sftp {
@@ -81,11 +89,23 @@ impl Sftp {
         }
         let mut raw = RawSftpSession::new(channel.into_stream());
         let version = raw.init().await.map_err(sftp_err)?;
-        if version.extensions.get("limits@openssh.com").is_some_and(|v| v == "1") {
+        let has = |name: &str| version.extensions.get(name).is_some_and(|v| v == "1");
+        if has("limits@openssh.com") {
             let limits = raw.limits().await.map_err(sftp_err)?;
             raw.set_limits(Limits::from(limits));
         }
-        Ok(Self { raw: Arc::new(raw) })
+        Ok(Self {
+            posix_rename: has(POSIX_RENAME),
+            fsync: has("fsync@openssh.com"),
+            raw: Arc::new(raw),
+        })
+    }
+
+    /// 只给测试用：当作服务器不支持 posix-rename，好测上传时「先删目标再改名」那条退路
+    #[doc(hidden)]
+    pub fn without_posix_rename(mut self) -> Self {
+        self.posix_rename = false;
+        self
     }
 
     /// 登录用户的家目录（sftp-server 启动时的当前目录）
@@ -155,7 +175,165 @@ impl Sftp {
     }
 
     /// 把 `src` 的内容写到远端文件（已存在则覆盖）。`total` 只用于进度回调。
+    ///
+    /// 照 WinSCP 的做法，先写到同目录的 `<文件名>.evershell-part`，写完再改名盖过去，
+    /// 传到一半断了服务器上的原文件还是好的。目标是符号链接、临时文件建不出来、
+    /// 或者保不住原文件的所有者时，退回直接覆盖目标。
     pub async fn upload<R: AsyncRead + Unpin>(
+        &self,
+        path: &str,
+        mut src: R,
+        total: u64,
+        mut on_progress: impl FnMut(TransferProgress),
+    ) -> Result<()> {
+        let target = match self.raw.lstat(path).await {
+            Ok(a) => Some(a.attrs),
+            Err(SftpError::Status(s)) if s.status_code == StatusCode::NoSuchFile => None,
+            Err(e) => return Err(sftp_err(e)),
+        };
+        match target.as_ref().map(|t| t.file_type()) {
+            Some(FileType::Dir) => return Err(Error::Sftp("目标是目录，不能覆盖".into())),
+            // 符号链接直接写，改的是它指向的文件；改名的话会把链接本身换成普通文件。
+            // 设备、管道这类特殊文件（或服务器没给类型）同样只能直接写
+            Some(FileType::Symlink | FileType::Other) => {
+                return self.upload_direct(path, src, total, on_progress).await;
+            }
+            Some(FileType::File) | None => {}
+        }
+
+        let part = format!("{path}{PART_SUFFIX}");
+        let Some(handle) = self.open_part(path, &part, target.as_ref()).await else {
+            return self.upload_direct(path, src, total, on_progress).await;
+        };
+        let mut written = self
+            .write_all(&handle, &mut src, total, &mut on_progress)
+            .await;
+        // 改名之前先落盘，免得服务器断电后目标名下是一个内容不全的文件
+        if written.is_ok() && self.fsync {
+            written = self.raw.fsync(handle.as_str()).await.map(drop).map_err(sftp_err);
+        }
+        if let Err(e) = written {
+            self.discard_part(handle, &part).await;
+            return Err(e);
+        }
+        if let Some(perm) = target.as_ref().and_then(|t| t.permissions) {
+            // 权限位照原文件：建的时候被 umask 去掉的位、setuid 这类位在这里补上。
+            // 放在写完之后，因为改所有者、普通用户写入都会让系统清掉 setuid 位
+            let attrs = FileAttributes { permissions: Some(perm & 0o7777), ..Default::default() };
+            if let Err(e) = self.raw.fsetstat(handle.as_str(), attrs).await {
+                log::warn!("{path} 原来的权限没能设到新文件上：{}", sftp_err(e));
+            }
+        }
+        if let Err(e) = self.raw.close(handle).await {
+            let _ = self.raw.remove(part.as_str()).await;
+            return Err(sftp_err(e));
+        }
+        self.replace_with_part(&part, path, target.is_some()).await
+    }
+
+    /// 在同目录建临时文件，目标已存在时把临时文件的所有者调成和目标一样。
+    /// 做不到时打一行日志、清掉临时文件，返回 None，由调用方退回直接覆盖。
+    async fn open_part(
+        &self,
+        path: &str,
+        part: &str,
+        target: Option<&FileAttributes>,
+    ) -> Option<String> {
+        // 建的时候就用原文件的权限（服务器还会按 umask 去掉一些），传输途中能读到它的人不比原文件多
+        let attrs = FileAttributes {
+            permissions: target.and_then(|t| t.permissions).map(|p| p & 0o777),
+            ..Default::default()
+        };
+        // 用 EXCLUDE 只新建、不打开已有的：已有的多半是上次中断留下的残件，删掉再建。
+        // 删的是这个名字本身，它就算是指向别处的符号链接，也不会把别处的文件截断
+        let flags = OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::EXCLUDE;
+        let opened = match self.raw.open(part, flags, attrs.clone()).await {
+            Ok(h) => Ok(h),
+            Err(e) => match self.raw.remove(part).await {
+                Ok(_) => self.raw.open(part, flags, attrs).await,
+                Err(_) => Err(e),
+            },
+        };
+        let handle = match opened {
+            Ok(h) => h.handle,
+            Err(e) => {
+                log::warn!("建不了临时文件 {part}（{}），改为直接覆盖 {path}", sftp_err(e));
+                return None;
+            }
+        };
+
+        // 新建的文件属于登录用户；原文件属于别人时（比如 root 登录覆盖 www-data 的文件）
+        // 要把所有者改回去，改不了就不用临时文件：保住所有者比原子替换更要紧
+        if let Some(t) = target
+            && let (Some(uid), Some(gid)) = (t.uid, t.gid)
+        {
+            let fixed = match self.raw.fstat(handle.as_str()).await {
+                Ok(a) if a.attrs.uid == Some(uid) && a.attrs.gid == Some(gid) => Ok(()),
+                // root 能改成任何人；普通用户只能把组改成自己所在的组
+                Ok(_) => {
+                    let owner =
+                        FileAttributes { uid: Some(uid), gid: Some(gid), ..Default::default() };
+                    self.raw.fsetstat(handle.as_str(), owner).await.map(drop)
+                }
+                Err(e) => Err(e),
+            };
+            if let Err(e) = fixed {
+                log::warn!("临时文件的所有者改不成和 {path} 一样（{}），改为直接覆盖", sftp_err(e));
+                self.discard_part(handle, part).await;
+                return None;
+            }
+        }
+        Some(handle)
+    }
+
+    /// 尽力关掉并删掉临时文件；连接已经断了就算了，残件下次上传同一个文件时会被清掉
+    async fn discard_part(&self, handle: String, part: &str) {
+        let _ = self.raw.close(handle).await;
+        let _ = self.raw.remove(part).await;
+    }
+
+    /// 把传完的临时文件改名成目标名。`exists`：目标原来就有
+    async fn replace_with_part(&self, part: &str, path: &str, exists: bool) -> Result<()> {
+        if self.posix_rename {
+            // 原子替换：任何时刻目标名下要么是旧文件，要么是完整的新文件
+            let result = self.posix_rename(part, path).await;
+            if result.is_err() {
+                let _ = self.raw.remove(part).await;
+            }
+            return result;
+        }
+        if exists {
+            // SFTP v3 的 rename 不覆盖已有文件，只能先删
+            log::warn!("服务器不支持 posix-rename，先删掉 {path} 再改名，中间有一小段时间这个文件不存在");
+            if let Err(e) = self.raw.remove(path).await {
+                let _ = self.raw.remove(part).await;
+                return Err(sftp_err(e));
+            }
+        }
+        // 目标原来就有的话这时已经删了，新内容只在临时文件里，失败时留着它并告诉用户在哪
+        self.raw
+            .rename(part, path)
+            .await
+            .map_err(|e| Error::Sftp(format!("改名失败，上传的内容在 {part}：{}", sftp_err(e))))?;
+        Ok(())
+    }
+
+    /// posix-rename@openssh.com 请求，参数是 string oldpath、string newpath
+    async fn posix_rename(&self, from: &str, to: &str) -> Result<()> {
+        let mut data = Vec::with_capacity(8 + from.len() + to.len());
+        for s in [from, to] {
+            data.extend_from_slice(&(s.len() as u32).to_be_bytes());
+            data.extend_from_slice(s.as_bytes());
+        }
+        match self.raw.extended(POSIX_RENAME, data).await.map_err(sftp_err)? {
+            Packet::Status(s) if s.status_code == StatusCode::Ok => Ok(()),
+            Packet::Status(s) => Err(sftp_err(SftpError::Status(s))),
+            _ => Err(Error::Sftp("服务器对改名请求的答复不对".into())),
+        }
+    }
+
+    /// 原来的做法：截断目标直接写。中途断了目标就毁了，只在用不了临时文件时走这里
+    async fn upload_direct<R: AsyncRead + Unpin>(
         &self,
         path: &str,
         mut src: R,

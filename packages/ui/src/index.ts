@@ -1,7 +1,11 @@
+export { HostKeyError } from './types';
 export type {
   AuthConfig,
   ConnectOptions,
   FileEntry,
+  HostKeyInfo,
+  HostKeyProblem,
+  KnownHostEntry,
   MonitorSnapshot,
   SecretStore,
   ShellHandlers,

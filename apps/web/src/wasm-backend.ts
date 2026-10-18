@@ -1,8 +1,9 @@
 import init, { WebSession } from '@evershell/ssh-wasm';
-import { browserDownload } from '@evershell/ui';
+import { browserDownload, HostKeyError } from '@evershell/ui';
 import type {
   ConnectOptions,
   FileEntry,
+  HostKeyProblem,
   MonitorSnapshot,
   SecretStore,
   SshBackend,
@@ -17,6 +18,14 @@ let ready: Promise<unknown> | undefined;
 /** wasm-bindgen 抛出的 JsError 是 Error 实例，这里统一成 Error 交给界面显示 */
 function rethrow(err: unknown): never {
   throw err instanceof Error ? err : new Error(String(err));
+}
+
+/** 指纹没通过时 WASM 抛的是 { kind: 'hostKey', problem }，见 crates/ssh-wasm 的 connect */
+function connectError(err: unknown): never {
+  if (err && typeof err === 'object' && (err as { kind?: unknown }).kind === 'hostKey') {
+    throw new HostKeyError((err as { problem: HostKeyProblem }).problem);
+  }
+  rethrow(err);
 }
 
 /** 浏览器里没有钥匙串，界面不提供"记住密码" */
@@ -37,6 +46,10 @@ class WasmSession implements SshSession {
   // 写操作在 WASM 里排进同一个队列，按调用顺序发出
   write(data: Uint8Array): void {
     this.inner.write(data);
+  }
+
+  ack(bytes: number): void {
+    this.inner.ack(bytes);
   }
 
   resize(cols: number, rows: number): void {
@@ -117,6 +130,9 @@ export function createWasmBackend(getRelay: () => RelayConfig): SshBackend {
       const key = opts.auth.type === 'key' ? opts.auth : null;
       const session = await WebSession.connect(
         url,
+        opts.host,
+        opts.port,
+        opts.knownHosts,
         opts.user,
         opts.auth.type === 'password' ? opts.auth.password : null,
         key?.privateKey ?? null,
@@ -124,8 +140,8 @@ export function createWasmBackend(getRelay: () => RelayConfig): SshBackend {
         opts.cols,
         opts.rows,
         handlers.onData,
-        handlers.onExit,
-      ).catch(rethrow);
+        (code: number | null, reason: string | null) => handlers.onExit(code, reason),
+      ).catch(connectError);
 
       return new WasmSession(session);
     },
