@@ -1,8 +1,14 @@
-/* 颜色变量和基础控件，取自设计稿（Main / NewTab / Manager 三份合并）。默认跟随系统深浅色。 */
+/* 颜色变量和基础控件，取自设计稿（Main / NewTab / Manager 三份合并）。默认跟随系统深浅色。
+
+   --strip 是标签栏底色。选中的标签和下面的页面同色、不描边，只靠和标签栏的色差区分，
+   所以它要和新标签页、跟随系统的终端、各终端预设都拉开：浅色下比它们暗一档，深色下比它们亮一档
+   （Mac 深色标题栏也比内容亮）。改它时同步 core/terminal-appearance.ts 的 STRIP_COLORS。 */
 
 .ap-light,
 .ap-auto {
-  --win: #e4e4e7;
+  --strip: #d7d8dc;
+  --strip-hover: rgba(0, 0, 0, 0.08);
+  --strip-sep: #b4b5bb;
   --bar: #f6f6f7;
   --side: #f0f0f2;
   --content: #ffffff;
@@ -31,7 +37,9 @@
 }
 
 .ap-dark {
-  --win: #19191b;
+  --strip: #333336;
+  --strip-hover: rgba(255, 255, 255, 0.08);
+  --strip-sep: #505055;
   --bar: #28282b;
   --side: #212124;
   --content: #1c1c1e;
@@ -61,7 +69,9 @@
 
 @media (prefers-color-scheme: dark) {
   .ap-auto {
-    --win: #19191b;
+    --strip: #333336;
+    --strip-hover: rgba(255, 255, 255, 0.08);
+    --strip-sep: #505055;
     --bar: #28282b;
     --side: #212124;
     --content: #1c1c1e;
@@ -142,11 +152,8 @@ textarea {
   color: inherit;
 }
 
+/* 和 Mac 原生控件一样，按钮和可点的行都用普通箭头，手形只留给链接 */
 button {
-  cursor: pointer;
-}
-
-button:disabled {
   cursor: default;
 }
 
@@ -313,7 +320,7 @@ select.field {
   display: flex;
   align-items: center;
   gap: 5px;
-  cursor: pointer;
+  cursor: default;
   white-space: nowrap;
 }
 

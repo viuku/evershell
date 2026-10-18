@@ -1,20 +1,25 @@
 import { useState } from 'react';
 import { formatBytes, formatLoad, formatPercent, formatRate, formatUptime, niceCeil, niceCeilBytes } from '../../core/format';
+import { dragRegion } from '../../core/platform';
 import { NET_SAMPLES, PING_SAMPLES, type MonitorState, type MonitorStore, type SessionInfo } from '../../core/session-manager';
 import { useMaybeStore } from '../../core/store';
 import type { MonitorSnapshot } from '../../types';
+import { SidebarToggle } from './SidebarToggle';
 import { SystemInfoDialog } from './SystemInfoDialog';
 
 interface Props {
   session: SessionInfo | null;
   monitor: MonitorStore | null;
+  onToggleSidebar(): void;
+  /** 顶部左边让出的宽度，给叠在窗口左上角的系统按钮 */
+  leadingInset?: number;
 }
 
 /**
  * 左侧状态栏。只订阅当前会话的 MonitorStore，监控刷新时只有这里重绘。
  * 三种状态：没有会话 / 会话断开 / 已连接；已连接但服务器不支持采集时显示提示。
  */
-export function MonitorSidebar({ session, monitor }: Props) {
+export function MonitorSidebar({ session, monitor, onToggleSidebar, leadingInset }: Props) {
   const state = useMaybeStore(monitor);
   const connected = session?.status === 'connected';
   const snap = connected ? (state?.snapshot ?? null) : null;
@@ -32,7 +37,9 @@ export function MonitorSidebar({ session, monitor }: Props) {
 
   return (
     <aside aria-label="服务器状态" className="sidebar scroll">
-      <div className="sidebar__head" aria-hidden="true" />
+      <div className="sidebar__head" style={leadingInset ? { paddingLeft: leadingInset } : undefined} {...dragRegion}>
+        <SidebarToggle onToggle={onToggleSidebar} />
+      </div>
       <div className="sidebar__body">
         <div className="sidebar__row">
           <span>同步状态</span>

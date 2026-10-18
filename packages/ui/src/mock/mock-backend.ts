@@ -212,7 +212,7 @@ class MockSession implements SshSession {
 
 const SECRETS_KEY = 'evershell.mock-secrets';
 
-/** 假钥匙串：存在 localStorage，只为了让“记住密码”流程能走通 */
+/** 假保险箱：存在 localStorage，只为了让“记住密码”流程能走通 */
 class MockSecrets implements SecretStore {
   readonly available = true;
   private readonly map = new Map<string, string>(Object.entries(readJson<Record<string, string>>(SECRETS_KEY, {})));

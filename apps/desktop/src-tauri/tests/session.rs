@@ -80,6 +80,7 @@ async fn real_openssh_through_session_manager() {
         .start_monitor(&id, Duration::from_millis(300), move |s| {
             let _ = snap_tx.send(s);
         })
+        .await
         .unwrap();
     let snap = tokio::time::timeout(Duration::from_secs(10), snap_rx.recv()).await.unwrap().unwrap();
     assert!(snap.latency_ms.is_some(), "{snap:?}");

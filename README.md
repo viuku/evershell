@@ -50,6 +50,18 @@ npm run tauri -w @evershell/desktop -- dev   # 桌面版
 
 网页版需要先构建 WASM 内核并启动中转，步骤见 [docs/m0-report.md](docs/m0-report.md) 的“怎么在本机复现”一节。
 
+Mac 上开发版每次启动前会自动用本机的签名证书签名（[scripts/macos-dev-run](scripts/macos-dev-run)），这样重新编译后读钥匙串不会再弹框。没有证书就不签名，照常运行。
+
+### 打包（Mac）
+
+```bash
+scripts/build-mac.sh
+```
+
+产物是 `build/EverShell.app`，只出 `.app`，不打 dmg。打包时用钥匙串里的“Developer ID Application”证书签名，配置在 [tauri.macos.conf.json](apps/desktop/src-tauri/tauri.macos.conf.json)。没有这张证书时，在命令前加 `APPLE_SIGNING_IDENTITY=-`，改成只在本机有效的签名。
+
+目前不做公证。别人下载后第一次打开会被系统拦下，需要在“系统设置 → 隐私与安全性”里点“仍要打开”。
+
 ## 协议
 
 EverShell 以 [GNU 通用公共许可证第 3 版或更高版本](LICENSE)（GPL-3.0-or-later）发布：任何人都可以使用、修改和分发，但分发修改后的版本时，也必须以同样的协议公开源代码。`vendor/russh` 除外，见下一节。

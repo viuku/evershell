@@ -86,7 +86,7 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
             await secrets.set(secretKeys.password(p.serverId), p.password);
             passwordsSaved++;
           } catch {
-            // 钥匙串写不进去不影响连接本身
+            // 保险箱写不进去不影响连接本身
           }
         }
       }

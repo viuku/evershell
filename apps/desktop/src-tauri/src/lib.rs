@@ -1,18 +1,24 @@
 //! 桌面端 Rust 侧：把 ssh-core 包成 Tauri 命令。
-//! 会话管理（`session`）和钥匙串（`secrets`）不依赖 Tauri，可以单独测试。
+//! 会话管理（`session`）和保险箱（`secrets`）不依赖 Tauri，可以单独测试。
 
 mod commands;
 pub mod secrets;
 pub mod session;
 
+use tauri::Manager;
+
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let context = tauri::generate_context!();
-    // 钥匙串条目的服务名用应用标识，和数据目录一致
-    let secrets = secrets::Secrets::new(context.config().identifier.clone());
     tauri::Builder::default()
         .manage(session::SessionManager::new())
-        .manage(secrets)
+        .setup(|app| {
+            // 保险箱放应用数据目录；钥匙串条目的服务名用应用标识，和数据目录一致
+            let path = app.path().app_data_dir()?.join("vault.json");
+            let keychain = secrets::SystemKeychain::new(app.config().identifier.clone());
+            app.manage(secrets::Secrets::new(path, keychain));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::ssh_connect,
             commands::ssh_write,

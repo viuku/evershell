@@ -184,7 +184,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .look__color input {
@@ -194,7 +194,7 @@
   border: 1px solid var(--fieldline);
   border-radius: 4px;
   background: transparent;
-  cursor: pointer;
+  cursor: default;
 }
 
 .look__size {

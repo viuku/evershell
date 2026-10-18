@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { historyStore, recentCommands } from '../../core/history-store';
+import { modEnterLabel } from '../../core/platform';
 import { useStore } from '../../core/store';
 import { PaletteIcon } from '../common/Icons';
 import { Dropdown, type MenuItem } from '../common/Menu';
@@ -100,7 +101,7 @@ export function CommandBar({ lookOpen, onToggleLook, onSend, onSendAll, connecte
       <button type="button" className="btn btn-primary" onClick={send} disabled={!connected}>
         发送
       </button>
-      <button type="button" className="btn" onClick={sendAll} disabled={connectedCount === 0} title="⌘⏎">
+      <button type="button" className="btn" onClick={sendAll} disabled={connectedCount === 0} title={modEnterLabel}>
         发送到全部会话
       </button>
     </div>

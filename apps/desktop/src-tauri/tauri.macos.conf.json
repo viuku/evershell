@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "title": "EverShell",
+        "width": 1200,
+        "height": 780,
+        "minWidth": 820,
+        "minHeight": 520,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 14, "y": 21 }
+      }
+    ]
+  },
+  "bundle": {
+    "targets": ["app"],
+    "macOS": {
+      "signingIdentity": "Developer ID Application"
+    }
+  }
+}

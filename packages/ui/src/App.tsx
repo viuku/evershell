@@ -21,15 +21,18 @@ import { hostsStore, touchServerConnected, type ServerRecord } from './core/host
 import { exportConnections } from './core/importers/export';
 import { pushRecent } from './core/recents-store';
 import { SessionManager, type TerminalLook } from './core/session-manager';
+import { isAppShortcut, shortcutLabel } from './core/platform';
 import { appearanceClass, appearanceMode, sidebarOpen, useEffectiveScheme } from './core/settings';
 import { useStore } from './core/store';
-import { resolveScheme, terminalAppearance, terminalBgImage, toXtermTheme } from './core/terminal-appearance';
+import { resolveScheme, tabNeedsEdge, terminalAppearance, terminalBgImage, toXtermTheme } from './core/terminal-appearance';
 import type { SshBackend } from './types';
 
 export interface AppProps {
   backend: SshBackend;
   /** ≡ 菜单末尾追加的项（网页端放“中转设置…”） */
   menuExtras?: MenuItem[];
+  /** 系统窗口按钮叠在界面左上角时占的宽度（桌面端 Mac 的红绿灯）；状态栏顶部、状态栏收起后的标签栏都要让开 */
+  windowButtonsInset?: number;
 }
 
 export function App(props: AppProps) {
@@ -44,7 +47,7 @@ export function App(props: AppProps) {
   );
 }
 
-function AppInner({ backend, menuExtras }: AppProps) {
+function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
   const mode = useStore(appearanceMode);
   const scheme = useEffectiveScheme();
   const appearance = useStore(terminalAppearance);
@@ -95,29 +98,6 @@ function AppInner({ backend, menuExtras }: AppProps) {
     [backend, manager, dialogs],
   );
 
-  // 快捷键：⌘O 连接管理器、⌘T 新标签页、⌘W 关闭标签（浏览器里后两个可能被浏览器自己接管）
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
-      const key = e.key.toLowerCase();
-      if (key === 'o') {
-        e.preventDefault();
-        setManagerOpen(true);
-      } else if (key === 't') {
-        e.preventDefault();
-        manager.openNewTab();
-      } else if (key === 'w') {
-        const id = manager.getSnapshot().activeId;
-        if (id) {
-          e.preventDefault();
-          manager.closeTab(id);
-        }
-      }
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [manager]);
-
   const closeTab = useCallback(
     async (id: string) => {
       const tab = manager.getSnapshot().tabs.find((t) => t.id === id);
@@ -130,9 +110,30 @@ function AppInner({ backend, menuExtras }: AppProps) {
     [manager, dialogs],
   );
 
+  // 快捷键：连接管理器、新标签页、关闭标签，按键见 core/platform.ts（浏览器里后两个可能被浏览器自己接管）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isAppShortcut(e, 'o')) {
+        e.preventDefault();
+        setManagerOpen(true);
+      } else if (isAppShortcut(e, 't')) {
+        e.preventDefault();
+        manager.openNewTab();
+      } else if (isAppShortcut(e, 'w')) {
+        const id = manager.getSnapshot().activeId;
+        if (id) {
+          e.preventDefault();
+          void closeTab(id);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [manager, closeTab]);
+
   const menuItems: MenuItem[] = [
-    { label: '连接管理器…', hint: '⌘O', onSelect: () => setManagerOpen(true) },
-    { label: '新标签页', hint: '⌘T', onSelect: () => manager.openNewTab() },
+    { label: '连接管理器…', hint: shortcutLabel('o'), onSelect: () => setManagerOpen(true) },
+    { label: '新标签页', hint: shortcutLabel('t'), onSelect: () => manager.openNewTab() },
     { type: 'separator' },
     {
       label: '导入连接…',
@@ -159,20 +160,27 @@ function AppInner({ backend, menuExtras }: AppProps) {
     ...(menuExtras && menuExtras.length > 0 ? [{ type: 'separator' } as MenuItem, ...menuExtras] : []),
   ];
 
-  // 终端配色暴露成变量：终端区底色、重连按钮颜色、选中标签的背景
+  // 终端配色暴露成变量：终端区底色（也是选中会话标签的底色）、重连按钮颜色
   const style = {
     '--t-bg': resolved.bg,
     '--t-fg': resolved.fg,
     '--t-amber': resolved.amber,
-    '--tab-on': resolved.tabBg,
     // 选中标签的背景跟终端底色走，文字要和它有对比，而不是和界面深浅色走
     '--tab-on-fg': resolved.isLight ? '#1D1D1F' : '#ECECEE',
     '--tab-on-dim': resolved.isLight ? '#5C5C63' : '#A3A3AA',
+    '--tab-on-edge': tabNeedsEdge(resolved.bg, scheme) ? 'var(--strip-sep)' : undefined,
   } as CSSProperties;
 
   return (
     <div className={`app ${appearanceClass(mode)}`} style={style}>
-      {sidebar && <MonitorSidebar session={session} monitor={monitor} />}
+      {sidebar && (
+        <MonitorSidebar
+          session={session}
+          monitor={monitor}
+          onToggleSidebar={() => sidebarOpen.set(false)}
+          leadingInset={windowButtonsInset}
+        />
+      )}
       <div className="app__main">
         <TabBar
           tabs={tabs}
@@ -181,8 +189,9 @@ function AppInner({ backend, menuExtras }: AppProps) {
           onClose={(id) => void closeTab(id)}
           onNewTab={() => manager.openNewTab()}
           onOpenManager={() => setManagerOpen(true)}
-          onToggleSidebar={() => sidebarOpen.set(!sidebar)}
+          onShowSidebar={sidebar ? undefined : () => sidebarOpen.set(true)}
           menuItems={menuItems}
+          leadingInset={sidebar ? undefined : windowButtonsInset}
         />
         {session ? (
           <SessionView

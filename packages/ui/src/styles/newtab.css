@@ -60,7 +60,7 @@
 
 .quick__row {
   height: 28px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .quick__row:hover {

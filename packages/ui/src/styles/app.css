@@ -9,54 +9,137 @@
 
 /* ---------- 标签栏 ---------- */
 
+/* 第一行 38px，和状态栏顶部、红绿灯对齐；标签多了往下换行，标签栏跟着变高。
+   和下面的页面之间不画线，选中的标签直接连进页面 */
 .tabbar {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 2px;
-  height: 38px;
+  min-height: 38px;
   flex: 0 0 auto;
   padding: 0 6px;
-  background: var(--win);
-  border-bottom: 1px solid var(--line);
+  background: var(--strip);
+}
+
+/* 状态栏开关、连接管理器、≡ 都在第一行，和标签文字同一条中线 */
+.tabbar > .tb,
+.tabbar__tool {
+  margin-top: 5px;
+}
+
+.tabbar .tb:hover {
+  background: var(--strip-hover);
 }
 
 .tabbar__manager {
-  margin: 0 2px 4px 0;
   color: var(--text);
 }
 
+/* 标签区：放不下就换行，不横向滚动。左边留 9px 给选中标签底部向外弯的那一截，右边留出「+」的位置 */
 .tabbar__tabs {
   display: flex;
-  align-items: flex-end;
-  gap: 2px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  align-content: flex-start;
   flex: 1 1 auto;
   min-width: 0;
-  height: 38px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
+  padding: 5px 34px 0 9px;
 }
 
-.tabbar__tabs::-webkit-scrollbar {
+/* Chrome 式标签，宽度固定，放不下就换行。每行 33px：上面 28px 是标签本身，文字和悬停底都以它为中线；
+   下面 5px 是行间距，选中的标签在最后一行时向下长满这 5px，和下面的页面连成一体 */
+.tab {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  flex: 0 1 180px;
+  min-width: 0;
+  height: 33px;
+  padding-bottom: 5px;
+  color: var(--muted);
+}
+
+/* 标签之间的竖线；每行第一个、选中标签两边、悬停标签两边不画 */
+.tab:not(.tab--on)::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 6px;
+  width: 1px;
+  height: 16px;
+  background: var(--strip-sep);
+}
+
+.tab:not(.tab--on):is(:first-child, .tab--row-start, .tab--on + *, :hover, :hover + *)::before {
   display: none;
 }
 
-.tab {
-  display: flex;
-  align-items: center;
-  flex: 0 1 200px;
-  min-width: 120px;
-  height: 31px;
-  margin-bottom: -1px;
-  border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: 7px 7px 0 0;
-  background: transparent;
+/* 悬停底，和文字上下居中 */
+.tab:not(.tab--on)::after,
+.tab--upper::after {
+  content: '';
+  position: absolute;
+  inset: 0 2px 5px;
+  z-index: -1;
+  border-radius: 8px;
 }
 
+.tab:not(.tab--on):hover::after {
+  background: var(--strip-hover);
+}
+
+/* 选中的标签用下面页面的颜色：会话是终端底色，新标签页是内容区底色。
+   --tab-on-edge 只在终端底色和标签栏几乎一样时才有（见 core 的 tabNeedsEdge），平时边线和底色相同、看不出来 */
 .tab--on {
-  border-color: var(--line);
-  background: var(--tab-on, var(--content));
+  --tab-fill: var(--t-bg);
+  --tab-edge: var(--tab-on-edge, var(--tab-fill));
+  z-index: 1;
+  color: var(--tab-on-dim, var(--muted));
+}
+
+.tab--on.tab--newtab {
+  --tab-fill: var(--content);
+  --tab-edge: var(--tab-fill);
+  color: var(--muted);
+}
+
+/* 在最后一行：上圆角，向下长到标签栏底边，底部两侧向外弯，和页面连成一体 */
+.tab--on:not(.tab--upper) {
+  border-radius: 8px 8px 0 0;
+  background: var(--tab-fill);
+  box-shadow:
+    inset 1px 1px 0 var(--tab-edge),
+    inset -1px 0 0 var(--tab-edge);
+}
+
+/* 外弯：圆心在小方块的外上角，半径正好等于方块边长，弧线才会贴着底边和标签侧边收住，不留台阶。
+   过渡带 1px 用来抗锯齿，中线落在 8px 上 */
+.tab--on:not(.tab--upper)::before,
+.tab--on:not(.tab--upper)::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: 8px;
+  height: 8px;
+  --flare: transparent 7.5px, var(--tab-edge) 8.5px, var(--tab-fill) 9.5px;
+}
+
+.tab--on:not(.tab--upper)::before {
+  left: -8px;
+  background: radial-gradient(circle at 0 0, var(--flare));
+}
+
+.tab--on:not(.tab--upper)::after {
+  right: -8px;
+  background: radial-gradient(circle at 100% 0, var(--flare));
+}
+
+/* 不在最后一行（下面还有标签）时连不到页面：画成和悬停底一样的圆角块，填页面的颜色 */
+.tab--upper::after {
+  inset: 0 0 5px;
+  background: var(--tab-fill);
+  box-shadow: inset 0 0 0 1px var(--tab-edge);
 }
 
 .tab__pick {
@@ -66,39 +149,24 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 0 4px 0 11px;
+  padding: 0 4px 0 12px;
   border: 0;
+  border-radius: 8px;
   background: transparent;
-  color: var(--muted);
   text-align: left;
 }
 
-.tab--on .tab__pick {
+.tab__pick:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.tab--on .tab__name {
   color: var(--tab-on-fg, var(--text));
 }
 
-.tab--on .tab__num,
-.tab--on .tab__close {
-  color: var(--tab-on-dim, var(--muted));
-}
-
-/* 新标签页没有终端，用内容区的底色 */
-.tab--on.tab--newtab {
-  background: var(--content);
-}
-
-.tab--on.tab--newtab .tab__pick {
+.tab--on.tab--newtab .tab__name {
   color: var(--text);
-}
-
-.tab--on.tab--newtab .tab__num,
-.tab--on.tab--newtab .tab__close {
-  color: var(--muted);
-}
-
-.tab__num {
-  font-family: var(--mono);
-  color: var(--muted);
 }
 
 .tab__dot {
@@ -132,22 +200,26 @@
   text-overflow: ellipsis;
 }
 
+/* 关闭按钮的颜色跟着标签走：选中的会话标签在终端底色上，不能用界面的颜色 */
 .tab__close {
   width: 18px;
   height: 18px;
+  margin-right: 7px;
   border-radius: 50%;
-  margin-right: 6px;
+  color: inherit;
 }
 
+.tabbar .tab__close:hover {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  color: inherit;
+}
+
+/* 左右外边距合起来是 0，不占行宽：永远跟在最后一个标签后面，不会自己掉到新的一行，画在标签区右边留出的位置里 */
 .tabbar__new {
   width: 26px;
   height: 26px;
-  margin: 0 0 3px 4px;
+  margin: 1px -32px 0 6px;
   border-radius: 50%;
-}
-
-.tabbar__tool {
-  margin-bottom: 4px;
 }
 
 @keyframes pulse {

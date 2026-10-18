@@ -11,10 +11,18 @@
   overflow-y: auto;
 }
 
-/* 顶部留 38px 和标签栏对齐（桌面端以后用系统窗口按钮时正好放在这里） */
+/* 顶部留 38px 和标签栏第一行对齐；桌面端 Mac 的红绿灯就叠在这里（tauri.macos.conf.json 的 trafficLightPosition），
+   开关按钮紧挨在红绿灯右边。状态栏内容滚动时它固定在顶上 */
 .sidebar__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
   height: 38px;
   flex: 0 0 auto;
+  padding-left: 6px;
+  background: var(--side);
 }
 
 .sidebar__body {

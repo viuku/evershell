@@ -113,7 +113,7 @@ class TauriSession implements SshSession {
   }
 }
 
-/** 系统钥匙串（macOS Keychain 等），服务名是应用标识 */
+/** 加密保险箱，开锁的钥匙在系统钥匙串里，见 src-tauri/src/secrets.rs */
 const secrets: SecretStore = {
   available: true,
   get: (id) => call<string | null>('secret_get', { id }),

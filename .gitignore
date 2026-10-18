@@ -1,4 +1,6 @@
 target/
+# Mac 正式版打包产物（scripts/build-mac.sh）
+/build/
 node_modules/
 dist/
 .wrangler/

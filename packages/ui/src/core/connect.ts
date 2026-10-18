@@ -2,7 +2,7 @@ import type { PasswordResult, KeyResult } from '../components/common/Dialogs';
 import type { AuthConfig, SecretStore } from '../types';
 import type { ServerRecord } from './hosts-store';
 
-// 连接一台服务器前先把认证信息凑齐：钥匙串里有就直接用，没有就弹窗问。
+// 连接一台服务器前先把认证信息凑齐：保存过就直接用，没有就弹窗问。
 
 export const secretKeys = {
   password: (id: string) => `${id}.password`,

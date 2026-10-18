@@ -110,9 +110,10 @@ pub fn ssh_close(state: State<'_, SessionManager>, id: String) -> Result<(), Str
     state.close(&id).map_err(|e| e.to_string())
 }
 
-/// 开始监控采样，快照持续推给 `on_snapshot`，直到 `ssh_monitor_stop` 或会话关闭
+/// 开始监控采样，快照持续推给 `on_snapshot`，直到 `ssh_monitor_stop` 或会话关闭。
+/// 必须是 async 命令：同步命令跑在主线程，没有 tokio 运行时，spawn 采样任务会直接崩溃。
 #[tauri::command]
-pub fn ssh_monitor_start(
+pub async fn ssh_monitor_start(
     state: State<'_, SessionManager>,
     id: String,
     interval_ms: u64,
@@ -125,6 +126,7 @@ pub fn ssh_monitor_start(
                 log::debug!("监控快照发送失败: {e}");
             }
         })
+        .await
         .map_err(|e| e.to_string())
 }
 
@@ -294,13 +296,13 @@ pub async fn secret_remove(secrets: State<'_, Secrets>, id: String) -> Result<()
     blocking(move || secrets.remove(&id)).await
 }
 
-/// 钥匙串调用是阻塞的（可能还会弹授权框），不要占着 tokio 的工作线程
+/// 保险箱读写文件、取钥匙串里的钥匙都是阻塞的（钥匙串还可能弹授权框），不要占着 tokio 的工作线程
 async fn blocking<T: Send + 'static>(
     f: impl FnOnce() -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
     tokio::task::spawn_blocking(f)
         .await
-        .map_err(|e| format!("钥匙串任务中断：{e}"))?
+        .map_err(|e| format!("保险箱任务中断：{e}"))?
 }
 
 async fn sftp(state: &SessionManager, id: &str) -> Result<ssh_core::Sftp, String> {

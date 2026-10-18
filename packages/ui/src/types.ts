@@ -79,7 +79,7 @@ export interface SshSession {
   download(remotePath: string, onProgress?: (p: TransferProgress) => void): Promise<string>;
 }
 
-/** 密码、私钥这类机密的保存位置。桌面端是系统钥匙串，网页端不支持。 */
+/** 密码、私钥这类机密的保存位置。桌面端是加密的保险箱（钥匙在系统钥匙串里），网页端不支持。 */
 export interface SecretStore {
   /** 为 false 时界面不提供“记住密码”，每次连接都询问 */
   readonly available: boolean;

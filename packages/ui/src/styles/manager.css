@@ -396,7 +396,7 @@
   align-items: center;
   padding: 6px 8px;
   border-radius: 6px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .imp__source:hover {
@@ -540,7 +540,7 @@
 }
 
 .imp__issues summary {
-  cursor: pointer;
+  cursor: default;
   color: var(--muted);
 }
 

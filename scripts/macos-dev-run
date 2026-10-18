@@ -1,0 +1,24 @@
+#!/bin/sh
+# cargo 的 runner（见 .cargo/config.toml）：macOS 上运行桌面端之前，先用本机证书给它签名。
+#
+# 不签名的话，每次重新编译出的程序在钥匙串看来都是新程序，读已保存的密码就会弹框要登录密码，
+# 点了“始终允许”也只管到下次编译。用固定证书签名后钥匙串认的是证书，重编译不会再问。
+#
+# 证书优先用环境变量 EVERSHELL_SIGN_IDENTITY（证书名或 SHA-1），否则自动找本机的
+# Developer ID Application，其次 Apple Development。都没有就不签名，照常运行。
+# 只处理桌面端主程序，测试等其他二进制直接运行。
+bin="$1"
+if [ "$(basename "$bin")" = "evershell-desktop" ]; then
+  identity="$EVERSHELL_SIGN_IDENTITY"
+  if [ -z "$identity" ]; then
+    ids=$(security find-identity -v -p codesigning 2>/dev/null)
+    identity=$(printf '%s\n' "$ids" | awk '/"Developer ID Application:/ { print $2; exit }')
+    [ -n "$identity" ] || identity=$(printf '%s\n' "$ids" | awk '/"Apple Development:/ { print $2; exit }')
+  fi
+  if [ -z "$identity" ]; then
+    echo "macos-dev-run: 本机没有签名证书，未签名运行（钥匙串可能每次都会询问）" >&2
+  elif ! codesign --force --sign "$identity" --identifier dev.evershell.desktop --timestamp=none "$bin" 2>/dev/null; then
+    echo "macos-dev-run: 签名失败，未签名运行（钥匙串可能每次都会询问）" >&2
+  fi
+fi
+exec "$@"

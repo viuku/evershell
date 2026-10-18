@@ -23,7 +23,7 @@ export interface MergeOutcome {
   folders: number;
   overwritten: number;
   skipped: number;
-  /** 需要写进钥匙串的密码；由调用方决定能不能存 */
+  /** 需要存进保险箱的密码；由调用方决定能不能存 */
   passwords: { serverId: string; password: string }[];
 }
 

@@ -19,8 +19,6 @@ export interface ResolvedScheme extends Palette {
   name: string;
   bg: string;
   fg: string;
-  /** 选中标签的背景：跟随系统时与终端底色一致 */
-  tabBg: string;
   isLight: boolean;
 }
 
@@ -77,8 +75,8 @@ export const PRESETS: Preset[] = [
 
 /** 跟随系统时的终端颜色：浅色是浅灰底，深色是黑底（见设计稿 --sys-t-*） */
 const SYSTEM_SCHEMES: Record<Scheme, Omit<ResolvedScheme, 'id' | 'name'>> = {
-  light: { bg: '#EEF0F3', fg: '#1D1D1F', tabBg: '#EEF0F3', isLight: true, ...LIGHT_PALETTE },
-  dark: { bg: '#0C0C0C', fg: '#D0D0D0', tabBg: '#1C1C1E', isLight: false, ...DARK_PALETTE },
+  light: { bg: '#EEF0F3', fg: '#1D1D1F', isLight: true, ...LIGHT_PALETTE },
+  dark: { bg: '#0C0C0C', fg: '#D0D0D0', isLight: false, ...DARK_PALETTE },
 };
 
 export const FONT_SIZES = [12, 12.5, 13, 14, 15];
@@ -121,12 +119,27 @@ const BG_IMAGE_KEY = 'evershell.terminal-bg-image';
 export const terminalBgImage = new Store<string | null>(readText(BG_IMAGE_KEY));
 terminalBgImage.subscribe(() => writeText(BG_IMAGE_KEY, terminalBgImage.get()));
 
-export function isLightColor(hex: string): boolean {
+function rgbOf(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+export function isLightColor(hex: string): boolean {
+  const [r, g, b] = rgbOf(hex);
   return 0.299 * r + 0.587 * g + 0.114 * b > 150;
+}
+
+/** 标签栏底色，和 base.css 的 --strip 保持一致 */
+const STRIP_COLORS: Record<Scheme, string> = { light: '#D7D8DC', dark: '#333336' };
+
+/**
+ * 选中的会话标签和终端同色。终端底色和标签栏太接近时（只会出现在自定义颜色上），
+ * 选中标签要描一道细边，否则看不出哪个是选中的
+ */
+export function tabNeedsEdge(bg: string, scheme: Scheme): boolean {
+  const a = rgbOf(bg);
+  const b = rgbOf(STRIP_COLORS[scheme]);
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 24;
 }
 
 /** 预设在当前深浅色下的实际颜色（给面板预览用） */
@@ -138,7 +151,6 @@ export function resolvePreset(preset: Preset, scheme: Scheme): ResolvedScheme {
     name: preset.name,
     bg,
     fg: preset.fg ?? '#FFFFFF',
-    tabBg: bg,
     isLight: isLightColor(bg),
     ...(preset.palette ?? DARK_PALETTE),
   };
@@ -152,7 +164,6 @@ export function resolveCustom(custom: TerminalAppearance['custom']): ResolvedSch
     name: '自定义',
     bg: custom.bg,
     fg: custom.fg,
-    tabBg: custom.bg,
     isLight: light,
     ...(light ? LIGHT_PALETTE : DARK_PALETTE),
   };
@@ -165,10 +176,7 @@ export function resolveScheme(appearance: TerminalAppearance, scheme: Scheme): R
 }
 
 function withAlpha(hex: string, alpha: number): string {
-  const h = hex.replace('#', '');
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
+  const [r, g, b] = rgbOf(hex);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 

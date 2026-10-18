@@ -660,6 +660,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "chacha20poly1305"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b89e1c441e926b9c82a8d023f6e1b7ae0adcfaa7d621814e4d60789bac751cb"
+dependencies = [
+ "aead",
+ "chacha20",
+ "cipher",
+ "poly1305",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1458,6 +1470,7 @@ dependencies = [
  "tauri-build",
  "thiserror 2.0.21",
  "tokio",
+ "vault",
 ]
 
 [[package]]
@@ -5486,6 +5499,19 @@ dependencies = [
  "js-sys",
  "serde_core",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "vault"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chacha20poly1305",
+ "getrandom 0.3.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "zeroize",
 ]
 
 [[package]]

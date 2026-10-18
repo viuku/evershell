@@ -98,7 +98,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
   const secrets = backend.secrets;
   const editing = target.mode === 'edit' ? target.server : null;
 
-  // 编辑时看看钥匙串里有没有已保存的密码 / 私钥，决定占位文案
+  // 编辑时看看保险箱里有没有已保存的密码 / 私钥，决定占位文案
   useEffect(() => {
     if (!editing || !secrets.available) return;
     const key = editing.auth === 'password' ? secretKeys.password(editing.id) : secretKeys.privateKey(editing.id);
@@ -124,7 +124,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
     return null;
   };
 
-  /** 组装认证信息；编辑时留空就用钥匙串里保存的 */
+  /** 组装认证信息；编辑时留空就用保险箱里保存的 */
   const buildAuth = async (serverId: string | null): Promise<AuthConfig | null> => {
     if (form.auth === 'password') {
       if (form.password) return { type: 'password', password: form.password };
@@ -210,7 +210,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
           await secrets.remove(secretKeys.password(id));
         }
       } catch {
-        // 钥匙串写入失败不影响保存连接本身
+        // 保险箱写入失败不影响保存连接本身
       }
     }
     onSaved(id);

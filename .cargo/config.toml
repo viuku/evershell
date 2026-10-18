@@ -1,2 +1,6 @@
 [env]
 AR_wasm32_unknown_unknown = { value = "scripts/llvm-ar", relative = true }
+
+# macOS 上 cargo run（包括 tauri dev）先给桌面端签名再运行，钥匙串的“始终允许”才不会每次重编译就失效
+[target.'cfg(target_os = "macos")']
+runner = "scripts/macos-dev-run"

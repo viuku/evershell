@@ -147,7 +147,9 @@ impl SessionManager {
     }
 
     /// 开始监控采样，快照通过 `on_snapshot` 送出。同一会话再次调用会替换掉之前的采样。
-    pub fn start_monitor<F>(&self, id: &str, interval: Duration, on_snapshot: F) -> Result<(), Error>
+    /// 内部会 spawn 任务，必须在 tokio 运行时里调用；写成 async 是为了让同步的 Tauri 命令
+    /// （跑在主线程、没有运行时）调不了它，否则一开监控整个应用就崩。
+    pub async fn start_monitor<F>(&self, id: &str, interval: Duration, on_snapshot: F) -> Result<(), Error>
     where
         F: Fn(MonitorSnapshot) + Send + 'static,
     {

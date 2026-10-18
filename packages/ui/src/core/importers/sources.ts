@@ -34,7 +34,7 @@ export const SOURCES: SourceInfo[] = [
     blurb: '选择 conn 文件夹，连接、分组和密码一起导入',
     mac: '~/Library/FinalShell/conn（访达里按 ⇧⌘G 输入路径）',
     windows: '%LOCALAPPDATA%\\finalshell\\conn，即 C:\\Users\\<用户名>\\AppData\\Local\\finalshell\\conn；旧版本在 FinalShell 安装目录下的 conn',
-    pick: '选择整个 conn 文件夹。里面的 *_connect_config.json 是连接，其余 JSON 记录是分组；保存的密码会解密后存进钥匙串。',
+    pick: '选择整个 conn 文件夹。里面的 *_connect_config.json 是连接，其余 JSON 记录是分组；保存的密码会一起导入，加密保存在本机。',
     extensions: ['json'],
     directory: true,
     parse: parseFinalShell,
