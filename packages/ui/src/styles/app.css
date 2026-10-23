@@ -428,6 +428,8 @@
 }
 
 .modal {
+  /* 拖动时靠 left/top 偏移（Modal.tsx） */
+  position: relative;
   width: 100%;
   max-height: 100%;
   display: flex;
@@ -451,6 +453,8 @@
   justify-content: center;
   height: 30px;
   flex: 0 0 auto;
+  /* 按住标题栏拖动弹窗；触屏上也不让浏览器拿去滚动页面 */
+  touch-action: none;
 }
 
 .modal--window .modal__head {
