@@ -31,7 +31,7 @@ export function SessionView(props: Props) {
   return (
     <>
       <section aria-label="终端" className="term-section">
-        <TerminalView manager={manager} session={session} onReconnect={onReconnect} />
+        <TerminalView manager={manager} session={session} />
         {findSeq !== null && (
           <TerminalSearch
             key={session.id}

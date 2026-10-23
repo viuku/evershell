@@ -45,27 +45,6 @@
   background-clip: content-box;
 }
 
-.term-offline {
-  position: absolute;
-  left: 10px;
-  bottom: 10px;
-  z-index: 2;
-}
-
-.term-reconnect {
-  height: 22px;
-  padding: 0 10px;
-  border: 1px solid var(--t-amber);
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--t-bg) 85%, transparent);
-  color: var(--t-amber);
-  font-size: 12px;
-}
-
-.term-reconnect:hover {
-  background: color-mix(in srgb, var(--t-amber) 15%, var(--t-bg));
-}
-
 /* 命令栏 */
 .cmdbar {
   display: flex;

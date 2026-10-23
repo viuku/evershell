@@ -191,11 +191,10 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
     ...(menuExtras && menuExtras.length > 0 ? [{ type: 'separator' } as MenuItem, ...menuExtras] : []),
   ];
 
-  // 终端配色暴露成变量：终端区底色（也是选中会话标签的底色）、重连按钮颜色
+  // 终端配色暴露成变量：终端区底色（也是选中会话标签的底色）、前景色
   const style = {
     '--t-bg': resolved.bg,
     '--t-fg': resolved.fg,
-    '--t-amber': resolved.amber,
     // 选中标签的背景跟终端底色走，文字要和它有对比，而不是和界面深浅色走
     '--tab-on-fg': resolved.isLight ? '#1D1D1F' : '#ECECEE',
     '--tab-on-dim': resolved.isLight ? '#5C5C63' : '#A3A3AA',
