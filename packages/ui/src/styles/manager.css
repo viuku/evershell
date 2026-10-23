@@ -1,5 +1,30 @@
 /* 连接管理器 + 新建 / 编辑连接弹窗 */
 
+/* 桌面端的独立窗口（docs/specs/manager-window.md）：标题栏和主窗口标签栏一样高，红绿灯叠在左边 */
+.mgr-window {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--content);
+  color: var(--text);
+}
+
+.mgr-window__head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  background: var(--bar);
+  flex: 0 0 auto;
+  user-select: none;
+}
+
+.mgr-window__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .mgr__toolbar {
   display: flex;
   flex-wrap: wrap;

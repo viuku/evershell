@@ -125,8 +125,23 @@ export class FileBrowser {
     if (cwd) void this.open(cwd);
   }
 
+  /** 正开着 dir 就刷新（别处改了这个目录里的文件，比如编辑器存了一个文件） */
+  refreshIfShowing(dir: string): void {
+    const { cwd, selected } = this.store.get();
+    if (cwd !== normalizePath(dir)) return;
+    // 刷新会清掉选中，选中的那行还在就选回来
+    void this.open(cwd).then(() => {
+      if (selected && this.store.get().cwd === cwd && !this.store.get().selected) this.select(selected);
+    });
+  }
+
   select(name: string | null): void {
     if (this.store.get().selected !== name) this.patch({ selected: name });
+  }
+
+  /** 跟着符号链接看它指向什么；看不了返回 null */
+  async statTarget(path: string): Promise<FileEntry | null> {
+    return this.session.stat(path).catch(() => null);
   }
 
   selectedEntry(): FileEntry | null {

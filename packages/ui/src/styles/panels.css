@@ -1,4 +1,4 @@
-/* 底部四个分页 */
+/* 底部分页 */
 
 .bottom {
   position: relative;
@@ -156,7 +156,37 @@
 }
 
 .files__row {
+  position: relative;
   height: 21px;
+}
+
+/* 双击打开文件时，那一行底下一条进度（读进编辑器要时间，网络慢时不至于像没点上） */
+.files__open-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  transition: width 0.2s linear;
+}
+
+.grid-row--on .files__open-bar {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+/* 还没开始读（先要查文件大小）：一小段来回走 */
+.files__open-bar--wait {
+  width: 20% !important;
+  animation: files-open-wait 1s ease-in-out infinite alternate;
+}
+
+@keyframes files-open-wait {
+  from {
+    left: 0;
+  }
+  to {
+    left: 80%;
+  }
 }
 
 .files__row:focus-visible {
@@ -184,84 +214,79 @@
   font-size: 11px;
 }
 
-/* ---------- 快捷命令 ---------- */
+/* ---------- 传输：文件工具栏右边的按钮和弹出的列表 ---------- */
 
-.snips {
-  flex: 1 1 0;
-  min-height: 0;
+.xfer-btn {
+  position: relative;
   display: flex;
-  flex-direction: column;
-}
-
-.snips__bar {
-  display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
+  gap: 4px;
+}
+
+.files__sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--line);
+}
+
+.xfer-btn__track {
+  display: block;
+  flex: 0 0 36px;
+  margin-left: 2px;
+}
+
+.xfer-btn--failed {
+  color: var(--danger);
+}
+
+.xfer-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: 560px;
+  max-width: calc(100vw - 40px);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bar);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.xfer-pop__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  padding: 0 8px 0 12px;
   border-bottom: 1px solid var(--line2);
-  flex: 0 0 auto;
 }
 
-.snips__new {
-  margin-left: auto;
+.xfer-pop__head strong {
+  font-weight: 600;
 }
 
-.snips__table {
-  flex: 1 1 0;
-  min-height: 0;
-}
-
-.snips__inner,
-.hist__inner,
-.xfer__inner {
-  min-width: 560px;
-}
-
-.snips__cols {
-  grid-template-columns: 140px minmax(0, 1fr) 70px 64px;
-}
-
-.snips__row,
-.hist__row {
-  height: 24px;
-}
-
-.snips__cmd,
-.hist__cmd {
-  font-size: 11.5px;
-  user-select: text;
-}
-
-.snips__send,
-.hist__send {
-  justify-self: end;
-}
-
-/* ---------- 历史 ---------- */
-
-.hist {
-  flex: 1 1 0;
-  min-height: 0;
-}
-
-.hist__cols {
-  grid-template-columns: 64px minmax(0, 1fr) 100px 76px;
-}
-
-/* ---------- 传输 ---------- */
-
-.xfer {
-  flex: 1 1 0;
-  min-height: 0;
+.xfer-pop__list {
+  max-height: 260px;
+  overflow: auto;
 }
 
 .xfer__cols {
-  grid-template-columns: 28px minmax(0, 1.2fr) minmax(0, 1.4fr) 120px 150px;
+  grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1.2fr) 90px 150px;
 }
 
 .xfer__row {
   height: 26px;
+  padding: 0 12px;
+}
+
+.xfer__up {
+  color: var(--up);
+}
+
+.xfer__down {
+  color: var(--down);
 }
 
 .xfer__route {

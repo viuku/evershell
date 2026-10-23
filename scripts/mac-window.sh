@@ -1,10 +1,11 @@
 #!/bin/sh
 # 给正在运行的 EverShell 窗口截图，不需要“控制电脑”权限，也不会抢焦点。
 #
-#   scripts/mac-window.sh list                     屏幕上所有 EverShell 窗口：窗口号 进程号 位置大小 名字
+#   scripts/mac-window.sh list                     屏幕上所有 EverShell 窗口：窗口号 进程号 位置大小 应用名 窗口标题
 #   scripts/mac-window.sh id [--pid PID]           主窗口的窗口号（有好几个时用 --pid 指定）
-#   scripts/mac-window.sh shot [--pid PID] [-o 输出.png] [--crop x,y,宽,高] [--max 像素]
+#   scripts/mac-window.sh shot [--pid PID] [--name 窗口名] [-o 输出.png] [--crop x,y,宽,高] [--max 像素]
 #
+# 默认截面积最大的窗口（主窗口）；--name 截标题里带这几个字的窗口，如 --name 连接管理器。
 # shot 默认存到 target/screens/evershell-时间.png，最后一行打印文件路径，用 Read 看图。
 # --crop 用窗口里的坐标（点，和 CSS 像素一样），自动换算 Retina 倍数，用来放大看细节。
 # --max 把长边缩到这个像素数（默认 1600，0 表示不缩）。
@@ -22,10 +23,11 @@ fi
 
 cmd=${1:-shot}
 [ $# -gt 0 ] && shift
-pid= out= crop= max=1600
+pid= name= out= crop= max=1600
 while [ $# -gt 0 ]; do
   case "$1" in
     --pid) pid=$2; shift ;;
+    --name) name=$2; shift ;;
     -o) out=$2; shift ;;
     --crop) crop=$2; shift ;;
     --max) max=$2; shift ;;
@@ -34,9 +36,9 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-# 取面积最大的那个窗口：窗口号<TAB>宽
+# 取面积最大的那个窗口（给了 --name 就只在标题带它的窗口里挑）：窗口号<TAB>宽
 main_window() {
-  "$tool" list $pid | awk -F'\t' '{ split($3, b, ","); a = b[3] * b[4]; if (a > best) { best = a; line = $1 "\t" b[3] } } END { if (line) print line }'
+  "$tool" list $pid | awk -F'\t' -v name="$name" 'name == "" || index($5, name) { split($3, b, ","); a = b[3] * b[4]; if (a > best) { best = a; line = $1 "\t" b[3] } } END { if (line) print line }'
 }
 
 case "$cmd" in

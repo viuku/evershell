@@ -68,6 +68,12 @@ russh 要求字节流能跨线程（`Send`），浏览器的 WebSocket 不行。
 
 ## 桌面端（Tauri）
 
+### 新开的窗口先白一下（2026-10-23）
+
+- **症状**：深色模式下打开连接管理器、编辑器这类独立窗口，窗口先是白的，过一会儿才变成界面。
+- **原因**：网页还没画出来时，WKWebView 自己铺一层白底。wry 只有在建窗口时设了 `background_color` 才关掉这层白底（私有属性 `drawsBackground`），露出窗口的底色。
+- **处理**：`apps/desktop/src-tauri/src/windows.rs` 建窗口时把界面当前的底色（前端读 `--content` 传过来）设成 `background_color`。没用“先藏起来、画好再显示”：窗口藏着时 WebKit 可能暂停绘制和定时器，反而更慢。
+
 ### 同步的 Tauri 命令没有 tokio 运行时，一 spawn 就整个应用闪退（2026-10-18）
 
 - **症状**：连上服务器后应用直接消失。日志：`there is no reactor running, must be called from the context of a Tokio 1.x runtime`，接着 `fatal runtime error: failed to initiate panic`。
@@ -99,7 +105,7 @@ russh 要求字节流能跨线程（`Send`），浏览器的 WebSocket 不行。
 
 - **症状**：系统是深色模式，窗口顶部却是一条白色标题栏。
 - **已经查清，别再去翻 tao / wry 源码**：同一台机器上普通 AppKit 窗口的标题栏是深色的，Tauri 窗口就算在代码里强制设成深色也还是浅色。Clash Verge Rev（也是 Tauri）同样中招。是 Tauri 在 macOS 27 上的毛病。
-- **处理**：不用系统标题栏。`apps/desktop/src-tauri/tauri.macos.conf.json` 里 `titleBarStyle: Overlay`、`hiddenTitle`、`trafficLightPosition`，界面一直画到顶；可拖动的空白处用 `packages/ui/src/core/platform.ts` 的 `dragRegion` 标记，`capabilities/default.json` 加了 `core:window:allow-start-dragging`；侧栏收起时标签栏给红绿灯让出 78px（`apps/desktop/src/main.tsx` 只在 Mac 上传这个值）。
+- **处理**：不用系统标题栏。`apps/desktop/src-tauri/tauri.macos.conf.json` 里 `titleBarStyle: Overlay`、`hiddenTitle`、`trafficLightPosition`，界面一直画到顶；可拖动的空白处用 `packages/ui/src/core/platform.ts` 的 `dragRegion` 标记（只对元素本身生效：铺满在上面的内层容器也要标，不然按下去点到的是内层，拖不动。2026-10-23 编辑窗口的文件标签栏就漏了这层），`capabilities/default.json` 加了 `core:window:allow-start-dragging`；侧栏收起时标签栏给红绿灯让出 78px（`apps/desktop/src/main.tsx` 只在 Mac 上传这个值）。
 - 调红绿灯位置只改 `trafficLightPosition`，改完用 `scripts/mac-preview.sh` 截图、`scripts/mac-window.sh shot --crop` 放大看对齐。
 
 ### 调试版和正式版共用所有者的真实数据
@@ -165,7 +171,7 @@ russh 要求字节流能跨线程（`Send`），浏览器的 WebSocket 不行。
 
 ### 网页端到端测试报“超时（10s）”（2026-10-18）
 
-`scripts/check.sh web` 的端到端测试要先起 `services/relay-node`。它不在 npm workspaces 里，新 worktree 里 `scripts/setup.sh` 也不装它的依赖，中转起不来（`target/check-logs/relay.log` 里是 `Cannot find package 'ws'`），10 秒后报超时。先 `npm install --prefix services/relay-node`。
+`scripts/check.sh web` 的端到端测试要先起 `services/relay-node`。它不在 npm workspaces 里，依赖没装时中转起不来（`target/check-logs/relay.log` 里是 `Cannot find package 'ws'`），10 秒后报超时。2026-10-23 起 `scripts/setup.sh` 会装它的依赖；之前建的 worktree 再跑一次 `scripts/setup.sh` 就好。
 
 ### 屏幕锁着时截不了原生窗口（2026-10-18）
 

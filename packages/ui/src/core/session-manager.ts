@@ -469,6 +469,12 @@ export class SessionManager {
     return id ? (this.entries.get(id)?.files ?? null) : null;
   }
 
+  /** 连着的会话（编辑远程文件用），没连上返回 null */
+  connected(id: string): { session: SshSession; info: SessionInfo } | null {
+    const entry = this.entries.get(id);
+    return entry?.session && entry.info.status === 'connected' ? { session: entry.session, info: entry.info } : null;
+  }
+
   getSystemInfo(id: string): Store<SystemInfoState> | null {
     return this.entries.get(id)?.sysInfo ?? null;
   }

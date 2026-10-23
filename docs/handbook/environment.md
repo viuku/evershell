@@ -8,7 +8,7 @@
 
 需要 Rust（装在 `~/.cargo/bin`，带 `wasm32-unknown-unknown` 目标和 `llvm-tools` 组件）、和 `Cargo.lock` 同版本的 wasm-bindgen-cli、Node.js 22 以上、Xcode 命令行工具。
 
-**新 worktree、新克隆第一次开工先跑 `scripts/setup.sh`**：它逐项检查工具链，缺什么告诉你怎么装，再补装 node_modules、编网页端的 WASM 包（没有它网页版连 `?mock` 也打不开）。已经装好的会跳过，重复跑没关系。新 worktree 第一次编 Rust 要几分钟，因为编译目录不共用。
+**新 worktree、新克隆第一次开工先跑 `scripts/setup.sh`**：它逐项检查工具链，缺什么告诉你怎么装，再补装 node_modules、编网页端的 WASM 包（没有它网页版连 `?mock` 也打不开）、装中转服务 `services/relay-node` 的依赖（网页端到端测试要用）。已经装好的会跳过，重复跑没关系。新 worktree 第一次编 Rust 要几分钟，因为编译目录不共用。
 
 ### cargo: command not found
 
@@ -25,7 +25,7 @@ Claude App 起的 shell 读 `~/.zshrc` 不读 `~/.zprofile`，而 rustup 把 PAT
 
 | 脚本 | 干什么 |
 |---|---|
-| `scripts/setup.sh` | 新文件夹初始化：查工具链、装依赖、编 WASM 包 |
+| `scripts/setup.sh` | 新文件夹初始化：查工具链、装依赖（含中转服务的）、编 WASM 包 |
 | `scripts/check.sh ui\|core\|desktop\|web\|docs\|all` | 按改动范围跑检查，选哪档见 [quality.md](quality.md#验证分级) |
 | `scripts/check-guards.sh` | 守则的自动检查（check.sh 会调用） |
 | `scripts/check-docs.sh` | 规范体系里写的路径、链接、锚点是否对得上（check.sh docs 会调用） |

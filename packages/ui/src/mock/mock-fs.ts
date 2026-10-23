@@ -33,6 +33,53 @@ function file(size: number, owner: string, perm = '-rw-r--r--', ageDays = 10, co
   return { kind: 'file', size, mtime: now - ageDays * DAY, perm, owner, content };
 }
 
+/** 有内容的文本文件，大小按内容算 */
+function text(content: string, owner: string, perm = '-rw-r--r--', ageDays = 10): MockFile {
+  return file(new TextEncoder().encode(content).length, owner, perm, ageDays, content);
+}
+
+const NGINX_CONF = `user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+include /etc/nginx/modules-enabled/*.conf;
+
+events {
+    worker_connections 768;
+}
+
+http {
+    sendfile on;
+    tcp_nopush on;
+    types_hash_max_size 2048;
+
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    # 日志
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    gzip on;
+
+    include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/sites-enabled/*;
+}
+`;
+
+const COMPOSE = `services:
+  web:
+    image: nginx:1.27
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./conf.d:/etc/nginx/conf.d:ro
+    restart: unless-stopped
+`;
+
+/** 看后缀像二进制文件的，假内容里放 0 字节 */
+const BINARY_EXT = /\.(gz|tgz|tar|zip|xz|bz2|png|jpe?g|gif|webp|ico|pdf|bin|so|deb|rpm|db|sqlite)$/i;
+
 function link(owner: string): MockFile {
   return { kind: 'link', size: 0, mtime: now - 3 * DAY, perm: 'lrwxrwxrwx', owner, content: null };
 }
@@ -59,7 +106,7 @@ export function createMockRoot(): MockDir {
     boot: dir('root', {}, 'drwxr-xr-x', 45),
     data: dir('root', { backups: dir('root'), uploads: dir('www-data') }, 'drwxr-xr-x', 6),
     etc: dir('root', {
-      nginx: dir('root', { 'nginx.conf': file(1490, 'root', '-rw-r--r--', 9), 'conf.d': dir('root') }, 'drwxr-xr-x', 9),
+      nginx: dir('root', { 'nginx.conf': text(NGINX_CONF, 'root', '-rw-r--r--', 9), 'conf.d': dir('root') }, 'drwxr-xr-x', 9),
       ssh: dir('root', { sshd_config: file(3300, 'root', '-rw-r--r--', 27) }, 'drwxr-xr-x', 27),
       systemd: dir('root', {}, 'drwxr-xr-x', 45),
       crontab: file(1042, 'root', '-rw-r--r--', 32),
@@ -75,7 +122,7 @@ export function createMockRoot(): MockDir {
           releases: dir('deploy', {}, 'drwxr-xr-x', 3),
           shared: dir('deploy', {}, 'drwxr-xr-x', 42),
           current: link('deploy'),
-          'docker-compose.yml': file(2870, 'deploy', '-rw-r--r--', 3),
+          'docker-compose.yml': text(COMPOSE, 'deploy', '-rw-r--r--', 3),
           '.env.production': file(1130, 'deploy', '-rw-------', 15),
         },
         'drwxr-xr-x',
@@ -187,10 +234,40 @@ export class MockFs {
     dst.children.set(basename(to), node);
   }
 
-  writeFile(path: string, size: number, owner: string): void {
+  /** 上传：已有的文件保留权限和所有者（和真服务器上的上传一样）；content 是文本内容，二进制给 null */
+  writeFile(path: string, size: number, owner: string, content: string | null = null): void {
     const parent = this.dirOf(parentPath(path) ?? '/');
-    parent.children.set(basename(path), file(size, owner, '-rw-r--r--', 0));
+    const old = parent.children.get(basename(path));
+    const keep = old && old.kind === 'file' ? old : null;
+    const next = file(size, keep?.owner ?? owner, keep?.perm ?? '-rw-r--r--', 0, content);
+    // 真服务器的修改时间是秒，同一秒里连存两次也要能看出变了
+    next.mtime = Math.max(Math.floor(Date.now() / 1000), (keep?.mtime ?? 0) + 1);
+    parent.children.set(basename(path), next);
     parent.mtime = Math.floor(Date.now() / 1000);
+  }
+
+  /** touch：已有的只更新修改时间，没有就建一个空文件 */
+  touch(path: string, owner: string): void {
+    const node = this.resolve(path);
+    if (node) node.mtime = Math.max(Math.floor(Date.now() / 1000), node.mtime + 1);
+    else this.writeFile(path, 0, owner, '');
+  }
+
+  stat(path: string): FileEntry {
+    const node = this.resolve(path);
+    if (!node) throw new Error('文件不存在');
+    const name = basename(path);
+    return { name, kind: node.kind, size: node.kind === 'dir' ? 4096 : node.size, mtime: node.mtime, perm: node.perm, owner: node.owner };
+  }
+
+  /** 编辑器读文件：有内容给内容，没有就编几行；看着像二进制的给带 0 字节的 */
+  readBytes(path: string): Uint8Array {
+    const node = this.resolve(path);
+    if (!node) throw new Error('文件不存在');
+    if (node.kind === 'dir') throw new Error('这是一个目录');
+    if (node.content != null) return new TextEncoder().encode(node.content);
+    if (BINARY_EXT.test(path)) return new Uint8Array(Math.min(node.size, 4096)).map((_, i) => i % 7);
+    return new TextEncoder().encode(`# ${basename(path)}\n# 预览用的假内容，真服务器上是文件本来的内容\n`);
   }
 
   readFile(path: string): string {

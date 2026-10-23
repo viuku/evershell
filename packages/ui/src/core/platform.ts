@@ -21,9 +21,26 @@ export function shortcutLabel(key: string): string {
 
 export const modEnterLabel = isMac ? '⌘⏎' : 'Ctrl+Enter';
 
-// 列表多选的按键照各系统的文件管理器：Mac 同访达，其他系统同资源管理器。
+/** 编辑器里的快捷键写法：⌘S / Ctrl+S（编辑器里没有终端，不用让着 Ctrl+字母） */
+export function editorShortcutLabel(key: string): string {
+  return isMac ? `⌘${key.toUpperCase()}` : `Ctrl+${key.toUpperCase()}`;
+}
+
+/** 编辑器里按的是不是“修饰键+key”：Mac ⌘，其他系统 Ctrl */
+export function isEditorShortcut(e: Mods & { key: string }, key: string): boolean {
+  if (e.altKey || e.shiftKey || e.key.toLowerCase() !== key) return false;
+  return isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+}
 
 type Mods = { metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean };
+
+/** 输入框里按的是不是“修饰键+回车”（文字见 modEnterLabel） */
+export function isModEnter(e: Mods & { key: string }): boolean {
+  if (e.key !== 'Enter' || e.altKey || e.shiftKey) return false;
+  return isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+}
+
+// 列表多选的按键照各系统的文件管理器：Mac 同访达，其他系统同资源管理器。
 
 /** 单击时按住的是不是“加选/取消这一项”的键：Mac ⌘，其他系统 Ctrl */
 export function isToggleSelect(e: Mods): boolean {

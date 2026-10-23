@@ -393,6 +393,43 @@ impl Sftp {
         }
     }
 
+    /// 一个文件或目录的信息，跟着符号链接走。`name` 取路径最后一段；
+    /// stat 不像 readdir 那样带 `ls -l` 那一行，所以服务器没给用户名时 `owner` 是 uid
+    pub async fn stat(&self, path: &str) -> Result<FileEntry> {
+        let attrs = self.raw.stat(path).await.map_err(sftp_err)?.attrs;
+        let name = path.trim_end_matches('/').rsplit('/').next().unwrap_or("").to_string();
+        Ok(to_entry(File { filename: name, longname: String::new(), attrs }))
+    }
+
+    /// 整个文件读进内存，给编辑器用。比 `max` 大就不读，直接报错；
+    /// 读的时候文件又变长了，只读到 stat 时的大小
+    pub async fn read_file(
+        &self,
+        path: &str,
+        max: u64,
+        mut on_progress: impl FnMut(TransferProgress),
+    ) -> Result<Vec<u8>> {
+        let attrs = self.raw.stat(path).await.map_err(sftp_err)?.attrs;
+        if attrs.file_type() == FileType::Dir {
+            return Err(Error::Sftp("这是一个目录".into()));
+        }
+        let size = attrs.size.unwrap_or(0);
+        if size > max {
+            return Err(Error::Sftp(format!("文件有 {size} 字节，超过了 {max} 字节的上限")));
+        }
+        let handle = self
+            .raw
+            .open(path, OpenFlags::READ, FileAttributes::default())
+            .await
+            .map_err(sftp_err)?
+            .handle;
+        let mut buf = Vec::with_capacity(size as usize);
+        let result = self.read_all(&handle, size, &mut buf, &mut on_progress).await;
+        let _ = self.raw.close(handle).await;
+        result?;
+        Ok(buf)
+    }
+
     /// 把远端文件读到 `dest`，返回读到的字节数。
     pub async fn download<W: AsyncWrite + Unpin>(
         &self,

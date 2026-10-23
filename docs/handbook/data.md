@@ -8,21 +8,24 @@
 
 ## 本机存了什么
 
-桌面端和网页端的界面数据都经 `packages/ui/src/core/storage.ts` 存在 WebView 的本地存储里（守则 5）。全部清单用 `grep -rn "'evershell\." packages/ui/src apps/web/src` 现查，下表是 2026-10-18 的样子：
+桌面端和网页端的界面数据都经 `packages/ui/src/core/storage.ts` 存在 WebView 的本地存储里（守则 5）。全部清单用 `grep -rn "'evershell\." packages/ui/src apps/web/src` 现查，下表是 2026-10-23 的样子：
 
 | 数据 | 存储键或位置 | 格式版本 | 同步用的字段 |
 |---|---|---|---|
 | 连接和文件夹 | `evershell.hosts.v1` | 数据里 `version: 1` | 有 id、updatedAt、deletedAt（墓碑） |
-| 快捷命令 | `evershell.snippets.v1` | 键名里的 v1 | 有 id、updatedAt，**没有墓碑** |
+| 快捷命令 | `evershell.snippets.v1`（`group` 是分类名） | 键名里的 v1 | 有 id、updatedAt，**没有墓碑** |
+| 快捷命令的分类 | `evershell.snippet-groups.v1`：分类名的数组，顺序即显示顺序（规格 [command-groups.md](../specs/command-groups.md)） | 键名里的 v1 | 没有，M2 定 |
 | 历史命令 | `evershell.history.v1` | 键名里的 v1 | 没有 |
 | 最近连接 | `evershell.recents.v1` | 键名里的 v1 | 没有（只是本机记录，可以不同步） |
 | 终端外观 | `evershell.terminal-appearance.v1`、背景图 `evershell.terminal-bg-image` | 键名里的 v1 | 没有 |
-| 界面状态 | `evershell.appearance-mode`、`evershell.sidebar-open`、`evershell.bottom-height`、`evershell.bottom-open`、`evershell.files.follow`、`evershell.manager.*` | 无 | 本机偏好，不同步 |
+| 界面状态 | `evershell.appearance-mode`、`evershell.sidebar-open`、`evershell.bottom-height`、`evershell.bottom-open`、`evershell.files.follow`、`evershell.manager.*`；命令页的编辑器宽度 `evershell.cmd-editor-width`、两个“发送到” `evershell.cmd-send-target` / `evershell.cmd-editor-target`、“发送后清空” `evershell.cmd-editor-clear`（`packages/ui/src/core/commands-panel.ts`；命令编辑器里的文字只在内存里） | 无 | 本机偏好，不同步 |
 | 主机密钥记录 | 桌面端：保险箱条目 `known_hosts`；网页端：`evershell.knownHosts`（`packages/ui/src/core/known-hosts.ts`） | OpenSSH known_hosts 文本格式 | M2 设计 |
 | 网页端的中转设置 | `evershell.relay`（`apps/web/src/relay-bar.tsx`） | 无 | 不同步 |
 | 网页版 `?mock` 的假保险箱 | `evershell.mock-secrets` | 无 | 只用于预览 |
 | 保险箱（桌面端） | 应用数据目录下的 `vault.json`（Mac 上是 `~/Library/Application Support/dev.evershell.desktop/`）；打不开时旧文件改名为 `vault-unreadable-<时间>.json` | 文件头 `version: 1` | M2 设计 |
 | 保险箱钥匙 | 系统钥匙串：服务名 `dev.evershell.desktop`，账户 `vault-key` | | 不同步（同步时用主密码另锁一份） |
+
+桌面端的主窗口、编辑窗口、连接管理器各有一份内存里的数据，共用上面这些存储：一个窗口写了，`core/storage.ts` 会通知其他窗口换成新内容（Tauri 事件 `store-sync`；浏览器多开页签靠自带的 storage 事件），不然另一个窗口下次写会拿旧数据盖掉。两个窗口几乎同时改同一个键时后写的赢（[docs/specs/manager-window.md](../specs/manager-window.md)）。
 
 调试版和正式版的应用标识相同，所以上面这些两边共用（[pitfalls.md](pitfalls.md#调试版和正式版共用所有者的真实数据)）。
 
@@ -44,7 +47,7 @@
 - `updatedAt`：最后修改时间。M2 可能换成混合逻辑时钟（见下面“同步冲突”），字段先占着。
 - `deletedAt`：删除不真删，记下删除时间当墓碑，界面上隐藏。
 
-现在连接和文件夹已经齐了；快捷命令缺墓碑，历史命令都没有，下次改到它们时补上（属于格式变化，按上面的规则迁移）。
+现在连接和文件夹已经齐了；快捷命令缺墓碑，历史命令都没有，下次改到它们时补上（属于格式变化，按上面的规则迁移）。快捷命令的分类清单只是名字数组，三个字段都没有，M2 设计同步时一起定（[规格](../specs/command-groups.md#导出和以后的同步)）。
 
 ## 导入导出
 

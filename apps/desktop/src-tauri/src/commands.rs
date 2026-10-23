@@ -221,6 +221,37 @@ pub async fn sftp_rename(
     sftp.rename(&from, &to).await.map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub async fn sftp_stat(state: State<'_, SessionManager>, id: String, path: String) -> Result<FileEntry, String> {
+    let sftp = sftp(&state, &id).await?;
+    sftp.stat(&path).await.map_err(|e| e.to_string())
+}
+
+/// 编辑器一次最多读进内存多少，前端传的上限再大也按这个算
+const READ_LIMIT: u64 = 32 * 1024 * 1024;
+
+/// 整个文件读进内存给编辑器，直接返回原始字节（前端拿到 ArrayBuffer），不转 JSON 数组
+#[tauri::command]
+pub async fn sftp_read(
+    state: State<'_, SessionManager>,
+    id: String,
+    path: String,
+    max_bytes: u64,
+    on_progress: Channel<TransferProgress>,
+) -> Result<tauri::ipc::Response, String> {
+    let sftp = sftp(&state, &id).await?;
+    let mut throttle = ProgressThrottle::default();
+    let data = sftp
+        .read_file(&path, max_bytes.min(READ_LIMIT), |p| {
+            if throttle.due(p) {
+                let _ = on_progress.send(p);
+            }
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(tauri::ipc::Response::new(data))
+}
+
 /// 上传：正文是文件的原始字节，会话 id、远端路径和进度 Channel 放在请求头里
 #[tauri::command]
 pub async fn sftp_upload(

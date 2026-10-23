@@ -95,6 +95,14 @@ class WasmSession implements SshSession {
     return this.inner.rename(from, to).catch(rethrow);
   }
 
+  stat(path: string): Promise<FileEntry> {
+    return (this.inner.stat(path) as Promise<FileEntry>).catch(rethrow);
+  }
+
+  readFile(path: string, maxBytes: number, onProgress?: (p: TransferProgress) => void): Promise<Uint8Array> {
+    return this.inner.readFile(path, BigInt(maxBytes), onProgress).catch(rethrow);
+  }
+
   async upload(remotePath: string, data: Blob, onProgress?: (p: TransferProgress) => void): Promise<void> {
     const bytes = new Uint8Array(await data.arrayBuffer());
     await this.inner.upload(remotePath, bytes, onProgress).catch(rethrow);

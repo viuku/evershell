@@ -11,7 +11,6 @@ interface Props {
   manager: SessionManager;
   session: SessionInfo;
   scheme: Scheme;
-  connectedCount: number;
   lookOpen: boolean;
   onToggleLook(): void;
   bottomTab: BottomTab;
@@ -25,7 +24,7 @@ interface Props {
 
 /** 一个会话标签的内容：终端 + 搜索框 + 命令栏（含外观浮层）+ 底栏 */
 export function SessionView(props: Props) {
-  const { manager, session, scheme, connectedCount, lookOpen, onToggleLook, bottomTab, onBottomTab, findSeq, onToggleFind, onReconnect } = props;
+  const { manager, session, scheme, lookOpen, onToggleLook, bottomTab, onBottomTab, findSeq, onToggleFind, onReconnect } = props;
   const bottomOpen = useStore(bottomPanelOpen);
 
   return (
@@ -48,9 +47,7 @@ export function SessionView(props: Props) {
           lookOpen={lookOpen}
           onToggleLook={onToggleLook}
           status={session.status}
-          connectedCount={connectedCount}
           onSend={(cmd) => manager.sendCommand(session.id, cmd)}
-          onSendAll={(cmd) => manager.sendToAll(cmd)}
           onToggleConnection={() => (session.status === 'connected' ? manager.disconnect(session.id) : onReconnect())}
           findOpen={findSeq !== null}
           onToggleFind={onToggleFind}

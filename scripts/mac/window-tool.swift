@@ -27,7 +27,9 @@ case "list":
         guard let dict = info[kCGWindowBounds as String] as? NSDictionary,
               let rect = CGRect(dictionaryRepresentation: dict) else { continue }
         let number = info[kCGWindowNumber as String] as? Int ?? 0
-        print("\(number)\t\(pid)\t\(Int(rect.minX)),\(Int(rect.minY)),\(Int(rect.width)),\(Int(rect.height))\t\(owner)")
+        // 窗口标题（如“连接管理器”）；没有屏幕录制权限时系统不给，是空的
+        let title = info[kCGWindowName as String] as? String ?? ""
+        print("\(number)\t\(pid)\t\(Int(rect.minX)),\(Int(rect.minY)),\(Int(rect.width)),\(Int(rect.height))\t\(owner)\t\(title)")
     }
 case "crop":
     guard args.count == 9,

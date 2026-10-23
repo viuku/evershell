@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState, type ChangeEvent, type MouseEvent } from 'react';
 import type { FileBrowser, TreeNode } from '../../core/file-browser';
 import { formatBytesLong, formatMtime } from '../../core/format';
-import { isValidName } from '../../core/paths';
+import { isValidName, joinPath } from '../../core/paths';
+import { EDIT_MAX_BYTES } from '../../core/remote-edit';
 import type { SessionInfo } from '../../core/session-manager';
 import { useMaybeStore } from '../../core/store';
 import type { FileEntry } from '../../types';
 import { useDialogs } from '../common/Dialogs';
+import { useRemoteEdit } from '../editor/remote-edit-context';
+import { TransfersButton } from './TransfersButton';
 import { CloseIcon, DisclosureIcon, FileIcon, FolderFillIcon, NewFolderIcon, RefreshIcon, UpIcon } from '../common/Icons';
 import { ContextMenu, type ContextMenuState, type MenuItem } from '../common/Menu';
 
@@ -19,9 +22,19 @@ interface Props {
 export function FilesPanel({ files, session, follow }: Props) {
   const state = useMaybeStore(files ? files.store : null);
   const dialogs = useDialogs();
+  const remoteEdit = useRemoteEdit();
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const [pathDraft, setPathDraft] = useState<string | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
+  /** 正在读进编辑器的文件：路径 → 进度（0～1，还没开始读时为 null）。网络慢时那一行显示“打开中”，不然像没点上 */
+  const [opening, setOpening] = useState<ReadonlyMap<string, number | null>>(new Map());
+  const markOpening = (path: string, progress: number | null | undefined) =>
+    setOpening((m) => {
+      const next = new Map(m);
+      if (progress === undefined) next.delete(path);
+      else next.set(path, progress);
+      return next;
+    });
 
   // 勾选“跟随终端目录”时，终端 cd 到哪里文件区就跳到哪里
   const termCwd = session.cwd;
@@ -72,6 +85,44 @@ export function FilesPanel({ files, session, follow }: Props) {
     if (ok) await files.remove(entry);
   };
 
+  /** 双击、右键「编辑」：读进编辑器，改完保存直接传回服务器；打不开的问要不要下载 */
+  const edit = async (entry: FileEntry) => {
+    if (!remoteEdit) return;
+    const offer = async (title: string, message: string) => {
+      const ok = await dialogs.confirm({ title, message, okText: '下载到本机' });
+      if (ok) await files.download(entry);
+    };
+    const path = joinPath(cwd, entry.name);
+    if (opening.has(path)) return;
+    markOpening(path, null);
+    try {
+      const r = await remoteEdit
+        .open(session.id, path, (p) => markOpening(path, p.total > 0 ? p.done / p.total : 1))
+        .finally(() => markOpening(path, undefined));
+      if (r.kind === 'too-large') {
+        await offer('这个文件不能在编辑器里打开', `${entry.name} 有 ${formatBytesLong(r.size)}，编辑器最多打开 ${EDIT_MAX_BYTES / 2 ** 20} MB。`);
+      } else if (r.kind === 'not-text') {
+        await offer('这个文件不能在编辑器里打开', `${entry.name} 不像文本文件，可能是图片、压缩包或程序。`);
+      }
+    } catch (err) {
+      await dialogs.alert('打不开这个文件', err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  /** 双击：目录进去，文件编辑；链接先当文件编辑，指向目录的话进目录 */
+  const activate = (entry: FileEntry) => {
+    if (entry.kind === 'dir') void files.open(`${cwd}/${entry.name}`);
+    else if (entry.kind === 'link') void openLink(entry);
+    else void edit(entry);
+  };
+
+  const openLink = async (entry: FileEntry) => {
+    const path = joinPath(cwd, entry.name);
+    const target = await files.statTarget(path);
+    if (target?.kind === 'dir') void files.open(path);
+    else void edit(entry);
+  };
+
   const onUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const list = e.target.files ? [...e.target.files] : [];
     e.target.value = '';
@@ -79,9 +130,12 @@ export function FilesPanel({ files, session, follow }: Props) {
   };
 
   const entryMenu = (entry: FileEntry): MenuItem[] => [
-    entry.kind === 'dir'
-      ? { label: '打开', onSelect: () => void files.open(`${cwd}/${entry.name}`) }
-      : { label: '下载', onSelect: () => void files.download(entry) },
+    ...(entry.kind === 'dir'
+      ? [{ label: '打开', onSelect: () => void files.open(`${cwd}/${entry.name}`) }]
+      : [
+          { label: '编辑', onSelect: () => void (entry.kind === 'link' ? openLink(entry) : edit(entry)) },
+          { label: '下载到本机', onSelect: () => void files.download(entry) },
+        ]),
     { type: 'separator' },
     { label: '重命名…', onSelect: () => void rename(entry) },
     { label: '删除…', danger: true, onSelect: () => void remove(entry) },
@@ -145,6 +199,7 @@ export function FilesPanel({ files, session, follow }: Props) {
           <button type="button" className="tb tb--sm" aria-label="刷新" onClick={() => files.refresh()}>
             <RefreshIcon size={14} />
           </button>
+          <TransfersButton />
         </div>
         {state.opError && (
           <div role="alert" className="inline-error">
@@ -178,23 +233,25 @@ export function FilesPanel({ files, session, follow }: Props) {
             ) : (
               state.entries.map((f) => {
                 const on = f.name === state.selected;
+                const path = joinPath(cwd, f.name);
+                const loading = opening.has(path);
+                const progress = opening.get(path) ?? null;
                 return (
                   <button
                     key={f.name}
                     type="button"
                     className={`grid-row files__cols files__row${on ? ' grid-row--on' : ''}`}
+                    aria-busy={loading || undefined}
                     aria-selected={on}
                     onClick={() => files.select(f.name)}
-                    onDoubleClick={() => {
-                      if (f.kind === 'dir') void files.open(`${cwd}/${f.name}`);
-                    }}
+                    onDoubleClick={() => activate(f)}
                     onContextMenu={(e) => {
                       e.stopPropagation();
                       files.select(f.name);
                       openMenu(e, entryMenu(f));
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && f.kind === 'dir') void files.open(`${cwd}/${f.name}`);
+                      if (e.key === 'Enter') activate(f);
                       else if (e.key === 'Backspace' || e.key === 'Delete') void remove(f);
                     }}
                   >
@@ -206,10 +263,25 @@ export function FilesPanel({ files, session, follow }: Props) {
                       )}
                       <span className="ellipsis">{f.name}</span>
                     </span>
-                    <span className="files__right muted">{f.kind === 'dir' ? '--' : f.kind === 'link' ? '链接' : formatBytesLong(f.size)}</span>
+                    <span className="files__right muted">
+                      {loading
+                        ? `打开中${progress === null ? '…' : ` ${Math.floor(progress * 100)}%`}`
+                        : f.kind === 'dir'
+                          ? '--'
+                          : f.kind === 'link'
+                            ? '链接'
+                            : formatBytesLong(f.size)}
+                    </span>
                     <span className="muted">{formatMtime(f.mtime)}</span>
                     <span className="muted mono files__perm">{f.perm}</span>
                     <span className="muted ellipsis">{f.owner}</span>
+                    {loading && (
+                      <span
+                        className={`files__open-bar${progress === null ? ' files__open-bar--wait' : ''}`}
+                        style={{ width: `${(progress ?? 0) * 100}%` }}
+                        aria-hidden="true"
+                      />
+                    )}
                   </button>
                 );
               })

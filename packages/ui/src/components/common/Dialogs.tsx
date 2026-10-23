@@ -22,6 +22,17 @@ export interface ConfirmOptions {
   danger?: boolean;
 }
 
+export interface ChooseOptions {
+  title: string;
+  message: string;
+  /** 从左到右排；最右边那个是默认按钮（回车） */
+  actions: { id: string; label: string; tone?: 'primary' | 'danger' }[];
+  /** 按 Esc、点关闭时算选了哪个 */
+  cancel: string;
+  /** 这个按钮单独放在最左边（比如“不保存”） */
+  aside?: string;
+}
+
 export interface PasswordOptions {
   title: string;
   message: string;
@@ -49,6 +60,8 @@ export interface KeyResult {
 interface DialogsApi {
   prompt(opts: PromptOptions): Promise<string | null>;
   confirm(opts: ConfirmOptions): Promise<boolean>;
+  /** 两个以上选项，返回选中的 id，比如“保存 / 不保存 / 取消” */
+  choose(opts: ChooseOptions): Promise<string>;
   askPassword(opts: PasswordOptions): Promise<PasswordResult | null>;
   /** 让用户选私钥文件（或粘贴），连接时没有保存的私钥用 */
   askPrivateKey(opts: KeyOptions): Promise<KeyResult | null>;
@@ -61,6 +74,7 @@ interface DialogsApi {
 type Pending =
   | { kind: 'prompt'; opts: PromptOptions; resolve(v: string | null): void }
   | { kind: 'confirm'; opts: ConfirmOptions; resolve(v: boolean): void }
+  | { kind: 'choose'; opts: ChooseOptions; resolve(v: string): void }
   | { kind: 'password'; opts: PasswordOptions; resolve(v: PasswordResult | null): void }
   | { kind: 'key'; opts: KeyOptions; resolve(v: KeyResult | null): void }
   | { kind: 'alert'; title: string; message: string; resolve(): void }
@@ -83,6 +97,7 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
     () => ({
       prompt: (opts) => new Promise((resolve) => push({ kind: 'prompt', opts, resolve })),
       confirm: (opts) => new Promise((resolve) => push({ kind: 'confirm', opts, resolve })),
+      choose: (opts) => new Promise((resolve) => push({ kind: 'choose', opts, resolve })),
       askPassword: (opts) => new Promise((resolve) => push({ kind: 'password', opts, resolve })),
       askPrivateKey: (opts) => new Promise((resolve) => push({ kind: 'key', opts, resolve })),
       alert: (title, message) => new Promise((resolve) => push({ kind: 'alert', title, message, resolve })),
@@ -97,6 +112,7 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
       {children}
       {current?.kind === 'prompt' && <PromptDialog key={queue.length} pending={current} done={pop} />}
       {current?.kind === 'confirm' && <ConfirmDialog key={queue.length} pending={current} done={pop} />}
+      {current?.kind === 'choose' && <ChooseDialog key={queue.length} pending={current} done={pop} />}
       {current?.kind === 'password' && <PasswordDialog key={queue.length} pending={current} done={pop} />}
       {current?.kind === 'key' && <KeyDialog key={queue.length} pending={current} done={pop} />}
       {current?.kind === 'alert' && <AlertDialog key={queue.length} pending={current} done={pop} />}
@@ -185,6 +201,36 @@ function ConfirmDialog({ pending, done }: { pending: Extract<Pending, { kind: 'c
           >
             {opts.okText ?? '确定'}
           </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ChooseDialog({ pending, done }: { pending: Extract<Pending, { kind: 'choose' }>; done(): void }) {
+  const { opts } = pending;
+  const finish = (id: string) => {
+    pending.resolve(id);
+    done();
+  };
+  const last = opts.actions[opts.actions.length - 1];
+  return (
+    <Modal title={opts.title} onClose={() => finish(opts.cancel)} width={400} tone="sheet">
+      <div className="dialog-body">
+        <p className="dialog-message">{opts.message}</p>
+        <div className="dialog-actions">
+          {opts.actions.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              className={`btn${a.tone === 'danger' ? ' btn-danger' : a.tone === 'primary' ? ' btn-primary' : ''}`}
+              style={a.id === opts.aside ? { marginRight: 'auto' } : undefined}
+              data-autofocus={a === last ? true : undefined}
+              onClick={() => finish(a.id)}
+            >
+              {a.label}
+            </button>
+          ))}
         </div>
       </div>
     </Modal>

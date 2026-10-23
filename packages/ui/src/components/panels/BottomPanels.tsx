@@ -1,16 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SessionInfo, SessionManager } from '../../core/session-manager';
 import { followTerminalDir } from '../../core/settings';
 import { PersistentStore } from '../../core/storage';
 import { useStore } from '../../core/store';
-import { transfersStore } from '../../core/transfers-store';
 import { Segmented } from '../common/Segmented';
+import { CommandsPanel } from './CommandsPanel';
 import { FilesPanel } from './FilesPanel';
-import { HistoryPanel } from './HistoryPanel';
-import { SnippetsPanel } from './SnippetsPanel';
-import { TransfersPanel } from './TransfersPanel';
 
-export type BottomTab = 'files' | 'snippets' | 'history' | 'transfers';
+export type BottomTab = 'files' | 'commands';
 
 /** 底部面板高度，拖动分隔条可调 */
 const bottomHeight = new PersistentStore<number>('evershell.bottom-height', 280, (raw, fb) =>
@@ -24,16 +21,11 @@ interface Props {
   onTab(tab: BottomTab): void;
 }
 
-/** 终端下方的四个分页：文件 / 快捷命令 / 历史命令 / 传输 */
+/** 终端下方的两个分页：文件 / 命令 */
 export function BottomPanels({ manager, session, tab, onTab }: Props) {
   const follow = useStore(followTerminalDir);
   const height = useStore(bottomHeight);
-  const transfers = useStore(transfersStore);
-  const running = transfers.filter((t) => t.status === 'running').length;
   const files = manager.getFiles(session.status === 'connected' ? session.id : null);
-
-  const sendCurrent = useCallback((cmd: string) => manager.sendCommand(session.id, cmd), [manager, session.id]);
-  const sendAll = useCallback((cmd: string) => manager.sendToAll(cmd), [manager]);
 
   return (
     <section aria-label="文件与命令" className="bottom" style={{ flexBasis: height, height }}>
@@ -45,9 +37,7 @@ export function BottomPanels({ manager, session, tab, onTab }: Props) {
           onChange={onTab}
           options={[
             { id: 'files', label: '文件' },
-            { id: 'snippets', label: '快捷命令' },
-            { id: 'history', label: '历史命令' },
-            { id: 'transfers', label: running > 0 ? `传输 (${running})` : '传输' },
+            { id: 'commands', label: '命令' },
           ]}
         />
         {tab === 'files' && (
@@ -58,9 +48,7 @@ export function BottomPanels({ manager, session, tab, onTab }: Props) {
         )}
       </div>
       {tab === 'files' && <FilesPanel files={files} session={session} follow={follow} />}
-      {tab === 'snippets' && <SnippetsPanel onSend={sendCurrent} onSendAll={sendAll} />}
-      {tab === 'history' && <HistoryPanel onSend={sendCurrent} />}
-      {tab === 'transfers' && <TransfersPanel />}
+      {tab === 'commands' && <CommandsPanel manager={manager} session={session} />}
     </section>
   );
 }

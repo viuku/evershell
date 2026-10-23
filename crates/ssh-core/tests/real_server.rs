@@ -230,6 +230,46 @@ async fn sftp_roundtrip_in_tmpdir() {
     conn.disconnect().await.unwrap();
 }
 
+/// 编辑器用的 stat 和 read_file
+#[tokio::test]
+async fn sftp_stat_and_read_file() {
+    let Some((conn, _)) = connect().await else { return };
+    let sftp = conn.sftp().await.unwrap();
+    let tmp = std::env::temp_dir();
+    let tmp = tmp.to_str().unwrap().trim_end_matches('/');
+    let dir = format!("{tmp}/ssh-core-read-{}", std::process::id());
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir(&dir).unwrap();
+    let file = format!("{dir}/nginx.conf");
+    // 跨多个 32KB 块
+    let data = pseudo_random(100 * 1024 + 7, 7);
+    std::fs::write(&file, &data).unwrap();
+
+    let st = sftp.stat(&file).await.unwrap();
+    assert_eq!(st.name, "nginx.conf");
+    assert_eq!(st.kind, FileKind::File);
+    assert_eq!(st.size, data.len() as u64);
+    assert!(st.mtime > 0);
+    assert_eq!(sftp.stat(&dir).await.unwrap().kind, FileKind::Dir);
+
+    let mut progress = Vec::new();
+    assert_eq!(sftp.read_file(&file, data.len() as u64, |p| progress.push(p)).await.unwrap(), data);
+    assert_eq!(progress.first().unwrap().done, 0);
+    assert_eq!(progress.last().unwrap(), &TransferProgress { done: data.len() as u64, total: data.len() as u64 });
+    let err = sftp.read_file(&file, 1024, |_| {}).await.err().unwrap();
+    assert!(err.to_string().contains("上限"), "{err}");
+    let err = sftp.read_file(&dir, 1024, |_| {}).await.err().unwrap();
+    assert!(err.to_string().contains("目录"), "{err}");
+    let err = sftp.stat(&format!("{dir}/nope")).await.err().unwrap();
+    assert!(err.to_string().contains("不存在"), "{err}");
+
+    std::fs::write(&file, b"").unwrap();
+    assert!(sftp.read_file(&file, 1024, |_| {}).await.unwrap().is_empty());
+
+    std::fs::remove_dir_all(&dir).unwrap();
+    conn.disconnect().await.unwrap();
+}
+
 /// 上传先写 `<文件名>.evershell-part` 再改名盖过去。要在本机看 inode、权限位和符号链接，只在 Unix 上跑
 #[cfg(unix)]
 mod upload {
