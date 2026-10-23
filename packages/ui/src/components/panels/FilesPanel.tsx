@@ -18,9 +18,28 @@ interface Props {
   follow: boolean;
 }
 
+/** 进目录时超过这么久还没列出来，就把文件表换成“加载中”；更快的话直接换成新列表，不闪 */
+const LOADING_DELAY_MS = 250;
+
+/** flag 连续为 true 超过 ms 毫秒才返回 true */
+function useLingering(flag: boolean, ms: number): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    if (!flag) {
+      setOn(false);
+      return;
+    }
+    const timer = setTimeout(() => setOn(true), ms);
+    return () => clearTimeout(timer);
+  }, [flag, ms]);
+  return flag && on;
+}
+
 /** SFTP 文件面板：左边目录树，右边文件表 */
 export function FilesPanel({ files, session, follow }: Props) {
   const state = useMaybeStore(files ? files.store : null);
+  // 网络慢时进目录要等一会儿，不提示的话像没点上（所有者 2026-10-23 报的）
+  const slowLoading = useLingering(!!state?.loading, LOADING_DELAY_MS);
   const dialogs = useDialogs();
   const remoteEdit = useRemoteEdit();
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
@@ -226,8 +245,13 @@ export function FilesPanel({ files, session, follow }: Props) {
             </div>
             {state.error ? (
               <div className="empty">{state.error}</div>
-            ) : state.loading && state.entries.length === 0 ? (
-              <div className="empty">读取中…</div>
+            ) : state.loading && (state.entries.length === 0 || slowLoading) ? (
+              <div className="files__loading" role="status">
+                <span className="files__loading-box">
+                  <span className="files__spinner" aria-hidden="true" />
+                  加载中…
+                </span>
+              </div>
             ) : state.entries.length === 0 ? (
               <div className="empty">空目录</div>
             ) : (

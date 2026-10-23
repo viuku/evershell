@@ -142,9 +142,46 @@
 }
 
 .files__table {
+  position: relative;
   flex: 1 1 0;
   min-height: 0;
   overflow: auto;
+}
+
+/* 进目录要等一会儿时，文件表中间一个“加载中”的小框（照 FinalShell） */
+.files__loading {
+  position: absolute;
+  inset: 22px 0 0;
+  display: grid;
+  place-items: center;
+}
+
+.files__loading-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bar);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.files__spinner {
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 2px solid var(--track);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: files-spin 0.8s linear infinite;
+}
+
+@keyframes files-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .files__inner {

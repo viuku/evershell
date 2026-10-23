@@ -11,7 +11,8 @@
   --ed-type: #a3501b;
   --ed-func: #3b5bdb;
   --ed-selection: rgba(0, 104, 214, 0.22);
-  --ed-line: #f2f4f8;
+  /* 光标所在行的底色要半透明：选中的蓝色画在它下面，实心的会把选中的字盖住（所有者 2026-10-23 报的） */
+  --ed-line: rgba(0, 48, 128, 0.05);
   --ed-match: rgba(255, 196, 0, 0.32);
   --ed-match-line: rgba(214, 150, 0, 0.6);
   --ed-match-on: rgba(255, 150, 0, 0.55);
@@ -27,7 +28,7 @@
   --ed-type: #ffa14f;
   --ed-func: #9db2ff;
   --ed-selection: rgba(47, 140, 255, 0.35);
-  --ed-line: #26262a;
+  --ed-line: rgba(255, 255, 255, 0.045);
   --ed-match: rgba(255, 196, 0, 0.22);
   --ed-match-line: rgba(255, 196, 0, 0.5);
   --ed-match-on: rgba(255, 150, 0, 0.45);
@@ -44,7 +45,7 @@
     --ed-type: #ffa14f;
     --ed-func: #9db2ff;
     --ed-selection: rgba(47, 140, 255, 0.35);
-    --ed-line: #26262a;
+    --ed-line: rgba(255, 255, 255, 0.045);
     --ed-match: rgba(255, 196, 0, 0.22);
     --ed-match-line: rgba(255, 196, 0, 0.5);
     --ed-match-on: rgba(255, 150, 0, 0.45);

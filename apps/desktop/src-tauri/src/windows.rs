@@ -19,6 +19,8 @@ const EDITOR_MSG: &str = "editor-msg";
 const MANAGER_MSG: &str = "manager-msg";
 /// 要关主窗口时，编辑窗口里还有没保存的：让它问一下
 const QUIT_EVENT: &str = "editor-quit-requested";
+/// 点了主窗口的关闭按钮：让主窗口先问“确定关闭窗口吗”（照 FinalShell，所有者 2026-10-23 要的）
+const MAIN_CLOSE_EVENT: &str = "main-close-requested";
 
 #[derive(Default)]
 pub struct EditorState {
@@ -26,6 +28,8 @@ pub struct EditorState {
     dirty: AtomicBool,
     /// 用户已经在编辑窗口里选了保存或不保存，接下来的关闭不再拦
     quitting: AtomicBool,
+    /// 用户在主窗口的“确定关闭窗口吗”里点了关闭，这一次关闭不再问
+    close_confirmed: AtomicBool,
 }
 
 /// `#rrggbb` → 颜色；格式不对返回 None
@@ -141,11 +145,27 @@ pub fn editor_quit(app: AppHandle, state: State<'_, EditorState>) {
     }
 }
 
-/// 要关主窗口了。编辑窗口有没保存的就先不关，让编辑窗口问；没有就把独立窗口一起关掉。
-/// 主窗口一关，会话就都没了，独立窗口留着也没用
+/// 主窗口里点了“确定关闭”：再关一次，这次不问
+#[tauri::command]
+pub fn main_close_confirmed(app: AppHandle, state: State<'_, EditorState>) {
+    state.close_confirmed.store(true, Ordering::Relaxed);
+    if let Some(w) = app.get_webview_window(MAIN) {
+        let _ = w.close();
+    }
+}
+
+/// 要关主窗口了。先让主窗口问一句“确定关闭窗口吗”；点了关闭以后，编辑窗口有没保存的就再让编辑窗口问；
+/// 都没问题就把独立窗口一起关掉。主窗口一关，会话就都没了，独立窗口留着也没用
 pub fn on_main_close_requested(app: &AppHandle, api: &CloseRequestApi) {
+    let state = app.state::<EditorState>();
+    // 编辑窗口问完、选了保存或不保存再来关的，不用再问一遍
+    let confirmed = state.close_confirmed.swap(false, Ordering::Relaxed) || state.quitting.load(Ordering::Relaxed);
+    if !confirmed {
+        api.prevent_close();
+        let _ = app.emit_to(MAIN, MAIN_CLOSE_EVENT, ());
+        return;
+    }
     if let Some(editor) = app.get_webview_window(EDITOR) {
-        let state = app.state::<EditorState>();
         if state.dirty.load(Ordering::Relaxed) && !state.quitting.load(Ordering::Relaxed) {
             api.prevent_close();
             let _ = editor.unminimize();
@@ -173,10 +193,20 @@ pub fn on_window_destroyed(app: &AppHandle, label: &str) {
     let _ = app.emit_to(MAIN, event, serde_json::json!({ "type": "gone" }));
 }
 
-/// 调试版用：环境变量 `EVERSHELL_OPEN=manager` 时，启动 4 秒后（主窗口已经把它预先建好了）把连接管理器亮出来，
-/// 给 scripts/mac-preview.sh 截图看样子（不用点界面），也能看出预先建好的窗口是不是一亮就有内容
+/// 调试版用，给 scripts/mac-preview.sh 截图看样子（不用点界面）：
+/// - `EVERSHELL_OPEN=manager`：启动 4 秒后（主窗口已经把它预先建好了）把连接管理器亮出来，也能看出预先建好的窗口是不是一亮就有内容
+/// - `EVERSHELL_OPEN=close`：启动 4 秒后像点了主窗口的关闭按钮一样，看“确定关闭窗口吗”
 #[cfg(debug_assertions)]
 pub fn open_from_env(app: &AppHandle) {
+    if std::env::var("EVERSHELL_OPEN").as_deref() == Ok("close") {
+        let app = app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(4));
+            if let Some(w) = app.get_webview_window(MAIN) {
+                let _ = w.close();
+            }
+        });
+    }
     if std::env::var("EVERSHELL_OPEN").as_deref() == Ok(MANAGER) {
         let app = app.clone();
         // 桌面端没开 tokio 的计时功能，用一个普通线程等

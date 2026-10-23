@@ -161,6 +161,27 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
     [backend, connectServer],
   );
   useEffect(() => managerLink?.start(), [managerLink]);
+
+  // 点主窗口的关闭按钮先问一句（照 FinalShell）；连着会话的话说清会断开
+  const askingClose = useRef(false);
+  useEffect(
+    () =>
+      backend.onCloseRequested?.(async () => {
+        if (askingClose.current) return false;
+        askingClose.current = true;
+        try {
+          const n = manager.connectedCount();
+          return await dialogs.confirm({
+            title: '关闭窗口',
+            message: n > 0 ? `确定关闭窗口吗？连着的 ${n} 个会话会断开。` : '确定关闭窗口吗？',
+            okText: '关闭',
+          });
+        } finally {
+          askingClose.current = false;
+        }
+      }),
+    [backend, manager, dialogs],
+  );
   // 主窗口画好后，在后台把连接管理器窗口先建好藏着，点开时直接亮出来（新建窗口要等它加载）
   useEffect(() => {
     const preload = backend.managerWindow?.preload;

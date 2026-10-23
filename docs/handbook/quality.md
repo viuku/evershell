@@ -22,6 +22,7 @@
    - 主机含 `fail`：连接失败；含 `bsd`：监控不支持；密码填 `wrong`：认证失败。
    - 主机含 `rekey`：接受过一次主机密钥后再连，服务器会换一把，看“密钥已经改变”的警告。
    - 主机含 `flaky`：连上 8 秒后像网络断了一样断开，看断线提示。
+   - 主机含 `slow`：网络很慢，列目录、查文件信息多等 1.5 秒，传文件约 20KB/s，看“加载中”和进度。和 `nopass` 一起用（如 `nopass-slow.local`）就不用填密码。
    - 密码留空时只有主机含 `nopass` 能直接连上（模拟不要密码的服务器）；其他主机先报认证失败，再弹框要密码。
 
    连接列表存在浏览器里，下次还在（5173 和 5174 各存各的）。
@@ -41,6 +42,7 @@
 1. `scripts/mac-preview.sh`：编调试版 .app → 关掉它自己上次开的那个 → 打开 → 等窗口出现 → 截图。最后一行是截图路径，用 Read 看。调试版编好后会搬进 `target/mac-preview/app.noindex/`，聚焦搜索不收录。
 2. 放大细节：`scripts/mac-window.sh shot --pid <进程号> --crop x,y,宽,高`，坐标用窗口里的点（和 CSS 像素一样），自动换算 Retina。
    - 看连接管理器窗口：`EVERSHELL_OPEN=manager scripts/mac-preview.sh`，调试版启动 4 秒后会把它亮出来（只有调试版认这个变量），再 `scripts/mac-window.sh shot --pid <进程号> --name 连接管理器`（`--name` 按窗口标题找）。编辑窗口要先连上服务器，开不出来，请所有者截图。
+   - 看点主窗口关闭按钮后的“确定关闭窗口吗”：`EVERSHELL_OPEN=close scripts/mac-preview.sh`，调试版启动 4 秒后会像点了关闭按钮一样，再截主窗口。
 3. 看完 `scripts/mac-preview.sh --stop`。它只关自己开的调试版并删掉它，所有者在用的窗口不受影响。所有者要求电脑上只留 `build/` 这一份应用（2026-10-23）。
 4. 截图报错或截出来全黑：所有者的屏幕锁着（[pitfalls.md](pitfalls.md#屏幕锁着时截不了原生窗口2026-10-18)），等他回来或请他看。
 
