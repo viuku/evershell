@@ -26,7 +26,8 @@ import { encodeUtf8 } from '../core/importers/text';
 // 不连服务器也能完整预览界面的假后端。网页端 URL 带 ?mock 时使用。
 // 约定几个特殊输入方便测试：主机含 fail → 连接失败；密码 wrong → 认证失败；主机含 bsd → 监控不支持；
 // 主机含 rekey → 信任过一次指纹后再连，服务器换一把钥匙（看“指纹变了”的警告）；
-// 主机含 flaky → 连上 8 秒后像网络断了一样断开（看断线提示）。
+// 主机含 flaky → 连上 8 秒后像网络断了一样断开（看断线提示）；
+// 主机含 slow → 网络很慢：列目录、查文件信息多等 1.5 秒，传文件约 20KB/s（看“加载中”和进度）。
 // 服务器指纹和真的一样要先确认：第一次连每台服务器都会弹确认框。
 // 密码留空时只有主机含 nopass 能连上（模拟不要密码的服务器），其他主机和真服务器一样报认证失败，界面再弹框要密码。
 // 导入窗口的一键导入：假装找到了 FinalShell 和 ~/.ssh/config，SecureCRT、PuTTY 没找到。
@@ -268,10 +269,12 @@ function mockSystemInfo(supported: boolean, hostname: string): SystemInfo {
   };
 }
 
-/** 模拟分块传输进度，大约 6MB/s，至少走 400ms */
-async function simulateTransfer(total: number, onProgress?: (p: TransferProgress) => void): Promise<void> {
+/** 模拟分块传输进度，大约 6MB/s（slow：约 20KB/s，最多 8 秒），至少走 400ms */
+async function simulateTransfer(total: number, onProgress?: (p: TransferProgress) => void, slow = false): Promise<void> {
   const size = Math.max(total, 1);
-  const durationMs = Math.max(400, (size / (6 * 2 ** 20)) * 1000);
+  const durationMs = slow
+    ? Math.min(8000, Math.max(1500, (size / (20 * 1024)) * 1000))
+    : Math.max(400, (size / (6 * 2 ** 20)) * 1000);
   const ticks = Math.max(4, Math.ceil(durationMs / 100));
   for (let i = 1; i <= ticks; i++) {
     await delay(durationMs / ticks);
@@ -359,13 +362,23 @@ class MockSession implements SshSession {
     return mockSystemInfo(!/bsd|unsupported/i.test(this.opts.host), this.opts.host);
   }
 
+  /** 主机含 slow 时模拟很慢的网络 */
+  private get slow(): boolean {
+    return /slow/i.test(this.opts.host);
+  }
+
+  /** 一次往返的等待；网络慢时多等 1.5 秒 */
+  private roundTrip(ms: number): Promise<void> {
+    return delay(this.slow ? ms + 1500 : ms);
+  }
+
   async homeDir(): Promise<string> {
-    await delay(80);
+    await this.roundTrip(80);
     return this.home;
   }
 
   async listDir(path: string) {
-    await delay(60 + Math.random() * 120);
+    await this.roundTrip(60 + Math.random() * 120);
     return this.fs.list(path);
   }
 
@@ -385,19 +398,19 @@ class MockSession implements SshSession {
   }
 
   async stat(path: string): Promise<FileEntry> {
-    await delay(40);
+    await this.roundTrip(40);
     return this.fs.stat(path);
   }
 
   async readFile(path: string, maxBytes: number, onProgress?: (p: TransferProgress) => void): Promise<Uint8Array> {
     const node = this.fs.stat(path);
     if (node.size > maxBytes) throw new Error(`文件有 ${node.size} 字节，超过了 ${maxBytes} 字节的上限`);
-    await simulateTransfer(node.size, onProgress);
+    await simulateTransfer(node.size, onProgress, this.slow);
     return this.fs.readBytes(path);
   }
 
   async upload(remotePath: string, data: Blob, onProgress?: (p: TransferProgress) => void): Promise<void> {
-    await simulateTransfer(data.size, onProgress);
+    await simulateTransfer(data.size, onProgress, this.slow);
     // 小文件按文本存下来，编辑器保存后再打开能看到改过的内容
     const content = data.size <= 1024 * 1024 ? await data.text() : null;
     this.fs.writeFile(remotePath, data.size, this.opts.user, content);
@@ -406,7 +419,7 @@ class MockSession implements SshSession {
   async download(remotePath: string, onProgress?: (p: TransferProgress) => void): Promise<string> {
     const node = this.fs.resolve(remotePath);
     if (!node) throw new Error(`没有这个文件：${remotePath}`);
-    await simulateTransfer(node.kind === 'dir' ? 4096 : node.size, onProgress);
+    await simulateTransfer(node.kind === 'dir' ? 4096 : node.size, onProgress, this.slow);
     return `~/Downloads/${remotePath.slice(remotePath.lastIndexOf('/') + 1)}`;
   }
 }

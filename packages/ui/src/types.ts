@@ -284,6 +284,11 @@ export interface SshBackend {
    */
   findLocalConfigs?(): Promise<LocalConfigFiles[]>;
   /**
+   * 点了主窗口的关闭按钮（桌面端）：handler 返回 true 才真的关，用来先问一句“确定关闭窗口吗”。
+   * 返回取消函数。网页端关页签由浏览器管，没有这项
+   */
+  onCloseRequested?(handler: () => Promise<boolean>): () => void;
+  /**
    * 独立的编辑窗口（docs/specs/remote-edit.md），主窗口这一头。
    * 没有这项的平台（网页端）编辑器在主窗口里浮着
    */

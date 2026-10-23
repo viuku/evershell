@@ -199,6 +199,11 @@ export const tauriBackend: SshBackend = {
     post: (message) => void emitTo(EDITOR_LABEL, EDITOR_MSG, message).catch(() => {}),
     listen: (handler) => listenHere(EDITOR_MSG, handler),
   },
+  // 先让 Rust 拦下关闭，问完点了关闭再真的关（src-tauri/src/windows.rs）
+  onCloseRequested: (handler) =>
+    listenHere('main-close-requested', () => {
+      void handler().then((ok) => ok && invoke('main_close_confirmed').catch(() => {}));
+    }),
   managerWindow: {
     open: (background) => call('manager_window_open', { background }),
     preload: (background) => void invoke('manager_window_preload', { background }).catch(() => {}),

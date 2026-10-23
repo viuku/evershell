@@ -65,6 +65,7 @@ pub fn run() {
             windows::manager_window_preload,
             windows::window_hide,
             windows::main_window_focus,
+            windows::main_close_confirmed,
         ])
         .run(context)
         .expect("Tauri 启动失败");
