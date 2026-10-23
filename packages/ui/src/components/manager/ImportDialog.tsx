@@ -1,8 +1,9 @@
-import { useRef, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { secretKeys } from '../../core/connect';
 import { hostsStore } from '../../core/hosts-store';
+import { firstFound, scanLocalConfigs, type LocalScan } from '../../core/importers/local';
 import { mergeImport, type DuplicatePolicy, type MergeOutcome } from '../../core/importers/merge';
-import { SOURCES, type SourceInfo } from '../../core/importers/sources';
+import { SOURCES, sourceInfo, type SourceInfo } from '../../core/importers/sources';
 import type { ImportResult, ImportSource } from '../../core/importers/types';
 import { useStore } from '../../core/store';
 import type { SshBackend } from '../../types';
@@ -11,14 +12,19 @@ import { collectImportFiles, pickedFromDrop, pickedFromList, type PickedFile } f
 import { ImportPreview, importTarget, type TargetKind } from './ImportPreview';
 
 // 导入连接：选来源 → 选文件 → 预览 → 完成。解析和合并都在 core/importers 里，这里只管流程和界面。
+// 桌面端打开时先去各软件的默认位置找配置，找到的来源可以「一键导入」，跳过选文件（core/importers/local.ts）。
 
 type Step =
   | { kind: 'source' }
   | { kind: 'file'; source: SourceInfo }
-  | { kind: 'preview'; source: SourceInfo; result: ImportResult }
+  /** from：一键导入时读的位置，「上一步」回来源页；手动选文件时为 null */
+  | { kind: 'preview'; source: SourceInfo; result: ImportResult; from: string | null }
   | { kind: 'done'; source: SourceInfo; result: ImportResult; outcome: MergeOutcome; passwordsSaved: number };
 
 const STEP_LABELS = ['选来源', '选文件', '预览', '完成'];
+
+/** 中文句子里夹软件名时两边留空格；以全角括号结尾的（OpenSSH（~/.ssh/config））后面不留 */
+const spaced = (label: string) => (label.endsWith('）') ? ` ${label}` : ` ${label} `);
 const stepIndex = (s: Step) => ({ source: 0, file: 1, preview: 2, done: 3 })[s.kind];
 
 interface Props {
@@ -42,6 +48,40 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const dirInput = useRef<HTMLInputElement>(null);
   const secrets = backend.secrets;
+  /** 各来源默认位置的查找结果；网页端、还没查完时为 null */
+  const [local, setLocal] = useState<Map<ImportSource, LocalScan> | null>(null);
+  /** 用户自己点过来源后，查找结果不再改选中项 */
+  const userPicked = useRef(false);
+
+  useEffect(() => {
+    if (!backend.findLocalConfigs) return;
+    let alive = true;
+    backend
+      .findLocalConfigs()
+      .then((list) => {
+        if (!alive) return;
+        const scan = scanLocalConfigs(list);
+        setLocal(scan);
+        const first = firstFound(scan);
+        if (first && !userPicked.current) setSourceId(first);
+      })
+      .catch(() => {
+        // 查不了就和以前一样手动选文件
+      });
+    return () => {
+      alive = false;
+    };
+  }, [backend]);
+
+  const showPreview = (source: SourceInfo, result: ImportResult, from: string | null) => {
+    // 默认全选：全部连接 + 没有连接的空文件夹
+    const withServers = new Set<string>();
+    const parentOf = new Map(result.folders.map((f) => [f.id, f.parentId]));
+    for (const s of result.servers) for (let cur = s.parentId; cur; cur = parentOf.get(cur) ?? null) withServers.add(cur);
+    setSelected(new Set([...result.servers.map((s) => s.id), ...result.folders.filter((f) => !withServers.has(f.id)).map((f) => f.id)]));
+    setPolicy('skip');
+    setStep({ kind: 'preview', source, result, from });
+  };
 
   const readFiles = async (source: SourceInfo, picked: PickedFile[]) => {
     setReading(true);
@@ -52,14 +92,7 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
         setFileError(skipped > 0 ? `选中的 ${skipped} 个文件都不是${source.label}的配置文件（扩展名不符或太大）` : '没有选中任何文件');
         return;
       }
-      const result = source.parse(files);
-      // 默认全选：全部连接 + 没有连接的空文件夹
-      const withServers = new Set<string>();
-      const parentOf = new Map(result.folders.map((f) => [f.id, f.parentId]));
-      for (const s of result.servers) for (let cur = s.parentId; cur; cur = parentOf.get(cur) ?? null) withServers.add(cur);
-      setSelected(new Set([...result.servers.map((s) => s.id), ...result.folders.filter((f) => !withServers.has(f.id)).map((f) => f.id)]));
-      setPolicy('skip');
-      setStep({ kind: 'preview', source, result });
+      showPreview(source, source.parse(files), null);
     } catch (e) {
       setFileError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -98,6 +131,8 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
   };
 
   const title = step.kind === 'source' ? '导入连接' : `导入连接 · ${step.source.label}`;
+  const chosen = sourceInfo(sourceId);
+  const scan = step.kind === 'source' ? local?.get(sourceId) : undefined;
 
   return (
     <Modal title={title} onClose={onClose} width={660} height={540} tone="sheet" className="imp">
@@ -112,13 +147,26 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
       <div className="imp__body">
         {step.kind === 'source' && (
           <div className="imp__sources" role="radiogroup" aria-label="来源">
-            {SOURCES.map((s) => (
-              <label key={s.id} className={`imp__source${s.id === sourceId ? ' imp__source--on' : ''}`}>
-                <input type="radio" name="imp-source" value={s.id} checked={s.id === sourceId} onChange={() => setSourceId(s.id)} />
-                <span className="imp__sourceName">{s.label}</span>
-                <span className="imp__sourceBlurb">{s.blurb}</span>
-              </label>
-            ))}
+            {SOURCES.map((s) => {
+              const found = local?.get(s.id);
+              return (
+                <label key={s.id} className={`imp__source${s.id === sourceId ? ' imp__source--on' : ''}`}>
+                  <input
+                    type="radio"
+                    name="imp-source"
+                    value={s.id}
+                    checked={s.id === sourceId}
+                    onChange={() => {
+                      userPicked.current = true;
+                      setSourceId(s.id);
+                    }}
+                  />
+                  <span className="imp__sourceName">{s.label}</span>
+                  {found?.state === 'found' && <span className="imp__found">找到 {found.result.servers.length} 个连接</span>}
+                  <span className="imp__sourceBlurb">{s.blurb}</span>
+                </label>
+              );
+            })}
           </div>
         )}
 
@@ -195,6 +243,11 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
           </>
         )}
 
+        {step.kind === 'preview' && step.from && (
+          <div className="imp__from muted ellipsis" title={step.from}>
+            读取自 <span className="mono">{step.from}</span>
+          </div>
+        )}
         {step.kind === 'preview' && (
           <ImportPreview
             source={step.source}
@@ -235,6 +288,19 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
       </div>
 
       <div className="imp__foot">
+        {scan?.state === 'found' && (
+          <button type="button" className="btn" onClick={() => setStep({ kind: 'file', source: chosen })}>
+            手动选择…
+          </button>
+        )}
+        {scan && (
+          <span className="muted ellipsis" title={scan.location}>
+            {scan.state === 'found' && <>从 <span className="mono">{scan.location}</span> 读取</>}
+            {scan.state === 'empty' && <><span className="mono">{scan.location}</span> 里没有可导入的连接</>}
+            {scan.state === 'missing' && `默认位置没有找到${spaced(chosen.label)}的配置`}
+            {scan.state === 'error' && `读不了${spaced(chosen.label)}的配置：${scan.message}`}
+          </span>
+        )}
         {step.kind === 'preview' && (
           <span className="muted ellipsis">
             {target === 'folder' ? `导入到根目录下的「${step.source.folderName}」` : '导入到根目录'}
@@ -245,7 +311,7 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
             type="button"
             className="btn"
             disabled={reading || importing}
-            onClick={() => setStep(step.kind === 'file' ? { kind: 'source' } : { kind: 'file', source: step.source })}
+            onClick={() => setStep(step.kind === 'file' || step.from ? { kind: 'source' } : { kind: 'file', source: step.source })}
           >
             上一步
           </button>
@@ -255,11 +321,16 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
             取消
           </button>
         )}
-        {step.kind === 'source' && (
-          <button type="button" className="btn btn-primary" onClick={() => setStep({ kind: 'file', source: SOURCES.find((s) => s.id === sourceId)! })}>
-            下一步
-          </button>
-        )}
+        {step.kind === 'source' &&
+          (scan?.state === 'found' ? (
+            <button type="button" className="btn btn-primary" onClick={() => showPreview(chosen, scan.result, scan.location)}>
+              一键导入
+            </button>
+          ) : (
+            <button type="button" className="btn btn-primary" onClick={() => setStep({ kind: 'file', source: chosen })}>
+              下一步
+            </button>
+          ))}
         {step.kind === 'preview' && (
           <button
             type="button"
