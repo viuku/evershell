@@ -10,7 +10,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use ssh_core::{Auth, ConnectConfig, Connection, HostKeyCheck, MonitorHandle, MonitorSnapshot, OutputAck, ShellEvent};
+use ssh_core::{
+    Auth, ConnectConfig, Connection, HostKeyCheck, MonitorDetail, MonitorHandle, MonitorSnapshot, OutputAck, ShellEvent,
+    SystemInfo,
+};
 use tokio::sync::mpsc;
 
 pub type SessionId = String;
@@ -51,6 +54,9 @@ struct Entry {
     conn: Arc<Connection>,
     /// 正在跑的监控采样；会话移除时一起丢弃，循环随之停止
     monitor: Option<MonitorHandle>,
+    /// 界面要的采样详情。记在会话上，采样（重新）开始时带上：
+    /// 前端的两次 invoke 到达顺序没有保证，改详情可能比开始采样先到
+    detail: MonitorDetail,
 }
 
 #[derive(Default)]
@@ -92,6 +98,7 @@ impl SessionManager {
                 output: shell.output_ack(),
                 conn: conn.clone(),
                 monitor: None,
+                detail: MonitorDetail::default(),
             },
         );
 
@@ -176,8 +183,12 @@ impl SessionManager {
     where
         F: Fn(MonitorSnapshot) + Send + 'static,
     {
-        let conn = self.connection(id)?;
-        let (handle, mut rx) = conn.watch_monitor(interval);
+        let (conn, detail) = {
+            let sessions = self.sessions.lock().unwrap();
+            let entry = sessions.get(id).ok_or(Error::NotFound)?;
+            (entry.conn.clone(), entry.detail)
+        };
+        let (handle, mut rx) = conn.watch_monitor(interval, detail);
         tokio::spawn(async move {
             while let Some(snap) = rx.recv().await {
                 on_snapshot(snap);
@@ -185,8 +196,28 @@ impl SessionManager {
         });
         let mut sessions = self.sessions.lock().unwrap();
         let entry = sessions.get_mut(id).ok_or(Error::NotFound)?;
+        // 取详情和存句柄之间界面又改了详情：以最新的为准（一样的话不会多采）
+        handle.set_detail(entry.detail);
         entry.monitor = Some(handle);
         Ok(())
+    }
+
+    /// 改监控采样顺带多取哪些数据（全部进程、网络连接），在跑的采样马上按新的采一次；
+    /// 没在采样时只记下来，下次开始采样时用
+    pub fn set_monitor_detail(&self, id: &str, detail: MonitorDetail) -> Result<(), Error> {
+        let mut sessions = self.sessions.lock().unwrap();
+        let entry = sessions.get_mut(id).ok_or(Error::NotFound)?;
+        entry.detail = detail;
+        if let Some(monitor) = &entry.monitor {
+            monitor.set_detail(detail);
+        }
+        Ok(())
+    }
+
+    /// 取一次系统信息（发行版、内核、CPU 型号）
+    pub async fn system_info(&self, id: &str) -> Result<SystemInfo, Error> {
+        let conn = self.connection(id)?;
+        Ok(conn.system_info().await?)
     }
 
     pub fn stop_monitor(&self, id: &str) -> Result<(), Error> {

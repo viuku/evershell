@@ -4,10 +4,12 @@ import type {
   ConnectOptions,
   FileEntry,
   HostKeyProblem,
+  MonitorDetail,
   MonitorSnapshot,
   SecretStore,
   SshBackend,
   SshSession,
+  SystemInfo,
   TransferProgress,
 } from '@evershell/ui';
 
@@ -63,6 +65,14 @@ class WasmSession implements SshSession {
   watchMonitor(onSnapshot: (s: MonitorSnapshot) => void, intervalMs: number): () => void {
     this.inner.startMonitor(intervalMs, onSnapshot);
     return () => this.inner.stopMonitor();
+  }
+
+  setMonitorDetail(detail: MonitorDetail): void {
+    this.inner.setMonitorDetail(detail.procs, detail.sockets);
+  }
+
+  systemInfo(): Promise<SystemInfo> {
+    return (this.inner.systemInfo() as Promise<SystemInfo>).catch(rethrow);
   }
 
   homeDir(): Promise<string> {

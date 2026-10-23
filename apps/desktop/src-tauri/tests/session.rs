@@ -4,7 +4,7 @@
 use std::time::{Duration, Instant};
 
 use evershell_desktop_lib::session::{ConnectParams, Error, SessionManager};
-use ssh_core::{Auth, HostKeyProblem, OUTPUT_ACK_BATCH, OUTPUT_HIGH_WATER, ShellEvent, known_hosts};
+use ssh_core::{Auth, HostKeyProblem, MonitorDetail, OUTPUT_ACK_BATCH, OUTPUT_HIGH_WATER, ShellEvent, known_hosts};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 
 /// 一直读，直到累计输出里出现 `needle`
@@ -96,6 +96,45 @@ async fn real_openssh_through_session_manager() {
     let snap = tokio::time::timeout(Duration::from_secs(10), snap_rx.recv()).await.unwrap().unwrap();
     assert!(snap.latency_ms.is_some(), "{snap:?}");
     manager.stop_monitor(&id).unwrap();
+
+    // 进程、网络标签页要的详情：先于开始采样到达也不丢（前端两次 invoke 的到达顺序没有保证）；
+    // 采样中改了马上采一次，不等下一个周期；没变就不多采
+    manager.set_monitor_detail(&id, MonitorDetail { procs: true, sockets: true }).unwrap();
+    let (snap_tx, mut snap_rx) = mpsc::unbounded_channel();
+    manager
+        .start_monitor(&id, Duration::from_secs(60), move |s| {
+            let _ = snap_tx.send(s);
+        })
+        .await
+        .unwrap();
+    let first = tokio::time::timeout(Duration::from_secs(10), snap_rx.recv()).await.unwrap().unwrap();
+    manager.set_monitor_detail(&id, MonitorDetail { procs: false, sockets: true }).unwrap();
+    let second = tokio::time::timeout(Duration::from_secs(10), snap_rx.recv())
+        .await
+        .expect("改了详情应马上采一次，不等 60 秒")
+        .unwrap();
+    if first.supported {
+        assert!(first.all_procs.as_ref().is_some_and(|p| !p.is_empty()) && first.sockets.is_some(), "{first:?}");
+        assert!(second.all_procs.is_none() && second.sockets.is_some(), "{second:?}");
+    } else {
+        eprintln!("服务器不是 Linux（本机 OpenSSH），只能验证改详情会马上重采");
+        assert!(first.all_procs.is_none() && second.sockets.is_none());
+    }
+    manager.set_monitor_detail(&id, MonitorDetail { procs: false, sockets: true }).unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_millis(1500), snap_rx.recv()).await.is_err(),
+        "详情没变不应多采一次"
+    );
+    manager.stop_monitor(&id).unwrap();
+
+    // 系统信息：本机 OpenSSH 上只有 uname 那几项
+    let info = manager.system_info(&id).await.unwrap();
+    eprintln!("系统信息: {info:?}");
+    assert!(!info.kernel.is_empty() && !info.kernel_release.is_empty(), "{info:?}");
+    assert!(!info.arch.is_empty() && !info.hostname.is_empty(), "{info:?}");
+    if cfg!(target_os = "macos") {
+        assert_eq!(info.kernel, "Darwin");
+    }
     manager.write(&id, b"echo still_$((1+1))\r".to_vec()).unwrap();
     read_until(&mut rx, "still_2").await;
 
@@ -116,6 +155,8 @@ async fn real_openssh_through_session_manager() {
     assert!(removed.is_ok(), "会话结束后应被移除");
     assert!(matches!(manager.connection(&id), Err(Error::NotFound)));
     assert!(matches!(manager.stop_monitor(&id), Err(Error::NotFound)));
+    assert!(matches!(manager.set_monitor_detail(&id, MonitorDetail::default()), Err(Error::NotFound)));
+    assert!(matches!(manager.system_info(&id).await, Err(Error::NotFound)));
 }
 
 /// 连不上的地址要把 ssh-core 的中文错误原样带出来

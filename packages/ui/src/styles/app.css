@@ -46,14 +46,15 @@
   padding: 5px 34px 0 9px;
 }
 
-/* Chrome 式标签，宽度固定，放不下就换行。每行 33px：上面 28px 是标签本身，文字和悬停底都以它为中线；
-   下面 5px 是行间距，选中的标签在最后一行时向下长满这 5px，和下面的页面连成一体 */
+/* Chrome 式标签，宽度随文字（最长 240px，再长省略），放不下就换行。每行 33px：上面 28px 是标签本身，
+   文字和悬停底都以它为中线；下面 5px 是行间距，选中的标签在最后一行时向下长满这 5px，和下面的页面连成一体 */
 .tab {
   position: relative;
   isolation: isolate;
   display: flex;
   align-items: center;
-  flex: 0 1 180px;
+  flex: 0 1 auto;
+  max-width: 240px;
   min-width: 0;
   height: 33px;
   padding-bottom: 5px;
@@ -71,7 +72,7 @@
   background: var(--strip-sep);
 }
 
-.tab:not(.tab--on):is(:first-child, .tab--row-start, .tab--on + *, :hover, :hover + *)::before {
+.tab:not(.tab--on):is(:first-child, .tab--row-start, .tab--on + *, .tab-chip + *, :hover, :hover + *)::before {
   display: none;
 }
 
@@ -98,7 +99,7 @@
   color: var(--tab-on-dim, var(--muted));
 }
 
-.tab--on.tab--newtab {
+.tab--on:is(.tab--newtab, .tab--info) {
   --tab-fill: var(--content);
   --tab-edge: var(--tab-fill);
   color: var(--muted);
@@ -142,6 +143,71 @@
   box-shadow: inset 0 0 0 1px var(--tab-edge);
 }
 
+/* ---------- 标签组（Chrome 式）：--group 是组的颜色，见 base.css ----------
+   没选中的组内标签底下一条 2px 的组色线；选中的标签描一圈 2px 的组色边，两侧外弯处接上底下的线 */
+.tab--grouped:not(.tab--on) {
+  background: linear-gradient(var(--group), var(--group)) left bottom / 100% 2px no-repeat;
+}
+
+.tab--on.tab--grouped {
+  --tab-edge: var(--group);
+}
+
+.tab--on.tab--grouped:not(.tab--upper) {
+  box-shadow:
+    inset 2px 2px 0 var(--tab-edge),
+    inset -2px 0 0 var(--tab-edge);
+}
+
+/* 外弯加宽到 10px、往标签里伸 2px，弧线正好接上标签两侧 2px 的边和旁边标签底下 2px 的线 */
+.tab--on.tab--grouped:not(.tab--upper)::before,
+.tab--on.tab--grouped:not(.tab--upper)::after {
+  width: 10px;
+  height: 10px;
+  --flare: transparent 7.5px, var(--tab-edge) 8.5px, var(--tab-edge) 9.5px, var(--tab-fill) 10.5px;
+}
+
+.tab--upper.tab--grouped::after {
+  box-shadow: inset 0 0 0 2px var(--tab-edge);
+}
+
+/* 组的名字块：和标签文字同一条中线，下面接上组色线（收起时没有线） */
+.tab-chip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  height: 33px;
+  padding: 4px 6px 0 4px;
+  background: linear-gradient(var(--group), var(--group)) right bottom / calc(100% - 4px) 2px no-repeat;
+}
+
+.tab-chip--collapsed {
+  background: none;
+}
+
+.tab-chip__btn {
+  max-width: 160px;
+  height: 20px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--group);
+  color: var(--group-fg);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-chip__btn:hover {
+  filter: brightness(1.1);
+}
+
+.tab-chip__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .tab__pick {
   flex: 1 1 auto;
   min-width: 0;
@@ -165,7 +231,7 @@
   color: var(--tab-on-fg, var(--text));
 }
 
-.tab--on.tab--newtab .tab__name {
+.tab--on:is(.tab--newtab, .tab--info) .tab__name {
   color: var(--text);
 }
 

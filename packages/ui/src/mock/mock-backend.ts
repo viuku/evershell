@@ -6,11 +6,15 @@ import {
   type HostKeyInfo,
   type KnownHostEntry,
   type LocalConfigFiles,
+  type MonitorDetail,
   type MonitorSnapshot,
+  type ProcDetail,
   type SecretStore,
   type ShellHandlers,
   type SshBackend,
   type SshSession,
+  type SocketRow,
+  type SystemInfo,
   type TransferProgress,
 } from '../types';
 import { FakeShell } from './fake-shell';
@@ -69,27 +73,44 @@ function checkHostKey(opts: ConnectOptions): HostKeyInfo {
   throw new HostKeyError({ kind: 'unknown', host: opts.host, port: opts.port, key, otherTypes: [] });
 }
 
-// 后面几个内存小、CPU 高，按 CPU 排时才排得上来
+// 后面几个内存小、CPU 高，按 CPU 排时才排得上来。内核线程没有命令行和程序位置
 const PROCS = [
-  { pid: 2314, name: 'node', mem: 1.1 * 2 ** 30, cpu: 12.4 },
-  { pid: 981, name: 'dockerd', mem: 612 * 2 ** 20, cpu: 3.1 },
-  { pid: 1420, name: 'redis-server', mem: 488 * 2 ** 20, cpu: 0.8 },
-  { pid: 1102, name: 'nginx', mem: 236 * 2 ** 20, cpu: 4.6 },
-  { pid: 873, name: 'containerd', mem: 142 * 2 ** 20, cpu: 0.2 },
-  { pid: 412, name: 'systemd-journal', mem: 64 * 2 ** 20, cpu: 0.1 },
-  { pid: 4410, name: 'php-fpm', mem: 52 * 2 ** 20, cpu: 6.2 },
-  { pid: 1033, name: 'sshd', mem: 38 * 2 ** 20, cpu: 0.1 },
-  { pid: 1, name: 'systemd', mem: 12 * 2 ** 20, cpu: 0 },
-  { pid: 702, name: 'cron', mem: 3 * 2 ** 20, cpu: 0 },
-  { pid: 5120, name: 'tar', mem: 6 * 2 ** 20, cpu: 38 },
-  { pid: 5121, name: 'gzip', mem: 2 * 2 ** 20, cpu: 96 },
-  { pid: 23, name: 'kswapd0', mem: 0, cpu: 1.5 },
+  { pid: 2314, user: 'deploy', name: 'node', cmd: 'node /srv/app/server.js --port 3000', exe: '/usr/bin/node', mem: 1.1 * 2 ** 30, cpu: 12.4 },
+  { pid: 981, user: 'root', name: 'dockerd', cmd: '/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock', exe: '/usr/bin/dockerd', mem: 612 * 2 ** 20, cpu: 3.1 },
+  { pid: 1420, user: 'redis', name: 'redis-server', cmd: '/usr/bin/redis-server 127.0.0.1:6379', exe: '/usr/bin/redis-server', mem: 488 * 2 ** 20, cpu: 0.8 },
+  { pid: 1102, user: 'www-data', name: 'nginx', cmd: 'nginx: worker process', exe: '/usr/sbin/nginx', mem: 236 * 2 ** 20, cpu: 4.6 },
+  { pid: 873, user: 'root', name: 'containerd', cmd: '/usr/bin/containerd', exe: '/usr/bin/containerd', mem: 142 * 2 ** 20, cpu: 0.2 },
+  { pid: 412, user: 'root', name: 'systemd-journal', cmd: '/usr/lib/systemd/systemd-journald', exe: '/usr/lib/systemd/systemd-journald', mem: 64 * 2 ** 20, cpu: 0.1 },
+  { pid: 4410, user: 'www-data', name: 'php-fpm', cmd: 'php-fpm: pool www', exe: '/usr/sbin/php-fpm8.3', mem: 52 * 2 ** 20, cpu: 6.2 },
+  { pid: 1033, user: 'root', name: 'sshd', cmd: 'sshd: root@pts/0', exe: '/usr/sbin/sshd', mem: 38 * 2 ** 20, cpu: 0.1 },
+  { pid: 1, user: 'root', name: 'systemd', cmd: '/lib/systemd/systemd --system --deserialize=29', exe: '/usr/lib/systemd/systemd', mem: 12 * 2 ** 20, cpu: 0 },
+  { pid: 702, user: 'root', name: 'cron', cmd: '/usr/sbin/cron -f -P', exe: '/usr/sbin/cron', mem: 3 * 2 ** 20, cpu: 0 },
+  { pid: 5120, user: 'root', name: 'tar', cmd: 'tar -czf /backup/www.tar.gz /var/www', exe: '/usr/bin/tar', mem: 6 * 2 ** 20, cpu: 38 },
+  { pid: 5121, user: 'root', name: 'gzip', cmd: 'gzip', exe: '/usr/bin/gzip', mem: 2 * 2 ** 20, cpu: 96 },
+  { pid: 23, user: 'root', name: 'kswapd0', cmd: '', exe: '', mem: 0, cpu: 1.5 },
+  { pid: 2, user: 'root', name: 'kthreadd', cmd: '', exe: '', mem: 0, cpu: 0 },
+  { pid: 15, user: 'root', name: 'ksoftirqd/0', cmd: '', exe: '', mem: 0, cpu: 0.3 },
+  { pid: 1201, user: 'systemd-resolve', name: 'systemd-resolve', cmd: '/usr/lib/systemd/systemd-resolved', exe: '/usr/lib/systemd/systemd-resolved', mem: 9 * 2 ** 20, cpu: 0 },
+  { pid: 1190, user: 'messagebus', name: 'dbus-daemon', cmd: '@dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only', exe: '/usr/bin/dbus-daemon', mem: 4 * 2 ** 20, cpu: 0 },
 ];
 
 const DISKS = [
-  { mount: '/', size: 80 * 2 ** 30, avail: 42 * 2 ** 30 },
-  { mount: '/data', size: 500 * 2 ** 30, avail: 88 * 2 ** 30 },
-  { mount: '/boot', size: 2 ** 30, avail: 780 * 2 ** 20 },
+  { mount: '/', device: '/dev/vda1', fsType: 'ext4', size: 80 * 2 ** 30, used: 36 * 2 ** 30, avail: 42 * 2 ** 30 },
+  { mount: '/data', device: '/dev/vdb1', fsType: 'xfs', size: 500 * 2 ** 30, used: 412 * 2 ** 30, avail: 88 * 2 ** 30 },
+  { mount: '/boot', device: '/dev/vda2', fsType: 'ext4', size: 2 ** 30, used: 180 * 2 ** 20, avail: 780 * 2 ** 20 },
+];
+
+/** 网络页的行：[pid, 名称, 监听地址, 端口, 几个 IP, 几条连接, 上传、下载的量级]。地址为 null 的是主动连出去的；pid 为 null 是看不到的进程 */
+const LISTENS: [number | null, string, string | null, number | null, number, number, number, number][] = [
+  [1033, 'sshd', '0.0.0.0', 22, 1, 2, 18 * 1024, 1500],
+  [1102, 'nginx', '0.0.0.0', 443, 23, 41, 860 * 1024, 96 * 1024],
+  [1102, 'nginx', '0.0.0.0', 80, 6, 7, 12 * 1024, 4 * 1024],
+  [2314, 'node', '127.0.0.1', 3000, 1, 8, 640 * 1024, 80 * 1024],
+  [1420, 'redis-server', '127.0.0.1', 6379, 1, 4, 30 * 1024, 26 * 1024],
+  [1201, 'systemd-resolve', '127.0.0.53', 53, 0, 0, 0, 0],
+  [981, 'dockerd', '::', 2375, 0, 0, 0, 0],
+  [null, '', '0.0.0.0', 9100, 1, 1, 2 * 1024, 300],
+  [2314, 'node', null, null, 3, 5, 40 * 1024, 210 * 1024],
 ];
 
 /** 随机游走，让数字看起来像真的在动 */
@@ -119,59 +140,131 @@ class MockMonitor {
   private readonly latency = new Drift(18, 6, 120, 3);
   private readonly started = Date.now();
   private samples = 0;
+  /** 各网卡累计的 [收, 发] 字节，每次采样按速率往上加 */
+  private readonly totals: Record<string, [number, number]> = {
+    eth0: [182 * 2 ** 30, 96 * 2 ** 30],
+    docker0: [3.2 * 2 ** 30, 1.1 * 2 ** 30],
+    lo: [5.4 * 2 ** 30, 5.4 * 2 ** 30],
+  };
+  /** 开着网络页以来第几次采样；第一次没有上一次的数可减，速率记 0，和真后端一样 */
+  private socketSamples = 0;
+  detail: MonitorDetail = { procs: false, sockets: false };
 
   constructor(private readonly supported: boolean) {}
 
   snapshot(): MonitorSnapshot {
     this.samples++;
+    this.socketSamples = this.detail.sockets ? this.socketSamples + 1 : 0;
     if (!this.supported) {
       return {
         supported: false,
         uptimeSecs: 0,
         load: [0, 0, 0],
         cpuPercent: 0,
+        cpuDetail: null,
         cpuCores: 0,
         memTotal: 0,
         memUsed: 0,
         swapTotal: 0,
         swapUsed: 0,
         net: [],
+        ifaces: [],
         procs: [],
         disks: [],
+        allProcs: null,
+        sockets: null,
         latencyMs: Math.round(this.latency.next()),
       };
     }
     const cpu = this.cpu.next();
     const memTotal = 8 * 2 ** 30;
+    const first = this.samples === 1;
+    // 第一次采样算不出速率
+    const net = first
+      ? []
+      : [
+          { iface: 'eth0', rxPerSec: this.rx.next(), txPerSec: this.tx.next() },
+          { iface: 'docker0', rxPerSec: this.dockerRx.next(), txPerSec: this.dockerRx.next() / 3 },
+          { iface: 'lo', rxPerSec: 6 * 1024 * (0.5 + Math.random()), txPerSec: 0 },
+        ];
+    for (const n of net) {
+      if (n.iface === 'lo') n.txPerSec = n.rxPerSec;
+      const t = this.totals[n.iface]!;
+      t[0] += n.rxPerSec * 2;
+      t[1] += n.txPerSec * 2;
+    }
+    const procs = PROCS.map((p) => ({ ...p, cpuNow: first ? 0 : p.cpu * (0.6 + Math.random() * 0.8) }));
+    // 总占用拆成几份，剩下的是空闲
+    const user = cpu * 0.55;
+    const system = cpu * 0.3;
+    const steal = cpu * 0.08;
+    const softirq = cpu * 0.05;
+    const iowait = cpu - user - system - steal - softirq;
     return {
       supported: true,
       uptimeSecs: 41 * 86400 + 6 * 3600 + Math.floor((Date.now() - this.started) / 1000),
       load: [0.42 + cpu / 200, 0.51, 0.47],
       cpuPercent: cpu,
+      cpuDetail: first ? null : { user, nice: 0, system, idle: 100 - cpu, iowait, irq: 0, softirq, steal },
       cpuCores: 4,
       memTotal,
       memUsed: Math.round(memTotal * this.mem.next()),
       swapTotal: 2 * 2 ** 30,
       swapUsed: 0.1 * 2 ** 30,
-      // 第一次采样算不出速率
-      net:
-        this.samples === 1
-          ? []
-          : [
-              { iface: 'eth0', rxPerSec: this.rx.next(), txPerSec: this.tx.next() },
-              { iface: 'docker0', rxPerSec: this.dockerRx.next(), txPerSec: this.dockerRx.next() / 3 },
-            ],
+      // 状态栏的网速不含 lo
+      net: net.filter((n) => n.iface !== 'lo'),
+      ifaces: ['lo', 'eth0', 'docker0'].map((iface) => {
+        const n = net.find((x) => x.iface === iface);
+        const [rxBytes, txBytes] = this.totals[iface]!;
+        return { iface, rxBytes, txBytes, rxPerSec: n?.rxPerSec ?? null, txPerSec: n?.txPerSec ?? null };
+      }),
       // 真实后端只给内存前 10 和 CPU 前 10，这里进程少，全给；第一次采样 CPU 算不出来
-      procs: PROCS.map((p) => ({
-        pid: p.pid,
-        name: p.name,
-        memBytes: p.mem,
-        cpuPercent: this.samples === 1 ? 0 : p.cpu * (0.6 + Math.random() * 0.8),
-      })),
+      procs: procs.map((p) => ({ pid: p.pid, name: p.name, memBytes: p.mem, cpuPercent: p.cpuNow })),
       disks: DISKS,
+      allProcs: this.detail.procs
+        ? procs.map((p): ProcDetail => ({ pid: p.pid, user: p.user, name: p.name, cmdline: p.cmd, exe: p.exe, memBytes: p.mem, cpuPercent: p.cpuNow }))
+        : null,
+      sockets: this.detail.sockets ? { available: true, rows: this.socketRows() } : null,
       latencyMs: Math.round(this.latency.next()),
     };
   }
+
+  private socketRows(): SocketRow[] {
+    const wiggle = () => (this.socketSamples === 1 ? 0 : 0.4 + Math.random() * 1.2);
+    return LISTENS.map(([pid, name, listenIp, port, ips, conns, tx, rx]) => ({
+      pid,
+      name,
+      listenIp,
+      port,
+      ips,
+      conns,
+      txPerSec: tx * wiggle(),
+      rxPerSec: rx * wiggle(),
+    }));
+  }
+}
+
+/** 假服务器的系统信息；监控不支持的主机只给 uname 拿得到的 */
+function mockSystemInfo(supported: boolean, hostname: string): SystemInfo {
+  if (!supported) return { os: '', kernel: 'FreeBSD', kernelRelease: '14.1-RELEASE', arch: 'amd64', hostname, cpus: [] };
+  return {
+    os: 'Ubuntu 24.04.1 LTS',
+    kernel: 'Linux',
+    kernelRelease: '6.8.0-45-generic',
+    arch: 'x86_64',
+    hostname,
+    cpus: [
+      {
+        model: 'Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz',
+        sockets: 1,
+        coresPerSocket: 2,
+        threads: 4,
+        mhz: 2499.996,
+        cache: '36608 KB',
+        bogomips: 4999.99,
+      },
+    ],
+  };
 }
 
 /** 模拟分块传输进度，大约 6MB/s，至少走 400ms */
@@ -191,6 +284,8 @@ class MockSession implements SshSession {
   private readonly monitor: MockMonitor;
   private closed = false;
   private readonly home: string;
+  /** 正在采样时，立刻采一次 */
+  private sampleNow: (() => void) | null = null;
 
   constructor(
     private readonly fs: MockFs,
@@ -234,12 +329,33 @@ class MockSession implements SshSession {
   }
 
   watchMonitor(onSnapshot: (s: MonitorSnapshot) => void, intervalMs: number): () => void {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    // 和真后端一样，改了要多取的数据就马上采一次，再从这时起重新计时
+    const restart = () => {
+      if (timer) clearInterval(timer);
+      timer = setInterval(() => onSnapshot(this.monitor.snapshot()), intervalMs);
+    };
     const first = setTimeout(() => onSnapshot(this.monitor.snapshot()), 300);
-    const timer = setInterval(() => onSnapshot(this.monitor.snapshot()), intervalMs);
+    restart();
+    this.sampleNow = () => {
+      onSnapshot(this.monitor.snapshot());
+      restart();
+    };
     return () => {
       clearTimeout(first);
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
+      this.sampleNow = null;
     };
+  }
+
+  setMonitorDetail(detail: MonitorDetail): void {
+    this.monitor.detail = detail;
+    this.sampleNow?.();
+  }
+
+  async systemInfo(): Promise<SystemInfo> {
+    await delay(150);
+    return mockSystemInfo(!/bsd|unsupported/i.test(this.opts.host), this.opts.host);
   }
 
   async homeDir(): Promise<string> {

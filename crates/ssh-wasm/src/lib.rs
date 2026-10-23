@@ -2,7 +2,7 @@
 //! 所以密码和私钥不会经过中转。
 #![cfg(target_arch = "wasm32")]
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -10,7 +10,8 @@ use std::time::Duration;
 use js_sys::{Function, Uint8Array};
 use serde::Serialize;
 use ssh_core::{
-    Auth, ConnectConfig, Connection, HostKeyCheck, MonitorHandle, OutputAck, Sftp, ShellEvent, TransferProgress,
+    Auth, ConnectConfig, Connection, HostKeyCheck, MonitorDetail, MonitorHandle, OutputAck, Sftp, ShellEvent,
+    TransferProgress,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 use tokio::sync::{mpsc, oneshot};
@@ -32,6 +33,8 @@ pub struct WebSession {
     conn: Arc<Connection>,
     fingerprint: Option<String>,
     monitor: RefCell<Option<MonitorHandle>>,
+    /// 采样时顺带多取哪些数据；记在会话上，重新开始采样时带上
+    detail: Cell<MonitorDetail>,
 }
 
 #[wasm_bindgen]
@@ -124,6 +127,7 @@ impl WebSession {
             conn,
             fingerprint,
             monitor: RefCell::new(None),
+            detail: Cell::new(MonitorDetail::default()),
         })
     }
 
@@ -158,7 +162,7 @@ impl WebSession {
     #[wasm_bindgen(js_name = startMonitor)]
     pub fn start_monitor(&self, interval_ms: u32, on_snapshot: Function) {
         let interval = Duration::from_millis(interval_ms.max(500) as u64);
-        let (handle, mut rx) = self.conn.watch_monitor(interval);
+        let (handle, mut rx) = self.conn.watch_monitor(interval, self.detail.get());
         *self.monitor.borrow_mut() = Some(handle);
         spawn_local(async move {
             while let Some(snap) = rx.recv().await {
@@ -172,6 +176,24 @@ impl WebSession {
     #[wasm_bindgen(js_name = stopMonitor)]
     pub fn stop_monitor(&self) {
         *self.monitor.borrow_mut() = None;
+    }
+
+    /// 采样时顺带多取哪些数据（见 types.ts 的 MonitorDetail），在跑的采样马上按新的采一次；
+    /// 没在采样时只记下，下次 startMonitor 时用
+    #[wasm_bindgen(js_name = setMonitorDetail)]
+    pub fn set_monitor_detail(&self, procs: bool, sockets: bool) {
+        let detail = MonitorDetail { procs, sockets };
+        self.detail.set(detail);
+        if let Some(monitor) = self.monitor.borrow().as_ref() {
+            monitor.set_detail(detail);
+        }
+    }
+
+    /// 取一次系统信息，返回 SystemInfo（见 types.ts）
+    #[wasm_bindgen(js_name = systemInfo)]
+    pub async fn system_info(&self) -> Result<JsValue, JsError> {
+        let info = self.conn.system_info().await.map_err(js_err)?;
+        to_js(&info)
     }
 
     #[wasm_bindgen(js_name = homeDir)]

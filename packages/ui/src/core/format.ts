@@ -32,6 +32,12 @@ export function formatRate(bytesPerSec: number): string {
   return `${formatBytes(bytesPerSec)}/s`;
 }
 
+/** 带空格和完整单位的速率：40.7 KB/s、76 B/s；没有数时为 - */
+export function formatRateLong(bytesPerSec: number | null): string {
+  // 速率是算出来的小数，不到 1 KB 时 formatBytesLong 会原样带着小数
+  return bytesPerSec === null ? '-' : `${formatBytesLong(Math.round(bytesPerSec))}/s`;
+}
+
 export function formatUptime(secs: number): string {
   if (!Number.isFinite(secs) || secs < 0) return '-';
   const days = Math.floor(secs / 86400);

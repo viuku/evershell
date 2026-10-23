@@ -6,11 +6,13 @@ export type {
   HostKeyInfo,
   HostKeyProblem,
   KnownHostEntry,
+  MonitorDetail,
   MonitorSnapshot,
   SecretStore,
   ShellHandlers,
   SshBackend,
   SshSession,
+  SystemInfo,
   TransferProgress,
 } from './types';
 export { App, type AppProps } from './App';

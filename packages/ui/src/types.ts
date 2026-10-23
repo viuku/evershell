@@ -62,6 +62,115 @@ export interface ShellHandlers {
   onExit(code: number | null, reason: string | null): void;
 }
 
+/**
+ * 采样时顺带多取哪些数据。只在开着对应标签页时打开：进程和网络连接的数据量大，一直取会加重服务器负担。
+ * 和 crates/ssh-core/src/monitor.rs 的 `MonitorDetail` 对应
+ */
+export interface MonitorDetail {
+  /** 全部进程（含用户、命令行、程序位置），给进程标签页 */
+  procs: boolean;
+  /** 监听端口和连接，给网络标签页 */
+  sockets: boolean;
+}
+
+/** CPU 时间按用途分的百分比，加起来是 100 */
+export interface CpuDetail {
+  user: number;
+  nice: number;
+  system: number;
+  idle: number;
+  /** 等硬盘读写 */
+  iowait: number;
+  /** 硬件中断 */
+  irq: number;
+  /** 软件中断 */
+  softirq: number;
+  /** 虚拟机被宿主机拿去跑别的机器的时间（top 里的 st） */
+  steal: number;
+}
+
+/** 一块网卡（含 lo）的累计收发量和速率 */
+export interface IfaceStat {
+  iface: string;
+  rxBytes: number;
+  txBytes: number;
+  /** 第一次采样、或这块网卡刚出现时算不出速率，为 null */
+  rxPerSec: number | null;
+  txPerSec: number | null;
+}
+
+/** 进程标签页的一行 */
+export interface ProcDetail {
+  pid: number;
+  /** 用户名；拿不到时为空字符串 */
+  user: string;
+  /** /proc/<pid>/stat 里的进程名，最长 15 个字符 */
+  name: string;
+  /** 完整命令行；内核线程没有，为空字符串。服务器给的文本，控制字符已换成空格 */
+  cmdline: string;
+  /** 程序文件的位置；内核线程、或没有权限看别的用户的进程时为空字符串 */
+  exe: string;
+  memBytes: number;
+  /** 和 MonitorSnapshot.procs 的 cpuPercent 一样，100 表示占满一个核 */
+  cpuPercent: number;
+}
+
+/** 网络标签页的一行：一个监听的地址和端口，或者一个进程主动连出去的连接汇总 */
+export interface SocketRow {
+  /** 不是 root 登录时看不到别的用户的进程，为 null */
+  pid: number | null;
+  /** 进程名；看不到时为空字符串 */
+  name: string;
+  /** 监听的地址，如 0.0.0.0、::、127.0.0.1；主动连出去的那一行为 null */
+  listenIp: string | null;
+  /** 监听的端口；主动连出去的那一行为 null */
+  port: number | null;
+  /** 有几个不同的对方 IP */
+  ips: number;
+  /** 几条已建立的连接 */
+  conns: number;
+  /** 这些连接的上传、下载速率，字节/秒；第一次采样为 0 */
+  txPerSec: number;
+  rxPerSec: number;
+}
+
+export interface SocketTable {
+  /** 服务器上没有 ss 命令时为 false，rows 为空 */
+  available: boolean;
+  rows: SocketRow[];
+}
+
+/** 型号相同的一组 CPU */
+export interface CpuGroup {
+  /** 型号；/proc/cpuinfo 里没有时为空字符串 */
+  model: string;
+  /** 物理 CPU 颗数；拿不到时为 null */
+  sockets: number | null;
+  /** 每颗几个核心；拿不到时为 null */
+  coresPerSocket: number | null;
+  /** 逻辑 CPU 数（线程数），也就是 top 里看到的 CPU 个数 */
+  threads: number;
+  /** 当前主频（这组的平均），MHz；拿不到时为 null */
+  mhz: number | null;
+  /** 缓存，原样取 /proc/cpuinfo 的写法，如“16384 KB”；拿不到时为 null */
+  cache: string | null;
+  bogomips: number | null;
+}
+
+/** 不怎么变的系统信息，打开系统信息标签页时取一次。拿不到的项为空字符串 */
+export interface SystemInfo {
+  /** 发行版，如 Ubuntu 24.04 LTS */
+  os: string;
+  /** uname -s，如 Linux */
+  kernel: string;
+  /** uname -r，如 6.8.0-110-generic */
+  kernelRelease: string;
+  /** uname -m，如 x86_64 */
+  arch: string;
+  hostname: string;
+  cpus: CpuGroup[];
+}
+
 /** 一次监控采样。数值都是原始单位（字节、0–100 的百分比），格式化交给界面。 */
 export interface MonitorSnapshot {
   /** 服务器不是 Linux、或采集命令失败时为 false，此时其余字段无意义 */
@@ -69,6 +178,8 @@ export interface MonitorSnapshot {
   uptimeSecs: number;
   load: [number, number, number];
   cpuPercent: number;
+  /** CPU 时间按用途分；第一次采样为 null */
+  cpuDetail: CpuDetail | null;
   cpuCores: number;
   memTotal: number;
   memUsed: number;
@@ -76,13 +187,19 @@ export interface MonitorSnapshot {
   swapUsed: number;
   /** 各网卡（不含 lo）的速率；第一次采样还算不出速率，为空数组 */
   net: { iface: string; rxPerSec: number; txPerSec: number }[];
+  /** 全部网卡（含 lo）的累计收发量和速率，给系统信息标签页 */
+  ifaces: IfaceStat[];
   /**
    * 内存前 10 和 CPU 前 10 的并集（最多 20 个），按内存从高到低，界面按用户选的列重排后取前 10。
    * cpuPercent 是两次采样之间的占用，和 top 一样 100 表示占满一个核，可以超过 100；第一次采样为 0。
    */
   procs: { pid: number; name: string; memBytes: number; cpuPercent: number }[];
-  /** 真实文件系统的挂载点（不含 tmpfs、overlay 等） */
-  disks: { mount: string; size: number; avail: number }[];
+  /** 真实文件系统的挂载点（不含 tmpfs、overlay 等）。device 如 /dev/vda1，fsType 如 ext4，拿不到时为空字符串 */
+  disks: { mount: string; size: number; used: number; avail: number; device: string; fsType: string }[];
+  /** 打开了 MonitorDetail.procs 才有：全部进程，顺序不定；否则为 null */
+  allProcs: ProcDetail[] | null;
+  /** 打开了 MonitorDetail.sockets 才有；否则为 null */
+  sockets: SocketTable | null;
   /** 本机到服务器的往返延迟；测不出时为 null */
   latencyMs: number | null;
 }
@@ -115,6 +232,10 @@ export interface SshSession {
 
   /** 开始周期采样，返回停止函数。同一会话同一时间只会有一个监听 */
   watchMonitor(onSnapshot: (s: MonitorSnapshot) => void, intervalMs: number): () => void;
+  /** 改采样时顺带多取哪些数据，改了马上采一次；没在采样时先记下，下次开始采样时用 */
+  setMonitorDetail(detail: MonitorDetail): void;
+  /** 取一次系统信息（发行版、内核、CPU 型号这些不怎么变的） */
+  systemInfo(): Promise<SystemInfo>;
 
   /** 登录用户的家目录（绝对路径） */
   homeDir(): Promise<string>;

@@ -7,10 +7,12 @@ import './styles/terminal.css';
 import './styles/panels.css';
 import './styles/newtab.css';
 import './styles/manager.css';
+import './styles/monitor.css';
 import { DialogsProvider, useDialogs } from './components/common/Dialogs';
 import { TooltipLayer } from './components/common/Tooltip';
 import type { MenuItem } from './components/common/Menu';
 import { ConnectionManager } from './components/manager/ConnectionManager';
+import { InfoTabView } from './components/monitor/InfoTabView';
 import { EditConnectionDialog } from './components/manager/EditConnectionDialog';
 import { NewTabPage } from './components/newtab/NewTabPage';
 import type { BottomTab } from './components/panels/BottomPanels';
@@ -75,11 +77,12 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
     if (manager.getSnapshot().tabs.length === 0) manager.openNewTab();
   }, [manager]);
 
-  const { tabs, activeId } = useSyncExternalStore(manager.subscribe, manager.getSnapshot);
+  const { tabs, activeId, groups } = useSyncExternalStore(manager.subscribe, manager.getSnapshot);
   const active = tabs.find((t) => t.id === activeId) ?? null;
+  // 信息页也带着所属的会话：状态栏、底部状态条照常显示这台服务器
   const session = active?.session ?? null;
   const monitor = manager.getMonitor(session?.id ?? null);
-  const connectedCount = tabs.filter((t) => t.session?.status === 'connected').length;
+  const connectedCount = tabs.filter((t) => !t.info && t.session?.status === 'connected').length;
 
   const [managerOpen, setManagerOpen] = useState(false);
   const [managerImport, setManagerImport] = useState(false);
@@ -126,7 +129,7 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
   const closeTab = useCallback(
     async (id: string) => {
       const tab = manager.getSnapshot().tabs.find((t) => t.id === id);
-      if (tab?.session?.status === 'connected') {
+      if (tab && !tab.info && tab.session?.status === 'connected') {
         const ok = await dialogs.confirm({ title: '关闭会话', message: `${tab.session.name} 仍在连接中，确定要关闭吗？`, okText: '关闭' });
         if (!ok) return;
       }
@@ -152,7 +155,8 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
         }
       } else if (isAppShortcut(e, 'f')) {
         const { tabs, activeId } = manager.getSnapshot();
-        if (activeId && tabs.find((t) => t.id === activeId)?.session) {
+        const tab = tabs.find((t) => t.id === activeId);
+        if (activeId && tab?.session && !tab.info) {
           e.preventDefault();
           openFind(activeId);
         }
@@ -208,6 +212,7 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
           session={session}
           monitor={monitor}
           onToggleSidebar={() => sidebarOpen.set(false)}
+          onOpenInfo={(kind) => session && manager.openInfo(session.id, kind)}
           leadingInset={windowButtonsInset}
         />
       )}
@@ -215,15 +220,26 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
         <TabBar
           tabs={tabs}
           activeId={activeId}
+          groups={groups}
           onSelect={(id) => manager.activate(id)}
           onClose={(id) => void closeTab(id)}
+          onToggleGroup={(id) => manager.toggleGroup(id)}
           onNewTab={() => manager.openNewTab()}
           onOpenManager={() => setManagerOpen(true)}
           onShowSidebar={sidebar ? undefined : () => sidebarOpen.set(true)}
           menuItems={menuItems}
           leadingInset={sidebar ? undefined : windowButtonsInset}
         />
-        {session ? (
+        {active?.info && session ? (
+          <InfoTabView
+            key={active.id}
+            kind={active.info}
+            manager={manager}
+            session={session}
+            monitor={monitor}
+            onReconnect={() => void reconnect(session)}
+          />
+        ) : session ? (
           <SessionView
             manager={manager}
             session={session}
