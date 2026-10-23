@@ -176,6 +176,38 @@
   height: 18px;
 }
 
+/* 进程表的「内存」「CPU」表头：点了按这列排，选中的字变亮、带小箭头（Mac 活动监视器的做法）。
+   负边距让悬停底色比文字宽一圈，又不挤动列宽 */
+.sidebar__sort {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: -3px;
+  padding: 3px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.sidebar__sort:hover {
+  background: var(--hover);
+}
+
+.sidebar__sort--on {
+  color: var(--text);
+}
+
+.sidebar__sort svg {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .sidebar__th--disks,
 .sidebar__tr--disks {
   grid-template-columns: minmax(0, 1fr) 92px;

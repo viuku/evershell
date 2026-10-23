@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { formatBytes, formatLoad, formatPercent, formatRate, formatUptime, niceCeil, niceCeilBytes } from '../../core/format';
 import { dragRegion } from '../../core/platform';
+import { procSort, sortProcs, type ProcSort } from '../../core/procs';
 import { NET_SAMPLES, PING_SAMPLES, type MonitorState, type MonitorStore, type SessionInfo } from '../../core/session-manager';
-import { useMaybeStore } from '../../core/store';
+import { useMaybeStore, useStore } from '../../core/store';
 import type { MonitorSnapshot } from '../../types';
 import { SidebarToggle } from './SidebarToggle';
 import { SystemInfoDialog } from './SystemInfoDialog';
@@ -127,6 +128,7 @@ function Meter({ label, pct, used, live }: { label: string; pct: number; used: s
 }
 
 function Procs({ snap, session }: { snap: MonitorSnapshot | null; session: SessionInfo | null }) {
+  const sort = useStore(procSort);
   const placeholder = !session
     ? '未连接'
     : session.status === 'connecting'
@@ -137,13 +139,13 @@ function Procs({ snap, session }: { snap: MonitorSnapshot | null; session: Sessi
   return (
     <div className="sidebar__table">
       <div className="sidebar__th sidebar__th--procs">
-        <span>内存</span>
-        <span>CPU</span>
+        <SortHeader label="内存" by="mem" sort={sort} />
+        <SortHeader label="CPU" by="cpu" sort={sort} />
         <span>命令</span>
       </div>
       {snap && snap.procs.length > 0 ? (
-        snap.procs.map((p, i) => (
-          <div key={`${p.name}-${i}`} className="sidebar__tr sidebar__tr--procs mono">
+        sortProcs(snap.procs, sort).map((p) => (
+          <div key={p.pid} className="sidebar__tr sidebar__tr--procs mono">
             <span>{formatBytes(p.memBytes)}</span>
             <span>{p.cpuPercent.toFixed(1)}</span>
             <span className="ellipsis">{p.name}</span>
@@ -153,6 +155,27 @@ function Procs({ snap, session }: { snap: MonitorSnapshot | null; session: Sessi
         <div className="sidebar__placeholder">{placeholder}</div>
       )}
     </div>
+  );
+}
+
+/** 进程表能点的表头：点了按这列从高到低排，选中的那列字变亮、带小箭头 */
+function SortHeader({ label, by, sort }: { label: string; by: ProcSort; sort: ProcSort }) {
+  const on = sort === by;
+  return (
+    <button
+      type="button"
+      className={`sidebar__sort${on ? ' sidebar__sort--on' : ''}`}
+      aria-pressed={on}
+      title={`按${label}从高到低排`}
+      onClick={() => procSort.set(by)}
+    >
+      {label}
+      {on && (
+        <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true">
+          <polyline points="1.5,3 4,5.5 6.5,3" />
+        </svg>
+      )}
+    </button>
   );
 }
 

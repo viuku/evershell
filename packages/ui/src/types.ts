@@ -76,8 +76,11 @@ export interface MonitorSnapshot {
   swapUsed: number;
   /** 各网卡（不含 lo）的速率；第一次采样还算不出速率，为空数组 */
   net: { iface: string; rxPerSec: number; txPerSec: number }[];
-  /** 按内存占用从高到低，最多 10 个 */
-  procs: { name: string; memBytes: number; cpuPercent: number }[];
+  /**
+   * 内存前 10 和 CPU 前 10 的并集（最多 20 个），按内存从高到低，界面按用户选的列重排后取前 10。
+   * cpuPercent 是两次采样之间的占用，和 top 一样 100 表示占满一个核，可以超过 100；第一次采样为 0。
+   */
+  procs: { pid: number; name: string; memBytes: number; cpuPercent: number }[];
   /** 真实文件系统的挂载点（不含 tmpfs、overlay 等） */
   disks: { mount: string; size: number; avail: number }[];
   /** 本机到服务器的往返延迟；测不出时为 null */

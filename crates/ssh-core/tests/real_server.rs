@@ -84,8 +84,10 @@ async fn monitor_two_consecutive_samples() {
         assert!(second.net.iter().all(|n| n.rx_per_sec >= 0.0 && n.tx_per_sec >= 0.0));
         assert!((0.0..=100.0).contains(&second.cpu_percent));
         assert!(!first.disks.is_empty() && first.disks.iter().all(|d| d.size >= d.avail));
-        assert!(!first.procs.is_empty() && first.procs.len() <= 10);
+        assert!(!first.procs.is_empty() && first.procs.len() <= 2 * ssh_core::monitor::TOP_PROCS);
         assert!(first.procs.windows(2).all(|w| w[0].mem_bytes >= w[1].mem_bytes));
+        assert!(first.procs.iter().all(|p| p.pid > 0 && p.cpu_percent == 0.0), "第一次采样没有参照");
+        assert!(second.procs.iter().all(|p| p.cpu_percent >= 0.0));
     } else {
         eprintln!("服务器不是 Linux（本机 OpenSSH），只能验证 supported=false 的路径");
         assert!(!first.supported && !second.supported);
