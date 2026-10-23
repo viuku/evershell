@@ -28,6 +28,8 @@ pub fn run() {
             commands::ssh_close,
             commands::ssh_monitor_start,
             commands::ssh_monitor_stop,
+            commands::ssh_monitor_detail,
+            commands::ssh_system_info,
             commands::sftp_home,
             commands::sftp_list,
             commands::sftp_mkdir,

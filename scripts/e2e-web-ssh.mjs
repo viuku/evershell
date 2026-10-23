@@ -1,5 +1,5 @@
 // 网页版 SSH 的无界面端到端测试：在 Node 里加载 ssh-wasm（Node 22 自带浏览器同款 WebSocket），
-// 经中转服务连到 SSH 服务器，跑终端、监控采样和 SFTP。
+// 经中转服务连到 SSH 服务器，跑终端、监控采样、系统信息和 SFTP。
 //
 // 用法：
 //   RELAY=ws://127.0.0.1:8787 RELAY_TOKEN=dev-token TARGET=127.0.0.1:2222 \
@@ -145,6 +145,27 @@ if (second.supported) {
 const countAfterStop = snapshots.length;
 await new Promise((r) => setTimeout(r, 1200));
 assert(snapshots.length === countAfterStop, '停止后不应再有快照');
+
+// 进程、网络标签页要的详情：改了马上采一次，不等下一个周期（这里周期设成 60 秒）
+const detailed = [];
+session.startMonitor(60_000, (s) => detailed.push(s));
+await waitFor(() => detailed.length >= 1, '改详情前的第一次采样', 30_000);
+session.setMonitorDetail(true, true);
+await waitFor(() => detailed.length >= 2, '改了详情马上重采', 15_000);
+session.stopMonitor();
+const [plain, withDetail] = detailed;
+assert(plain.allProcs === null && plain.sockets === null, `没开详情时不应有全部进程和连接：${JSON.stringify(plain).slice(0, 200)}`);
+if (withDetail.supported) {
+  assert(Array.isArray(withDetail.allProcs) && withDetail.allProcs.length > 0, '开了进程详情应有全部进程');
+  assert(withDetail.sockets && typeof withDetail.sockets.available === 'boolean', '开了网络详情应有连接表');
+  console.log(`详情：全部进程 ${withDetail.allProcs.length} 个，网络 ${withDetail.sockets.available ? `${withDetail.sockets.rows.length} 行` : '没有 ss'}`);
+} else {
+  console.log('详情：服务器不是 Linux，只验证改详情会马上重采');
+}
+const info = await session.systemInfo();
+assert(info.kernel && info.kernelRelease && info.arch && info.hostname, `系统信息不完整：${JSON.stringify(info)}`);
+assert(Array.isArray(info.cpus), `cpus 应是数组：${JSON.stringify(info)}`);
+console.log(`系统信息：${info.os || '（没有 os-release）'}，${info.kernel} ${info.kernelRelease} ${info.arch}，CPU ${info.cpus.length} 组`);
 
 // SFTP：家目录、列目录、上传、下载、改名、删除
 const home = await session.homeDir();

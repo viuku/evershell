@@ -61,7 +61,7 @@
 
 ## D. 网页链路
 
-`scripts/check.sh web`：重编 WASM 包、类型检查；test-sshd 开着时临时起一个 Node 中转，跑 `scripts/e2e-web-ssh.mjs`（主机密钥确认、终端、50 次按键顺序、2MB 输出、`yes` 后 Ctrl-C 多快停下、监控、SFTP 上传下载）。
+`scripts/check.sh web`：重编 WASM 包、类型检查；test-sshd 开着时临时起一个 Node 中转，跑 `scripts/e2e-web-ssh.mjs`（主机密钥确认、终端、50 次按键顺序、2MB 输出、`yes` 后 Ctrl-C 多快停下、监控（含改进程 / 网络详情后马上重采）、系统信息、SFTP 上传下载）。
 
 - 新 worktree 先 `npm install --prefix services/relay-node`，不然中转起不来，端到端测试报“超时（10s）”（[pitfalls.md](pitfalls.md#网页端到端测试报超时10s2026-10-18)）。
 

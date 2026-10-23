@@ -2,16 +2,17 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import { formatBytes, formatLoad, formatPercent, formatRate, formatUptime, niceCeil, niceCeilBytes } from '../../core/format';
 import { dragRegion } from '../../core/platform';
 import { procSort, sortProcs, type ProcSort } from '../../core/procs';
-import { NET_SAMPLES, PING_SAMPLES, type MonitorState, type MonitorStore, type SessionInfo } from '../../core/session-manager';
+import { NET_SAMPLES, PING_SAMPLES, type InfoKind, type MonitorState, type MonitorStore, type SessionInfo } from '../../core/session-manager';
 import { useMaybeStore, useStore } from '../../core/store';
 import type { MonitorSnapshot } from '../../types';
 import { SidebarToggle } from './SidebarToggle';
-import { SystemInfoDialog } from './SystemInfoDialog';
 
 interface Props {
   session: SessionInfo | null;
   monitor: MonitorStore | null;
   onToggleSidebar(): void;
+  /** 打开当前会话的系统信息 / 进程 / 网络标签页，已经开着就切过去 */
+  onOpenInfo(kind: InfoKind): void;
   /** 顶部左边让出的宽度，给叠在窗口左上角的系统按钮 */
   leadingInset?: number;
 }
@@ -19,12 +20,12 @@ interface Props {
 /**
  * 左侧状态栏。只订阅当前会话的 MonitorStore，监控刷新时只有这里重绘。
  * 三种状态：没有会话 / 会话断开 / 已连接；已连接但服务器不支持采集时显示提示。
+ * 「系统信息」按钮、进程表、网速图点了各打开一个标签页
  */
-export function MonitorSidebar({ session, monitor, onToggleSidebar, leadingInset }: Props) {
+export function MonitorSidebar({ session, monitor, onToggleSidebar, onOpenInfo, leadingInset }: Props) {
   const state = useMaybeStore(monitor);
   const connected = session?.status === 'connected';
   const snap = connected ? (state?.snapshot ?? null) : null;
-  const [infoOpen, setInfoOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const copyIp = async () => {
@@ -64,7 +65,13 @@ export function MonitorSidebar({ session, monitor, onToggleSidebar, leadingInset
             <span className="muted">-</span>
           )}
         </div>
-        <button type="button" className="btn sidebar__info" disabled={!snap} onClick={() => setInfoOpen(true)}>
+        <button
+          type="button"
+          className="btn sidebar__info"
+          disabled={!connected}
+          title="在新标签页打开系统信息"
+          onClick={() => onOpenInfo('sysinfo')}
+        >
           系统信息
         </button>
 
@@ -98,15 +105,14 @@ export function MonitorSidebar({ session, monitor, onToggleSidebar, leadingInset
                 live={!!snap}
               />
             </div>
-            <Procs snap={snap} session={session} />
+            <Procs snap={snap} session={session} onOpen={() => onOpenInfo('procs')} />
             {/* 换会话时柱状图整个重建，别让两台服务器编号相同的柱子串到一起 */}
-            <Net key={`net-${session?.id}`} state={state} snap={snap} monitor={monitor} />
+            <Net key={`net-${session?.id}`} state={state} snap={snap} monitor={monitor} onOpen={() => onOpenInfo('net')} />
             <Latency key={`ping-${session?.id}`} state={state} snap={snap} />
             <Disks snap={snap} />
           </>
         )}
       </div>
-      {infoOpen && session && snap && <SystemInfoDialog session={session} snap={snap} onClose={() => setInfoOpen(false)} />}
     </aside>
   );
 }
@@ -128,7 +134,7 @@ function Meter({ label, pct, used, live }: { label: string; pct: number; used: s
   );
 }
 
-function Procs({ snap, session }: { snap: MonitorSnapshot | null; session: SessionInfo | null }) {
+function Procs({ snap, session, onOpen }: { snap: MonitorSnapshot | null; session: SessionInfo | null; onOpen(): void }) {
   const sort = useStore(procSort);
   const placeholder = !session
     ? '未连接'
@@ -145,13 +151,16 @@ function Procs({ snap, session }: { snap: MonitorSnapshot | null; session: Sessi
         <span>命令</span>
       </div>
       {snap && snap.procs.length > 0 ? (
-        sortProcs(snap.procs, sort).map((p) => (
-          <div key={p.pid} className="sidebar__tr sidebar__tr--procs mono">
-            <span>{formatBytes(p.memBytes)}</span>
-            <span>{p.cpuPercent.toFixed(1)}</span>
-            <span className="ellipsis">{p.name}</span>
-          </div>
-        ))
+        // 表身整块是一个按钮：点了在新标签页看全部进程。表头的排序按钮不在里面
+        <button type="button" className="sidebar__open" title="在新标签页打开进程列表" onClick={onOpen}>
+          {sortProcs(snap.procs, sort).map((p) => (
+            <span key={p.pid} className="sidebar__tr sidebar__tr--procs mono">
+              <span>{formatBytes(p.memBytes)}</span>
+              <span>{p.cpuPercent.toFixed(1)}</span>
+              <span className="ellipsis">{p.name}</span>
+            </span>
+          ))}
+        </button>
       ) : (
         <div className="sidebar__placeholder">{placeholder}</div>
       )}
@@ -180,7 +189,17 @@ function SortHeader({ label, by, sort }: { label: string; by: ProcSort; sort: Pr
   );
 }
 
-function Net({ state, snap, monitor }: { state: MonitorState | null; snap: MonitorSnapshot | null; monitor: MonitorStore | null }) {
+function Net({
+  state,
+  snap,
+  monitor,
+  onOpen,
+}: {
+  state: MonitorState | null;
+  snap: MonitorSnapshot | null;
+  monitor: MonitorStore | null;
+  onOpen(): void;
+}) {
   const samples = snap ? (state?.net ?? []) : [];
   const last = samples[samples.length - 1];
   // 刻度只看图上露出来的那些，正在滑出去的那根不算
@@ -220,21 +239,22 @@ function Net({ state, snap, monitor }: { state: MonitorState | null; snap: Monit
         )}
       </div>
       {snap ? (
-        <div className="sidebar__netPlot">
-          <div className="sidebar__axis mono">
+        // 图整块是一个按钮：点了在新标签页看网络连接。上面的网卡选择不在里面
+        <button type="button" className="sidebar__netPlot sidebar__open" title="在新标签页打开网络连接" onClick={onOpen}>
+          <span className="sidebar__axis mono">
             <span>{formatBytes(max)}</span>
             <span>{formatBytes(max / 2)}</span>
             <span>0</span>
-          </div>
+          </span>
           <ScrollingBars samples={samples} total={state?.netTotal ?? 0} slots={NET_SAMPLES}>
             {(s) => (
               <>
-                <div className="sidebar__bar up" style={{ height: barHeight(s.tx, max, 2) }} />
-                <div className="sidebar__bar down" style={{ height: barHeight(s.rx, max, 2) }} />
+                <span className="sidebar__bar up" style={{ height: barHeight(s.tx, max, 2) }} />
+                <span className="sidebar__bar down" style={{ height: barHeight(s.rx, max, 2) }} />
               </>
             )}
           </ScrollingBars>
-        </div>
+        </button>
       ) : (
         <div className="sidebar__emptyPlot sidebar__emptyPlot--net" />
       )}

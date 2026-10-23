@@ -33,6 +33,21 @@
   --server: #3a3a40;
   --scrim: rgba(0, 0, 0, 0.16);
   --shadow: 0 14px 36px rgba(0, 0, 0, 0.18);
+  /* 标签组的颜色（紫、蓝、绿、橙、粉、青、灰），名字块上的字用 -fg。浅色下压暗到白字看得清 */
+  --group-0: #8944ab;
+  --group-1: #0068d6;
+  --group-2: #1a7f37;
+  --group-3: #b25e00;
+  --group-4: #c4245d;
+  --group-5: #0e7490;
+  --group-6: #5c5c63;
+  --group-0-fg: #ffffff;
+  --group-1-fg: #ffffff;
+  --group-2-fg: #ffffff;
+  --group-3-fg: #ffffff;
+  --group-4-fg: #ffffff;
+  --group-5-fg: #ffffff;
+  --group-6-fg: #ffffff;
   color-scheme: light;
 }
 
@@ -64,6 +79,20 @@
   --server: #3a3a40;
   --scrim: rgba(0, 0, 0, 0.4);
   --shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+  --group-0: #bf5af2;
+  --group-1: #4aa3ff;
+  --group-2: #32d74b;
+  --group-3: #ff9f0a;
+  --group-4: #ff6482;
+  --group-5: #4fc8d8;
+  --group-6: #a3a3aa;
+  --group-0-fg: #1c1c1e;
+  --group-1-fg: #1c1c1e;
+  --group-2-fg: #1c1c1e;
+  --group-3-fg: #1c1c1e;
+  --group-4-fg: #1c1c1e;
+  --group-5-fg: #1c1c1e;
+  --group-6-fg: #1c1c1e;
   color-scheme: dark;
 }
 
@@ -96,6 +125,20 @@
     --server: #3a3a40;
     --scrim: rgba(0, 0, 0, 0.4);
     --shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+    --group-0: #bf5af2;
+    --group-1: #4aa3ff;
+    --group-2: #32d74b;
+    --group-3: #ff9f0a;
+    --group-4: #ff6482;
+    --group-5: #4fc8d8;
+    --group-6: #a3a3aa;
+    --group-0-fg: #1c1c1e;
+    --group-1-fg: #1c1c1e;
+    --group-2-fg: #1c1c1e;
+    --group-3-fg: #1c1c1e;
+    --group-4-fg: #1c1c1e;
+    --group-5-fg: #1c1c1e;
+    --group-6-fg: #1c1c1e;
     color-scheme: dark;
   }
 }

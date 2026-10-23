@@ -3,10 +3,12 @@ import type {
   ConnectOptions,
   FileEntry,
   HostKeyProblem,
+  MonitorDetail,
   MonitorSnapshot,
   SecretStore,
   SshBackend,
   SshSession,
+  SystemInfo,
   TransferProgress,
 } from '@evershell/ui';
 import { Channel, invoke } from '@tauri-apps/api/core';
@@ -89,6 +91,15 @@ class TauriSession implements SshSession {
       stopped = true;
       invoke('ssh_monitor_stop', { id: this.id }).catch(() => {});
     };
+  }
+
+  // 会话已关时 Rust 报“会话不存在”，不用管；先于 ssh_monitor_start 到达也没关系，Rust 会记下
+  setMonitorDetail(detail: MonitorDetail): void {
+    invoke('ssh_monitor_detail', { id: this.id, procs: detail.procs, sockets: detail.sockets }).catch(() => {});
+  }
+
+  systemInfo(): Promise<SystemInfo> {
+    return call('ssh_system_info', { id: this.id });
   }
 
   homeDir(): Promise<string> {

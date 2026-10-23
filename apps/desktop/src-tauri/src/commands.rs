@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
-use ssh_core::{Auth, FileEntry, HostKeyProblem, MonitorSnapshot, ShellEvent, TransferProgress};
+use ssh_core::{Auth, FileEntry, HostKeyProblem, MonitorDetail, MonitorSnapshot, ShellEvent, SystemInfo, TransferProgress};
 use tauri::ipc::{Channel, InvokeBody, InvokeResponseBody, JavaScriptChannelId, Request};
 use tauri::{AppHandle, Manager, State, Webview};
 
@@ -159,6 +159,26 @@ pub async fn ssh_monitor_start(
 #[tauri::command]
 pub fn ssh_monitor_stop(state: State<'_, SessionManager>, id: String) -> Result<(), String> {
     state.stop_monitor(&id).map_err(|e| e.to_string())
+}
+
+/// 采样时顺带多取哪些数据（进程标签页要全部进程，网络标签页要连接），改了马上采一次。
+/// 没在采样时只记下，下次 ssh_monitor_start 时用
+#[tauri::command]
+pub async fn ssh_monitor_detail(
+    state: State<'_, SessionManager>,
+    id: String,
+    procs: bool,
+    sockets: bool,
+) -> Result<(), String> {
+    state
+        .set_monitor_detail(&id, MonitorDetail { procs, sockets })
+        .map_err(|e| e.to_string())
+}
+
+/// 取一次系统信息（发行版、内核、CPU 型号）
+#[tauri::command]
+pub async fn ssh_system_info(state: State<'_, SessionManager>, id: String) -> Result<SystemInfo, String> {
+    state.system_info(&id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

@@ -356,29 +356,32 @@
   height: 36px;
 }
 
-/* 系统信息弹窗 */
-.sysinfo {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
+/* 进程表身、网速图整块是按钮：点了在新标签页打开进程 / 网络页，悬停时底色深一档 */
+.sidebar__open {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
 }
 
-.sysinfo__row {
-  display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
-  gap: 10px;
+.sidebar__table > .sidebar__open {
+  display: block;
 }
 
-.sysinfo__row dt {
-  color: var(--muted);
-  text-align: right;
+.sidebar__netPlot.sidebar__open {
+  border-radius: 4px;
 }
 
-.sysinfo__row dd {
-  margin: 0;
-  font-size: 11.5px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  user-select: text;
+.sidebar__open:hover {
+  background: var(--hover);
+}
+
+.sidebar__open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }

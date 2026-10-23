@@ -25,7 +25,10 @@ use tokio::sync::mpsc;
 
 pub use flow::{OUTPUT_ACK_BATCH, OUTPUT_HIGH_WATER, OutputAck};
 pub use known_hosts::{HostKey, KnownEntry};
-pub use monitor::{MonitorHandle, MonitorSnapshot};
+pub use monitor::{
+    CpuDetail, CpuGroup, IfaceStat, MonitorDetail, MonitorHandle, MonitorSnapshot, ProcDetail, SocketRow, SocketTable,
+    SystemInfo,
+};
 pub use sftp::{FileEntry, FileKind, Sftp, TransferProgress};
 
 #[derive(Debug, thiserror::Error)]
@@ -414,12 +417,18 @@ impl Connection {
         Ok(elapsed)
     }
 
-    /// 开始周期采样服务器状态，见 [`monitor::watch`]。
+    /// 开始周期采样服务器状态，`detail` 是一开始就顺带多取哪些数据，见 [`monitor::watch`]。
     pub fn watch_monitor(
         self: &Arc<Self>,
         interval: std::time::Duration,
+        detail: MonitorDetail,
     ) -> (MonitorHandle, mpsc::UnboundedReceiver<MonitorSnapshot>) {
-        monitor::watch(self.clone(), interval)
+        monitor::watch(self.clone(), interval, detail)
+    }
+
+    /// 取一次系统信息（发行版、内核、CPU 型号这些不怎么变的），见 [`monitor::system_info`]。
+    pub async fn system_info(&self) -> Result<SystemInfo> {
+        monitor::system_info(self).await
     }
 
     /// 断开连接。所有 channel 随之关闭，shell 会收到 `Exit`。

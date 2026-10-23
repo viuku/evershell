@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use ssh_core::{Auth, ConnectConfig, Connection, FileKind, HostKeyCheck, TransferProgress, connect_tcp};
+use ssh_core::{Auth, ConnectConfig, Connection, FileKind, HostKeyCheck, MonitorDetail, TransferProgress, connect_tcp};
 
 async fn connect() -> Option<(Connection, String)> {
     let (Ok(addr), Ok(user), Ok(key)) = (
@@ -64,7 +64,7 @@ async fn monitor_two_consecutive_samples() {
     let is_linux = conn.exec("uname -s").await.unwrap().stdout_lossy().trim() == "Linux";
     let conn = Arc::new(conn);
 
-    let (handle, mut rx) = conn.watch_monitor(Duration::from_millis(300));
+    let (handle, mut rx) = conn.watch_monitor(Duration::from_millis(300), MonitorDetail::default());
     let first = tokio::time::timeout(Duration::from_secs(15), rx.recv()).await.unwrap().unwrap();
     let second = tokio::time::timeout(Duration::from_secs(15), rx.recv()).await.unwrap().unwrap();
     eprintln!("第一次采样: {first:?}");
@@ -102,6 +102,46 @@ async fn monitor_two_consecutive_samples() {
     })
     .await;
     assert!(end.is_ok(), "停止后不应再有快照");
+    conn.disconnect().await.unwrap();
+}
+
+#[tokio::test]
+async fn monitor_detail_and_system_info() {
+    let Some((conn, _)) = connect().await else { return };
+    let uname = conn.exec("uname -s").await.unwrap().stdout_lossy().trim().to_string();
+    let ssh_port: u16 = std::env::var("SSH_E2E_ADDR").unwrap().rsplit_once(':').unwrap().1.parse().unwrap();
+    let conn = Arc::new(conn);
+
+    let info = conn.system_info().await.unwrap();
+    eprintln!("系统信息: {info:?}");
+    assert_eq!(info.kernel, uname);
+    assert!(!info.kernel_release.is_empty() && !info.arch.is_empty() && !info.hostname.is_empty(), "{info:?}");
+    if uname == "Linux" {
+        assert!(!info.cpus.is_empty() && info.cpus.iter().all(|c| c.threads > 0), "{info:?}");
+    }
+
+    // 周期设成 60 秒：改了详情要马上采一次，不能等下一个周期
+    let (handle, mut rx) = conn.watch_monitor(Duration::from_secs(60), MonitorDetail::default());
+    let plain = tokio::time::timeout(Duration::from_secs(15), rx.recv()).await.unwrap().unwrap();
+    assert!(plain.all_procs.is_none() && plain.sockets.is_none(), "{plain:?}");
+    handle.set_detail(MonitorDetail { procs: true, sockets: true });
+    let detailed = tokio::time::timeout(Duration::from_secs(15), rx.recv())
+        .await
+        .expect("改了详情应马上采一次")
+        .unwrap();
+    if uname == "Linux" {
+        let procs = detailed.all_procs.as_ref().expect("开了进程详情");
+        assert!(procs.iter().any(|p| !p.user.is_empty() && !p.cmdline.is_empty()), "{procs:?}");
+        let sockets = detailed.sockets.as_ref().expect("开了网络详情");
+        if sockets.available {
+            // 测试自己这条 SSH 连接应归到 sshd 的监听端口上
+            assert!(sockets.rows.iter().any(|r| r.port == Some(ssh_port) && r.conns > 0), "{sockets:?}");
+        }
+    } else {
+        eprintln!("服务器不是 Linux（本机 OpenSSH），只验证改详情会马上重采");
+        assert!(!detailed.supported && detailed.all_procs.is_none());
+    }
+    drop(handle);
     conn.disconnect().await.unwrap();
 }
 

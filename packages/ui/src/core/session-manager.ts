@@ -1,7 +1,17 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon, type ISearchOptions } from '@xterm/addon-search';
 import { Terminal, type IDisposable, type ITheme } from '@xterm/xterm';
-import { HostKeyError, type AuthConfig, type ConnectOptions, type HostKeyProblem, type MonitorSnapshot, type SshBackend, type SshSession } from '../types';
+import {
+  HostKeyError,
+  type AuthConfig,
+  type ConnectOptions,
+  type HostKeyProblem,
+  type MonitorDetail,
+  type MonitorSnapshot,
+  type SshBackend,
+  type SshSession,
+  type SystemInfo,
+} from '../types';
 import { authForReconnect, isAuthFailure, isBlankPassword, type ConnectTarget } from './connect';
 import { FileBrowser } from './file-browser';
 import { pushHistory } from './history-store';
@@ -31,16 +41,39 @@ export interface SessionInfo {
   cwd: string | null;
 }
 
-/** 标签页：session 为 null 就是“新标签页” */
+/** 从会话打开的信息页：系统信息、进程、网络 */
+export type InfoKind = 'sysinfo' | 'procs' | 'net';
+
+/** 标签页：session 为 null 就是“新标签页”；info 不为 null 的是从 session 打开的信息页 */
 export interface TabInfo {
   id: string;
   session: SessionInfo | null;
+  info: InfoKind | null;
+}
+
+/** 组的颜色有几种，界面里是 --group-0 … --group-6 */
+export const GROUP_COLORS = 7;
+
+/** 会话标签和它的信息页组成的标签组 */
+export interface TabGroup {
+  /** 0 … GROUP_COLORS - 1 */
+  color: number;
+  collapsed: boolean;
 }
 
 export interface WorkspaceSnapshot {
   tabs: TabInfo[];
   activeId: string | null;
+  /** 键是会话 id。会话开着信息页时才有组，最后一个信息页关掉组就散了 */
+  groups: Readonly<Record<string, TabGroup>>;
 }
+
+/** 系统信息页要的那份不怎么变的信息，打开时取一次，重连后重取 */
+export type SystemInfoState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ok'; info: SystemInfo }
+  | { status: 'error'; message: string };
 
 export interface OpenSessionOptions {
   serverId: string | null;
@@ -123,6 +156,9 @@ interface Entry {
   monitor: MonitorStore;
   stopMonitor: (() => void) | null;
   files: FileBrowser | null;
+  /** 采样时顺带多取哪些数据，跟着开着的信息页走 */
+  detail: MonitorDetail;
+  sysInfo: Store<SystemInfoState>;
   /** 收到过 OSC 7 之后就不再用标题猜目录 */
   cwdFromOsc: boolean;
   /** 第几次连接。主动断开或重连后，旧连接迟到的输出和结束通知按这个认出来丢掉 */
@@ -168,7 +204,7 @@ const FONT_FAMILY = '"SF Mono", Menlo, Monaco, Consolas, "Cascadia Mono", "Liber
 export class SessionManager {
   private readonly entries = new Map<string, Entry>();
   private readonly listeners = new Set<() => void>();
-  private snapshot: WorkspaceSnapshot = { tabs: [], activeId: null };
+  private snapshot: WorkspaceSnapshot = { tabs: [], activeId: null, groups: {} };
   private seq = 0;
   private look: TerminalLook;
   /** 服务器指纹记录，连接前读出来交给后端校验 */
@@ -207,7 +243,7 @@ export class SessionManager {
 
   openNewTab(): string {
     const id = `t${++this.seq}`;
-    this.snapshot = { tabs: [...this.snapshot.tabs, { id, session: null }], activeId: id };
+    this.snapshot = { ...this.snapshot, tabs: [...this.snapshot.tabs, { id, session: null, info: null }], activeId: id };
     this.emit();
     return id;
   }
@@ -261,6 +297,8 @@ export class SessionManager {
       monitor: new MonitorStore(),
       stopMonitor: null,
       files: null,
+      detail: { procs: false, sockets: false },
+      sysInfo: new Store<SystemInfoState>({ status: 'idle' }),
       cwdFromOsc: false,
       attempt: 0,
       finding: false,
@@ -282,22 +320,92 @@ export class SessionManager {
     });
     term.onResize(({ cols, rows }) => this.update(id, { cols, rows }));
 
-    const tab: TabInfo = { id, session: info };
+    const tab: TabInfo = { id, session: info, info: null };
     const index = replaceTabId ? this.snapshot.tabs.findIndex((t) => t.id === replaceTabId && t.session === null) : -1;
     const tabs = index >= 0 ? this.snapshot.tabs.map((t, i) => (i === index ? tab : t)) : [...this.snapshot.tabs, tab];
-    this.snapshot = { tabs, activeId: id };
+    this.snapshot = { ...this.snapshot, tabs, activeId: id };
     this.emit();
     return id;
   }
 
+  /**
+   * 打开会话的信息页，已经开着就切过去。新开的放在这个会话的组的最后；
+   * 这是会话的第一个信息页时成组，颜色挑一个别的组没在用的。组收着的话展开
+   */
+  openInfo(sessionId: string, kind: InfoKind): string | null {
+    const entry = this.entries.get(sessionId);
+    if (!entry) return null;
+    const { tabs, groups } = this.snapshot;
+    const existing = tabs.find((t) => t.info === kind && t.session?.id === sessionId);
+    if (existing) {
+      this.snapshot = { ...this.snapshot, activeId: existing.id, groups: withExpanded(groups, sessionId) };
+      this.emit();
+      return existing.id;
+    }
+    let last = -1;
+    tabs.forEach((t, i) => {
+      if (t.session?.id === sessionId) last = i;
+    });
+    if (last < 0) return null;
+    const id = `i${++this.seq}`;
+    const next = [...tabs.slice(0, last + 1), { id, session: entry.info, info: kind }, ...tabs.slice(last + 1)];
+    const group = groups[sessionId];
+    this.snapshot = {
+      tabs: next,
+      activeId: id,
+      groups: { ...groups, [sessionId]: group ? { ...group, collapsed: false } : { color: pickGroupColor(groups), collapsed: false } },
+    };
+    this.emit();
+    this.syncDetail(entry);
+    return id;
+  }
+
+  /** 收起 / 展开会话的标签组。收起时选中的标签在组里，就切到组外最近的标签，组外没有标签就开一个新标签页 */
+  toggleGroup(sessionId: string): void {
+    const group = this.snapshot.groups[sessionId];
+    if (!group) return;
+    const groups = { ...this.snapshot.groups, [sessionId]: { ...group, collapsed: !group.collapsed } };
+    if (group.collapsed) {
+      this.snapshot = { ...this.snapshot, groups };
+      this.emit();
+      return;
+    }
+    const { tabs, activeId } = this.snapshot;
+    const inGroup = (t: TabInfo) => t.session?.id === sessionId;
+    const active = tabs.find((t) => t.id === activeId);
+    if (!active || !inGroup(active)) {
+      this.snapshot = { ...this.snapshot, groups };
+      this.emit();
+      return;
+    }
+    const visible = (t: TabInfo) => !inGroup(t) && !(t.session && groups[t.session.id]?.collapsed);
+    const first = tabs.findIndex(inGroup);
+    let lastIndex = first;
+    tabs.forEach((t, i) => {
+      if (inGroup(t)) lastIndex = i;
+    });
+    const after = tabs.slice(lastIndex + 1).find(visible);
+    const before = tabs.slice(0, first).reverse().find(visible);
+    const target = after ?? before;
+    this.snapshot = { ...this.snapshot, groups, activeId: target?.id ?? activeId };
+    this.emit();
+    if (!target) this.openNewTab();
+  }
+
   activate(id: string): void {
-    if (this.snapshot.activeId === id || !this.snapshot.tabs.some((t) => t.id === id)) return;
-    this.snapshot = { ...this.snapshot, activeId: id };
+    const tab = this.snapshot.tabs.find((t) => t.id === id);
+    if (this.snapshot.activeId === id || !tab) return;
+    const sid = tab.session?.id;
+    this.snapshot = { ...this.snapshot, activeId: id, groups: sid ? withExpanded(this.snapshot.groups, sid) : this.snapshot.groups };
     this.emit();
   }
 
+  /** 关掉标签。关会话标签时它的信息页一起关；会话最后一个信息页关掉时组就散了 */
   closeTab(id: string): void {
-    const entry = this.entries.get(id);
+    const closing = this.snapshot.tabs.find((t) => t.id === id);
+    if (!closing) return;
+    const owner = closing.session ? this.entries.get(closing.session.id) : undefined;
+    const entry = closing.info ? undefined : owner;
     if (entry) {
       entry.stopMonitor?.();
       entry.session?.close();
@@ -306,12 +414,18 @@ export class SessionManager {
       this.entries.delete(id);
     }
     const index = this.snapshot.tabs.findIndex((t) => t.id === id);
-    if (index < 0) return;
-    const tabs = this.snapshot.tabs.filter((t) => t.id !== id);
+    const gone = (t: TabInfo) => t.id === id || (!!entry && t.session?.id === entry.info.id);
+    const tabs = this.snapshot.tabs.filter((t) => !gone(t));
+    const groups = { ...this.snapshot.groups };
+    const sid = closing.session?.id;
+    if (sid && !tabs.some((t) => t.info && t.session?.id === sid)) delete groups[sid];
     let activeId = this.snapshot.activeId;
-    if (activeId === id) activeId = tabs[Math.min(index, tabs.length - 1)]?.id ?? null;
-    this.snapshot = { tabs, activeId };
+    if (!tabs.some((t) => t.id === activeId)) activeId = pickNear(tabs, groups, index)?.id ?? null;
+    const target = tabs.find((t) => t.id === activeId);
+    const targetSid = target?.session?.id;
+    this.snapshot = { tabs, activeId, groups: targetSid ? withExpanded(groups, targetSid) : groups };
     this.emit();
+    if (owner && !entry) this.syncDetail(owner);
     // 始终保留至少一个标签
     if (tabs.length === 0) this.openNewTab();
   }
@@ -353,6 +467,30 @@ export class SessionManager {
 
   getFiles(id: string | null): FileBrowser | null {
     return id ? (this.entries.get(id)?.files ?? null) : null;
+  }
+
+  getSystemInfo(id: string): Store<SystemInfoState> | null {
+    return this.entries.get(id)?.sysInfo ?? null;
+  }
+
+  /** 系统信息还没取过（或上次失败了）就去取；没连上时什么也不做 */
+  loadSystemInfo(id: string): void {
+    const entry = this.entries.get(id);
+    const session = entry?.session;
+    if (!entry || !session || entry.info.status !== 'connected') return;
+    const state = entry.sysInfo.get().status;
+    if (state === 'loading' || state === 'ok') return;
+    const attempt = entry.attempt;
+    const current = () => this.entries.has(id) && entry.attempt === attempt;
+    entry.sysInfo.set({ status: 'loading' });
+    session.systemInfo().then(
+      (info) => {
+        if (current()) entry.sysInfo.set({ status: 'ok', info });
+      },
+      (err: unknown) => {
+        if (current()) entry.sysInfo.set({ status: 'error', message: errorMessage(err) });
+      },
+    );
   }
 
   // ---------- 外观 ----------
@@ -491,6 +629,7 @@ export class SessionManager {
     }
     entry.term.write('\r\n\x1b[90m[正在重新连接…]\x1b[0m\r\n');
     entry.monitor.reset();
+    entry.sysInfo.set({ status: 'idle' });
     this.update(id, { status: 'connecting', error: null, exitCode: null, fingerprint: null });
     void this.connect(entry);
   }
@@ -546,6 +685,7 @@ export class SessionManager {
       // 握手期间窗口可能变过
       if (term.cols !== opts.cols || term.rows !== opts.rows) session.resize(term.cols, term.rows);
       entry.stopMonitor = session.watchMonitor((s) => entry.monitor.push(s), MONITOR_INTERVAL);
+      if (entry.detail.procs || entry.detail.sockets) session.setMonitorDetail(entry.detail);
       entry.files = new FileBrowser(session);
       void entry.files.init();
       this.update(info.id, { status: 'connected', fingerprint: session.hostKeyFingerprint, error: null });
@@ -616,6 +756,15 @@ export class SessionManager {
     entry.files = null;
   }
 
+  /** 按会话开着的信息页决定采样时顺带多取什么，变了才告诉后端 */
+  private syncDetail(entry: Entry): void {
+    const open = (kind: InfoKind) => this.snapshot.tabs.some((t) => t.info === kind && t.session?.id === entry.info.id);
+    const detail: MonitorDetail = { procs: open('procs'), sockets: open('net') };
+    if (detail.procs === entry.detail.procs && detail.sockets === entry.detail.sockets) return;
+    entry.detail = detail;
+    entry.session?.setMonitorDetail(detail);
+  }
+
   private setCwd(id: string, path: string): void {
     const entry = this.entries.get(id);
     if (!entry) return;
@@ -627,9 +776,10 @@ export class SessionManager {
     const entry = this.entries.get(id);
     if (!entry) return;
     entry.info = { ...entry.info, ...patch };
+    // 信息页也带着所属会话的信息，一起换
     this.snapshot = {
       ...this.snapshot,
-      tabs: this.snapshot.tabs.map((t) => (t.id === id ? { id, session: entry.info } : t)),
+      tabs: this.snapshot.tabs.map((t) => (t.session?.id === id ? { ...t, session: entry.info } : t)),
     };
     this.emit();
   }
@@ -637,6 +787,25 @@ export class SessionManager {
   private emit(): void {
     for (const listener of this.listeners) listener();
   }
+}
+
+/** 挑一个别的组没在用的颜色；都用上了就轮着来 */
+export function pickGroupColor(groups: Readonly<Record<string, TabGroup>>): number {
+  const used = new Set(Object.values(groups).map((g) => g.color));
+  for (let c = 0; c < GROUP_COLORS; c++) if (!used.has(c)) return c;
+  return used.size % GROUP_COLORS;
+}
+
+function withExpanded(groups: Readonly<Record<string, TabGroup>>, sessionId: string): Readonly<Record<string, TabGroup>> {
+  const g = groups[sessionId];
+  return g?.collapsed ? { ...groups, [sessionId]: { ...g, collapsed: false } } : groups;
+}
+
+/** 关掉标签后选哪个：原位置往右第一个看得见的，没有就往左；都在收起的组里就选原位置那个（它的组会被展开） */
+function pickNear(tabs: TabInfo[], groups: Readonly<Record<string, TabGroup>>, index: number): TabInfo | undefined {
+  const visible = (t: TabInfo) => !(t.session && groups[t.session.id]?.collapsed);
+  const at = Math.min(index, tabs.length - 1);
+  return tabs.slice(at).find(visible) ?? tabs.slice(0, at).reverse().find(visible) ?? tabs[at];
 }
 
 /** OSC 7 的内容形如 file://host/path，取出 path */

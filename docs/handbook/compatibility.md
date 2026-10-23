@@ -55,6 +55,7 @@
 | 非英文语言环境 | 命令输出会变 | 命令里已经强制 `LC_ALL=C` |
 | 登录脚本会打印文字 | 污染命令输出和 SFTP 数据 | SFTP 有已知问题（[pitfalls.md](pitfalls.md#sftp-报-packet-length-limit-exceeded2026-10-18)） |
 | macOS / BSD 服务器 | 没有 `/proc` | 应该显示“不支持”而不是报错；test-sshd 上是 `supported=false` |
+| 进程页、网络页开着时 | 同一条命令末尾多跑 `ps`、`ls -l /proc/*/exe`、`ss`（规格 [monitor-tabs.md](../specs/monitor-tabs.md)）。BusyBox 的 `ps` 不认 `user:32`（`-e` 它会忽略），报错后退回 `ps -o pid,user,args`；没有 `ss`（最小化的容器、很老的系统）网络页显示提示；不是 root 登录看不到别的用户的进程：网络页那几行 PID 和名称为「-」，进程页的位置为空 | 2026-10-23 只在单元测试的样例和 test-sshd（macOS，监控不支持）上跑过，没上过真 Linux |
 
 建议的改法（做的时候再定）：容器里读 cgroup v2 的 `memory.max` / `memory.current`（附录 C 2.6）。
 
