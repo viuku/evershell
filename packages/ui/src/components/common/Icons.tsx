@@ -83,6 +83,45 @@ export const UpIcon = (p: P) => (
   </Svg>
 );
 
+export const DownIcon = (p: P) => (
+  <Svg strokeWidth={2} {...p}>
+    <path d="M12 5v14M6 13l6 6 6-6" />
+  </Svg>
+);
+
+export const ChevronUpIcon = (p: P) => (
+  <Svg strokeWidth={2} {...p}>
+    <path d="M6 15l6-6 6 6" />
+  </Svg>
+);
+
+export const ChevronDownIcon = (p: P) => (
+  <Svg strokeWidth={2} {...p}>
+    <path d="M6 9l6 6 6-6" />
+  </Svg>
+);
+
+/** 实心闪电，颜色表示连接状态 */
+export const BoltIcon = (p: P) => (
+  <Svg {...p}>
+    <path fill="currentColor" d="M13.5 2.5 5 13.5h6.5l-1 8 8.5-11H12.5z" />
+  </Svg>
+);
+
+export const SearchIcon = (p: P) => (
+  <Svg {...p}>
+    <circle cx="10.5" cy="10.5" r="6.5" />
+    <path d="M15.3 15.3l5.2 5.2" />
+  </Svg>
+);
+
+export const GearIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M9.93 5.31l.24-2.33h3.66l.24 2.33 1.2.5 1.81-1.48 2.59 2.59-1.48 1.81.5 1.2 2.33.24v3.66l-2.33.24-.5 1.2 1.48 1.81-2.59 2.59-1.81-1.48-1.2.5-.24 2.33h-3.66l-.24-2.33-1.2-.5-1.81 1.48-2.59-2.59 1.48-1.81-.5-1.2-2.33-.24v-3.66l2.33-.24.5-1.2-1.48-1.81 2.59-2.59 1.81 1.48z" />
+    <circle cx="12" cy="12" r="3" />
+  </Svg>
+);
+
 export const RefreshIcon = (p: P) => (
   <Svg strokeWidth={2} {...p}>
     <path d="M20 11a8 8 0 1 0-2.3 5.7" />

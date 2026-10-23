@@ -76,6 +76,23 @@ export function isBlankPassword(auth: AuthConfig): boolean {
   return auth.type === 'password' && auth.password === '';
 }
 
+interface AuthTarget {
+  host: string;
+  port: number;
+  user: string;
+  auth: AuthConfig;
+}
+
+/**
+ * 重连用哪份认证。按连接管理器里的最新设置；那边没存密码、连的还是同一台同一个用户时，
+ * 沿用这次会话里输过的密码，免得每次重连都再问一遍
+ */
+export function authForReconnect(fresh: AuthTarget, previous: AuthTarget): AuthConfig {
+  const sameTarget = fresh.host === previous.host && fresh.port === previous.port && fresh.user === previous.user;
+  if (isBlankPassword(fresh.auth) && sameTarget && previous.auth.type === 'password') return previous.auth;
+  return fresh.auth;
+}
+
 /**
  * 是不是认证没通过。内核的报错以「认证失败」开头（crates/ssh-core 的 Error::AuthFailed），
  * 桌面端经 Tauri 只传得过来字符串，所以按文字认；内核改文案时这里要一起改

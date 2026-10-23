@@ -23,6 +23,11 @@ export const followTerminalDir = new PersistentStore<boolean>('evershell.files.f
   typeof raw === 'boolean' ? raw : fb,
 );
 
+/** 终端下面的底栏（文件 / 快捷命令 / 历史命令 / 传输）显示着没有，命令栏右边的箭头切换 */
+export const bottomPanelOpen = new PersistentStore<boolean>('evershell.bottom-open', true, (raw, fb) =>
+  typeof raw === 'boolean' ? raw : fb,
+);
+
 const darkQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
 
 function subscribeSystem(listener: () => void): () => void {

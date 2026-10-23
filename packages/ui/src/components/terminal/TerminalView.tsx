@@ -6,10 +6,11 @@ import { terminalBgImage } from '../../core/terminal-appearance';
 interface Props {
   manager: SessionManager;
   session: SessionInfo;
+  onReconnect(): void;
 }
 
 /** 把会话持有的 xterm 容器放进 DOM，跟随尺寸变化 fit；断线时在左下角给“立即重连” */
-export function TerminalView({ manager, session }: Props) {
+export function TerminalView({ manager, session, onReconnect }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const bgImage = useStore(terminalBgImage);
   const id = session.id;
@@ -42,7 +43,7 @@ export function TerminalView({ manager, session }: Props) {
       <div ref={hostRef} className="term-view" onMouseDown={() => manager.focus(id)} />
       {offline && (
         <div className="term-offline">
-          <button type="button" className="term-reconnect" onClick={() => manager.reconnect(id)}>
+          <button type="button" className="term-reconnect" onClick={onReconnect}>
             立即重连
           </button>
         </div>

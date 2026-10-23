@@ -1,7 +1,8 @@
 import { FitAddon } from '@xterm/addon-fit';
+import { SearchAddon, type ISearchOptions } from '@xterm/addon-search';
 import { Terminal, type IDisposable, type ITheme } from '@xterm/xterm';
 import { HostKeyError, type AuthConfig, type ConnectOptions, type HostKeyProblem, type MonitorSnapshot, type SshBackend, type SshSession } from '../types';
-import { isAuthFailure, isBlankPassword, type ConnectTarget } from './connect';
+import { authForReconnect, isAuthFailure, isBlankPassword, type ConnectTarget } from './connect';
 import { FileBrowser } from './file-browser';
 import { pushHistory } from './history-store';
 import { applyHostKeyDecision, KnownHostsStore, withTrustOnce, type AskableHostKeyProblem, type HostKeyDecision } from './known-hosts';
@@ -100,6 +101,7 @@ interface Entry {
   options: OpenSessionOptions;
   term: Terminal;
   fit: FitAddon;
+  search: SearchAddon;
   /** xterm 只能 open 一次，挂载点由会话自己持有，React 只负责放进 / 移出 DOM */
   container: HTMLDivElement;
   session: SshSession | null;
@@ -110,6 +112,10 @@ interface Entry {
   files: FileBrowser | null;
   /** 收到过 OSC 7 之后就不再用标题猜目录 */
   cwdFromOsc: boolean;
+  /** 第几次连接。主动断开或重连后，旧连接迟到的输出和结束通知按这个认出来丢掉 */
+  attempt: number;
+  /** 搜索框开着：选中色换成搜索的橙色 */
+  finding: boolean;
 }
 
 /** 不带密码没连上时向用户要密码；返回 null 表示取消 */
@@ -118,7 +124,21 @@ export type PasswordPrompt = (target: ConnectTarget) => Promise<string | null>;
 export interface TerminalLook {
   theme: ITheme;
   fontSize: number;
+  /** 终端是不是浅色底，搜索高亮按它挑颜色 */
+  isLight: boolean;
 }
+
+/** 搜索结果：第几个（从 1 数，0 表示没有选中的）/ 一共几个 */
+export interface FindResults {
+  index: number;
+  count: number;
+}
+
+// 高亮色要求 #RRGGBB；文字颜色不变，所以深色底用暗一些的黄和橙，字才看得清
+const FIND_COLORS = {
+  light: { match: '#FFE066', active: '#FFA94D' },
+  dark: { match: '#6E5B00', active: '#B8560B' },
+};
 
 export type { AskableHostKeyProblem, HostKeyDecision } from './known-hosts';
 /** 由界面提供：弹“安全警告”框，返回用户的决定 */
@@ -189,10 +209,14 @@ export class SessionManager {
       lineHeight: 1.1,
       scrollback: 5000,
       allowTransparency: true,
+      // 搜索高亮用的 registerDecoration 在 xterm 里算试验接口，要先打开
+      allowProposedApi: true,
       theme: this.look.theme,
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
+    const search = new SearchAddon();
+    term.loadAddon(search);
     const container = document.createElement('div');
     container.className = 'term-host';
 
@@ -216,6 +240,7 @@ export class SessionManager {
       options,
       term,
       fit,
+      search,
       container,
       session: null,
       started: false,
@@ -224,6 +249,8 @@ export class SessionManager {
       stopMonitor: null,
       files: null,
       cwdFromOsc: false,
+      attempt: 0,
+      finding: false,
     };
     this.entries.set(id, entry);
 
@@ -320,10 +347,76 @@ export class SessionManager {
   applyLook(look: TerminalLook): void {
     this.look = look;
     for (const entry of this.entries.values()) {
-      entry.term.options.theme = look.theme;
+      entry.term.options.theme = this.themeFor(entry);
       entry.term.options.fontSize = look.fontSize;
     }
     if (this.snapshot.activeId) this.fit(this.snapshot.activeId);
+  }
+
+  // ---------- 搜索 ----------
+
+  /**
+   * 在会话的终端输出里找 query，往上翻才看得到的也算。返回有没有找到。
+   * typing：边打字边找，当前这处还对得上就不动；next / prev：跳到下一处 / 上一处
+   */
+  find(id: string, query: string, step: 'typing' | 'next' | 'prev'): boolean {
+    const entry = this.entries.get(id);
+    if (!entry) return false;
+    const colors = FIND_COLORS[this.look.isLight ? 'light' : 'dark'];
+    const opts: ISearchOptions = {
+      decorations: {
+        matchBackground: colors.match,
+        matchOverviewRuler: colors.match,
+        activeMatchBackground: colors.active,
+        activeMatchColorOverviewRuler: colors.active,
+      },
+    };
+    if (!query) {
+      entry.search.clearDecorations();
+      return false;
+    }
+    if (!entry.finding) {
+      entry.finding = true;
+      entry.term.options.theme = this.themeFor(entry);
+    }
+    if (step === 'prev') return entry.search.findPrevious(query, opts);
+    return entry.search.findNext(query, { ...opts, incremental: step === 'typing' });
+  }
+
+  /** 搜索结果数量变了就通知，返回取消订阅 */
+  onFindResults(id: string, listener: (r: FindResults) => void): () => void {
+    const entry = this.entries.get(id);
+    if (!entry) return () => {};
+    const sub = entry.search.onDidChangeResults(({ resultIndex, resultCount }) =>
+      listener({ index: resultIndex + 1, count: resultCount }),
+    );
+    return () => sub.dispose();
+  }
+
+  /** 关掉搜索时去掉高亮，选中色换回来 */
+  clearFind(id: string): void {
+    const entry = this.entries.get(id);
+    if (!entry) return;
+    entry.search.clearDecorations();
+    if (entry.finding) {
+      entry.finding = false;
+      entry.term.options.theme = this.themeFor(entry);
+    }
+  }
+
+  /**
+   * 当前这一处是靠“选中”标出来的，而 xterm 画选中的格子时会盖掉高亮色，
+   * 所以搜索期间把选中色换成橙色，当前这处才和其他找到的分得开
+   */
+  private themeFor(entry: Entry): ITheme {
+    if (!entry.finding) return this.look.theme;
+    const active = FIND_COLORS[this.look.isLight ? 'light' : 'dark'].active;
+    return { ...this.look.theme, selectionBackground: active, selectionInactiveBackground: active };
+  }
+
+  /** 终端里选中的文字（只取第一行），打开搜索时拿来当默认关键字 */
+  selectedText(id: string): string {
+    return this.entries.get(id)?.term.getSelection().split('\n')[0]?.trim() ?? '';
   }
 
   // ---------- 命令 ----------
@@ -361,9 +454,28 @@ export class SessionManager {
     return '';
   }
 
-  reconnect(id: string): void {
+  /** 主动断开：标签留着，终端里提示一行，之后可以重连 */
+  disconnect(id: string): void {
+    const entry = this.entries.get(id);
+    const session = entry?.session;
+    if (!entry || !session || entry.info.status !== 'connected') return;
+    // 先作废这次连接的回调，后端随后报的结束就不会再写一遍提示
+    entry.attempt++;
+    this.teardown(entry);
+    session.close();
+    this.update(id, { status: 'closed', error: null, exitCode: null });
+    entry.term.write('\r\n\x1b[90m[已断开连接]\x1b[0m\r\n');
+  }
+
+  /** 重连。fresh 是连接管理器里的最新设置（用齿轮改过的这时生效），不给就照上次的连 */
+  reconnect(id: string, fresh?: OpenSessionOptions): void {
     const entry = this.entries.get(id);
     if (!entry || entry.info.status === 'connecting' || entry.info.status === 'connected') return;
+    if (fresh) {
+      entry.options = { ...fresh, auth: authForReconnect(fresh, entry.options) };
+      const { serverId, name, host, port, user } = fresh;
+      this.update(id, { serverId, name, host, port, user });
+    }
     entry.term.write('\r\n\x1b[90m[正在重新连接…]\x1b[0m\r\n');
     entry.monitor.reset();
     this.update(id, { status: 'connecting', error: null, exitCode: null, fingerprint: null });
@@ -375,8 +487,10 @@ export class SessionManager {
   /** `trustOnce`：用户选了“只连这一次”时临时加上的一行指纹记录，不保存 */
   private async connect(entry: Entry, trustOnce = ''): Promise<void> {
     const { term, info } = entry;
+    const attempt = ++entry.attempt;
+    const current = () => this.entries.has(info.id) && entry.attempt === attempt;
     const knownHosts = await this.knownHosts.load();
-    if (!this.entries.has(info.id)) return;
+    if (!current()) return;
     const opts: ConnectOptions = {
       host: entry.options.host,
       port: entry.options.port,
@@ -391,10 +505,10 @@ export class SessionManager {
       const session = await this.backend.connect(opts, {
         onData: (data) => {
           // 画完再回执，后端据此决定要不要继续读，大量输出时内存不涨、Ctrl-C 马上停
-          if (this.entries.has(info.id)) term.write(data, () => acks.done(data.length));
+          if (current()) term.write(data, () => acks.done(data.length));
         },
         onExit: (code, reason) => {
-          if (!this.entries.has(info.id)) return;
+          if (!current()) return;
           this.teardown(entry);
           this.update(info.id, { status: 'closed', exitCode: code, error: reason });
           term.write(
@@ -404,7 +518,7 @@ export class SessionManager {
           );
         },
       });
-      if (!this.entries.has(info.id)) {
+      if (!current()) {
         // 等待握手期间标签已被关掉
         session.close();
         return;
@@ -423,7 +537,7 @@ export class SessionManager {
       void entry.files.init();
       this.update(info.id, { status: 'connected', fingerprint: session.hostKeyFingerprint, error: null });
     } catch (err) {
-      if (!this.entries.has(info.id)) return;
+      if (!current()) return;
       if (err instanceof HostKeyError) {
         void this.resolveHostKey(entry, err.problem);
         return;
