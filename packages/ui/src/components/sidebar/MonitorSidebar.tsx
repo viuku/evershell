@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { formatBytes, formatLoad, formatPercent, formatRate, formatUptime, niceCeil, niceCeilBytes } from '../../core/format';
 import { dragRegion } from '../../core/platform';
 import { NET_SAMPLES, PING_SAMPLES, type MonitorState, type MonitorStore, type SessionInfo } from '../../core/session-manager';
@@ -70,7 +70,7 @@ export function MonitorSidebar({ session, monitor, onToggleSidebar, leadingInset
         {snap && !snap.supported ? (
           <>
             <div className="sidebar__unsupported">暂不支持该系统的监控</div>
-            <Latency state={state} snap={snap} />
+            <Latency key={`ping-${session?.id}`} state={state} snap={snap} />
           </>
         ) : (
           <>
@@ -98,8 +98,9 @@ export function MonitorSidebar({ session, monitor, onToggleSidebar, leadingInset
               />
             </div>
             <Procs snap={snap} session={session} />
-            <Net state={state} snap={snap} monitor={monitor} />
-            <Latency state={state} snap={snap} />
+            {/* 换会话时柱状图整个重建，别让两台服务器编号相同的柱子串到一起 */}
+            <Net key={`net-${session?.id}`} state={state} snap={snap} monitor={monitor} />
+            <Latency key={`ping-${session?.id}`} state={state} snap={snap} />
             <Disks snap={snap} />
           </>
         )}
@@ -159,7 +160,8 @@ function Procs({ snap, session }: { snap: MonitorSnapshot | null; session: Sessi
 function Net({ state, snap, monitor }: { state: MonitorState | null; snap: MonitorSnapshot | null; monitor: MonitorStore | null }) {
   const samples = snap ? (state?.net ?? []) : [];
   const last = samples[samples.length - 1];
-  const max = niceCeilBytes(Math.max(1024, ...samples.map((s) => Math.max(s.rx, s.tx))));
+  // 刻度只看图上露出来的那些，正在滑出去的那根不算
+  const max = niceCeilBytes(Math.max(1024, ...samples.slice(-NET_SAMPLES).map((s) => Math.max(s.rx, s.tx))));
   const ifaces = snap?.net.map((n) => n.iface) ?? [];
   return (
     <div className="sidebar__chart">
@@ -201,17 +203,14 @@ function Net({ state, snap, monitor }: { state: MonitorState | null; snap: Monit
             <span>{formatBytes(max / 2)}</span>
             <span>0</span>
           </div>
-          <div className="sidebar__bars grid-bg" aria-hidden="true">
-            {Array.from({ length: NET_SAMPLES }, (_, i) => {
-              const s = samples[i - (NET_SAMPLES - samples.length)];
-              return (
-                <div key={i} className="sidebar__barPair">
-                  <div className="sidebar__bar up" style={{ height: s ? `${Math.max(2, (s.tx / max) * 100)}%` : 0 }} />
-                  <div className="sidebar__bar down" style={{ height: s ? `${Math.max(2, (s.rx / max) * 100)}%` : 0 }} />
-                </div>
-              );
-            })}
-          </div>
+          <ScrollingBars samples={samples} total={state?.netTotal ?? 0} slots={NET_SAMPLES}>
+            {(s) => (
+              <>
+                <div className="sidebar__bar up" style={{ height: barHeight(s.tx, max, 2) }} />
+                <div className="sidebar__bar down" style={{ height: barHeight(s.rx, max, 2) }} />
+              </>
+            )}
+          </ScrollingBars>
         </div>
       ) : (
         <div className="sidebar__emptyPlot sidebar__emptyPlot--net" />
@@ -222,7 +221,7 @@ function Net({ state, snap, monitor }: { state: MonitorState | null; snap: Monit
 
 function Latency({ state, snap }: { state: MonitorState | null; snap: MonitorSnapshot | null }) {
   const samples = snap ? (state?.ping ?? []) : [];
-  const max = niceCeil(Math.max(10, ...samples));
+  const max = niceCeil(Math.max(10, ...samples.slice(-PING_SAMPLES)));
   const latency = snap?.latencyMs;
   return (
     <div className="sidebar__chart">
@@ -231,17 +230,59 @@ function Latency({ state, snap }: { state: MonitorState | null; snap: MonitorSna
         <span className="muted">本机 → 服务器</span>
       </div>
       {snap ? (
-        <div className="sidebar__bars sidebar__bars--ping grid-bg" aria-hidden="true">
-          {Array.from({ length: PING_SAMPLES }, (_, i) => {
-            const v = samples[i - (PING_SAMPLES - samples.length)];
-            return <div key={i} className="sidebar__bar accent" style={{ height: v ? `${Math.max(3, (v / max) * 100)}%` : 0 }} />;
-          })}
-        </div>
+        <ScrollingBars samples={samples} total={state?.pingTotal ?? 0} slots={PING_SAMPLES} className="sidebar__bars--ping">
+          {(v) => <div className="sidebar__bar accent" style={{ height: v ? barHeight(v, max, 3) : 0 }} />}
+        </ScrollingBars>
       ) : (
         <div className="sidebar__emptyPlot sidebar__emptyPlot--ping" />
       )}
     </div>
   );
+}
+
+/**
+ * 往左滚的柱状图。每根柱子跟着自己那次采样走：新数据从右边滑进来，其余的一起往左挪一格，
+ * 最老的从左边滑出去。柱子按采样编号固定身份，高度只在纵轴刻度变了时才变。
+ * samples 比 slots 多一个，多出来的那根停在左边框外，就是这次刚滑出去的。
+ */
+function ScrollingBars<T>({
+  samples,
+  total,
+  slots,
+  className,
+  children,
+}: {
+  samples: T[];
+  /** 一共收到过几次采样，最新那根的编号是 total - 1 */
+  total: number;
+  slots: number;
+  className?: string;
+  children(sample: T): ReactNode;
+}) {
+  // 打开时已经有的柱子直接摆好，之后新来的才从右边滑进来
+  const [firstNew] = useState(total);
+  return (
+    <div className={`sidebar__bars grid-bg${className ? ` ${className}` : ''}`} style={{ '--slots': slots } as CSSProperties} aria-hidden="true">
+      {samples.map((s, i) => {
+        const age = samples.length - 1 - i;
+        const id = total - 1 - age;
+        return (
+          <div
+            key={id}
+            className={`sidebar__slot${id >= firstNew ? ' sidebar__slot--new' : ''}`}
+            style={{ '--age': age } as CSSProperties}
+          >
+            {children(s)}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 柱子高度：至少 min%，让很小的值也看得见；超过刻度的（正在滑出去的那根）顶格 */
+function barHeight(v: number, max: number, min: number): string {
+  return `${Math.min(100, Math.max(min, (v / max) * 100))}%`;
 }
 
 function Disks({ snap }: { snap: MonitorSnapshot | null }) {
