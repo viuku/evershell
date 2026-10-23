@@ -3,7 +3,7 @@
 #
 #   scripts/mac-preview.sh               完整走一遍，最后一行是截图路径（用 Read 看）
 #   scripts/mac-preview.sh --no-build    不重新编译，直接重开并截图
-#   scripts/mac-preview.sh --stop        关掉调试版
+#   scripts/mac-preview.sh --stop        关掉调试版并删掉它
 #
 # 调试版开着不关，可以接着用 scripts/mac-window.sh shot --pid <进程号> --crop … 放大看细节。
 # 注意：调试版和所有者在用的 build/EverShell.app 是同一个应用标识，共用连接列表、保险箱和钥匙串。
@@ -12,9 +12,11 @@ set -e
 cd "$(dirname "$0")/.."
 . scripts/dev-env.sh
 
-app="${CARGO_TARGET_DIR:-$PWD/target}/debug/bundle/macos/EverShell.app"
-bin="$app/Contents/MacOS/evershell-desktop"
+built="${CARGO_TARGET_DIR:-$PWD/target}/debug/bundle/macos/EverShell.app"
 dir=target/mac-preview
+# 编好后搬进 .noindex 文件夹：聚焦搜索不收录，所有者搜 EverShell 只看到 build/ 那一份
+app="$PWD/$dir/app.noindex/EverShell.app"
+bin="$app/Contents/MacOS/evershell-desktop"
 mkdir -p "$dir"
 
 stop_old() {
@@ -27,7 +29,7 @@ stop_old() {
 }
 
 case "$1" in
-  --stop) stop_old; echo "调试版已关闭"; exit 0 ;;
+  --stop) stop_old; rm -rf "$app"; echo "调试版已关闭并删除"; exit 0 ;;
   --no-build) build= ;;
   "") build=1 ;;
   *) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 2 ;;
@@ -42,6 +44,10 @@ if [ -n "$build" ]; then
     exit 1
   fi
   echo "编译完成（$(( $(date +%s) - t0 ))s）"
+  stop_old
+  rm -rf "$app"
+  mkdir -p "$dir/app.noindex"
+  mv "$built" "$app"
 fi
 [ -x "$bin" ] || { echo "没有 $app，先去掉 --no-build 编一次" >&2; exit 1; }
 

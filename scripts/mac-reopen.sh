@@ -4,7 +4,7 @@
 #   scripts/mac-reopen.sh              编译（scripts/build-mac.sh）后重开
 #   scripts/mac-reopen.sh --no-build   只重开 build/EverShell.app
 #
-# 在 worktree 里跑也会放进主文件夹（git worktree list 第一行）的 build/，所有者只认那一个位置。
+# 在 worktree 里跑也会搬进主文件夹（git worktree list 第一行）的 build/，所有者只认那一个位置。
 # 必须先退出旧的：同一个应用标识已经在运行时，系统只会把旧窗口叫到前面，打开的还是旧版。
 # 退出用的是普通的结束进程，不发“退出”指令给应用（那样会弹“允许控制”的授权框）。
 # 别的会话开着的调试版（target/debug/bundle 里的）不动。
@@ -49,11 +49,12 @@ if [ -n "$old" ]; then
   [ -z "$alive" ] || kill -9 $old 2>/dev/null || true
 fi
 
-if [ "$PWD" != "$main" ]; then
-  [ -d build/EverShell.app ] || { echo "没有 build/EverShell.app，先去掉 --no-build 编一次" >&2; exit 1; }
+# 在 worktree 里编的搬过去，worktree 里不留副本；--no-build 时直接重开主文件夹那份
+if [ "$PWD" != "$main" ] && [ -d build/EverShell.app ]; then
   mkdir -p "$main/build"
   rm -rf "$app"
-  ditto build/EverShell.app "$app"
+  mv build/EverShell.app "$app"
+  rmdir build 2>/dev/null || true
 fi
 [ -d "$app" ] || { echo "没有 $app，先去掉 --no-build 编一次" >&2; exit 1; }
 

@@ -38,9 +38,9 @@
 
 用在：窗口外观（标题栏、红绿灯、透明、拖动区域）、`tauri*.conf.json`、`capabilities/`、`apps/desktop/src` 里只在桌面端生效的代码。
 
-1. `scripts/mac-preview.sh`：编调试版 .app → 关掉它自己上次开的那个 → 打开 → 等窗口出现 → 截图。最后一行是截图路径，用 Read 看。
+1. `scripts/mac-preview.sh`：编调试版 .app → 关掉它自己上次开的那个 → 打开 → 等窗口出现 → 截图。最后一行是截图路径，用 Read 看。调试版编好后会搬进 `target/mac-preview/app.noindex/`，聚焦搜索不收录。
 2. 放大细节：`scripts/mac-window.sh shot --pid <进程号> --crop x,y,宽,高`，坐标用窗口里的点（和 CSS 像素一样），自动换算 Retina。
-3. 看完 `scripts/mac-preview.sh --stop`。它只关自己开的调试版，所有者在用的窗口不受影响。
+3. 看完 `scripts/mac-preview.sh --stop`。它只关自己开的调试版并删掉它，所有者在用的窗口不受影响。所有者要求电脑上只留 `build/` 这一份应用（2026-10-23）。
 4. 截图报错或截出来全黑：所有者的屏幕锁着（[pitfalls.md](pitfalls.md#屏幕锁着时截不了原生窗口2026-10-18)），等他回来或请他看。
 
 **为什么不能点、不能操作**：

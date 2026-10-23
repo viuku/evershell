@@ -10,7 +10,8 @@
 
 所有者定的（2026-10-18）：签名编译好就行，不打 dmg，`.app` 放在主文件夹的 `build/` 里。
 
-- `scripts/mac-reopen.sh`：签名编译 → 放进主文件夹的 `build/EverShell.app`（在 worktree 里跑也放那里，所有者只认这一个位置）→ 退出他正在用的旧版 → 打开新版。release 编译要几分钟，用 `run_in_background` 跑。
+- `scripts/mac-reopen.sh`：签名编译 → 放进主文件夹的 `build/EverShell.app`（在 worktree 里跑也搬到那里，所有者只认这一个位置）→ 退出他正在用的旧版 → 打开新版。release 编译要几分钟，用 `run_in_background` 跑。
+- 电脑上只留 `build/` 这一份应用（所有者 2026-10-23 定）：编译的中间产物 `target/release/bundle/macos/EverShell.app` 复制完就删，worktree 里编的是搬过去、不留副本。别处多出来的应用会出现在访达和聚焦搜索里，他分不清该开哪个。
 - 不先退出旧版的话，系统只会把旧窗口叫到前面，打开的还是旧版。别的会话开着的调试版不受影响。
 
 **跑之前查两件事**：
