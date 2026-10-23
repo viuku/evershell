@@ -146,6 +146,13 @@ russh 要求字节流能跨线程（`Send`），浏览器的 WebSocket 不行。
 - 当前这一处是插件把它“选中”来标的。EverShell 用的是 xterm 默认的 DOM 渲染，画选中的格子时直接用不透明的选中色，盖掉装饰的橙色，当前这处看起来就是普通的选中蓝。所以 `core/session-manager.ts` 在搜索框开着时把 `selectionBackground` / `selectionInactiveBackground` 换成橙色，关掉再换回来（`themeFor`）。
 - 高亮色只认 `#RRGGBB`，文字颜色不变，深色终端要用暗一些的黄和橙，字才看得清。
 
+### 系统的 title 悬停提示在 Mac 桌面端靠不住（2026-10-23）
+
+- **症状**：所有者反馈连接管理器顶上的图标按钮，鼠标停上去没有说明，按钮上明明写了 `title`。
+- **原因**：一是 Mac 桌面端的网页视图（WKWebView）里，`title` 提示是系统画的，要停一两秒才出，窗口不在最前面时不出；没有逐一核实是哪种情况。二是灰掉的按钮（`disabled`）在 WebKit 里收不到鼠标事件，`title` 提示也就不出（[WebKit bug 237097](https://bugs.webkit.org/show_bug.cgi?id=237097)，Chrome 和 Firefox 会派发）。
+- **现在的处理**：界面自己画提示。`packages/ui/src/components/common/Tooltip.tsx` 的 `TooltipLayer` 挂在 `App.tsx` 根上，鼠标停在带 `data-tip` 的元素上半秒就在下方显示。`app.css` 给 `[data-tip]:disabled` 设了不接收鼠标，鼠标落到外层，提示层再按坐标找回灰掉的按钮。
+- 还在用 `title` 的地方（命令栏、文件区等）还没换，所有者提出来再换。
+
 ### 应用里的“外观”设置会盖过系统
 
 界面深浅色存在本地存储的 `evershell.appearance-mode`（跟随系统 / 浅色 / 深色，存的是 JSON 字符串）。用浏览器的深浅色模拟验证时要保证它是“跟随系统”，否则模拟不起作用；验证时手动改过就改回去。怎么查、怎么改见 [quality.md](quality.md#a-网页版-mock界面改动的主力) 第 3 步。
