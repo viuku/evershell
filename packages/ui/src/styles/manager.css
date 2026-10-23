@@ -391,7 +391,7 @@
 
 .imp__source {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   gap: 1px 8px;
   align-items: center;
   padding: 6px 8px;
@@ -419,6 +419,20 @@
 .imp__sourceBlurb {
   grid-column: 2;
   color: var(--muted);
+  font-size: 11.5px;
+}
+
+/* 一键导入：默认位置找到了连接 */
+.imp__found {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  color: var(--ok);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.imp__from {
+  flex: 0 0 auto;
   font-size: 11.5px;
 }
 

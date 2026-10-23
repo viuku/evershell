@@ -5,6 +5,7 @@ import {
   type ConnectOptions,
   type HostKeyInfo,
   type KnownHostEntry,
+  type LocalConfigFiles,
   type MonitorSnapshot,
   type SecretStore,
   type ShellHandlers,
@@ -15,6 +16,7 @@ import {
 import { FakeShell } from './fake-shell';
 import { MockFs } from './mock-fs';
 import { browserDownload } from '../core/browser-download';
+import { encodeUtf8 } from '../core/importers/text';
 
 // 不连服务器也能完整预览界面的假后端。网页端 URL 带 ?mock 时使用。
 // 约定几个特殊输入方便测试：主机含 fail → 连接失败；密码 wrong → 认证失败；主机含 bsd → 监控不支持；
@@ -22,6 +24,7 @@ import { browserDownload } from '../core/browser-download';
 // 主机含 flaky → 连上 8 秒后像网络断了一样断开（看断线提示）。
 // 服务器指纹和真的一样要先确认：第一次连每台服务器都会弹确认框。
 // 密码留空时只有主机含 nopass 能连上（模拟不要密码的服务器），其他主机和真服务器一样报认证失败，界面再弹框要密码。
+// 导入窗口的一键导入：假装找到了 FinalShell 和 ~/.ssh/config，SecureCRT、PuTTY 没找到。
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -264,6 +267,39 @@ class MockSession implements SshSession {
   }
 }
 
+/** 一键导入的样例：像 Mac 上装了 FinalShell、写过 ~/.ssh/config，SecureCRT 和 PuTTY 没装。密码密文取自导入测试的样例 */
+function mockLocalConfigs(): LocalConfigFiles[] {
+  const json = (path: string, rec: Record<string, unknown>) => ({ path, bytes: encodeUtf8(JSON.stringify(rec)) });
+  const conn = (folder: string, id: string, name: string, host: string, port: number, user: string, password: string) =>
+    json(`conn/${folder}/${id}_connect_config.json`, {
+      id,
+      name,
+      host,
+      port,
+      user_name: user,
+      password,
+      parent_id: folder,
+      conection_type: 100,
+      authentication_type: 1,
+    });
+  const pw = 'OhHCBX4pkEsVowU9xIn1UBVPg3QVyR4W';
+  const finalshell = [
+    json('conn/p1/folder.json', { id: 'p1', name: '生产环境', parent_id: '' }),
+    conn('p1', 'a1', 'web-01', '203.0.113.11', 22, 'root', pw),
+    conn('p1', 'a2', 'web-02', '203.0.113.12', 22, 'root', pw),
+    conn('p1', 'a3', 'db-master', '203.0.113.20', 2222, 'dba', 'YY4C8xQVZgeoticpurt8nK/FbdF/of7s'),
+    json('conn/t1/folder.json', { id: 't1', name: '测试', parent_id: '' }),
+    conn('t1', 'b1', 'test-box', '192.0.2.50', 22, 'ubuntu', ''),
+  ];
+  const sshConfig = 'Host bastion\n  HostName 198.51.100.9\n  User ops\n\nHost *.internal\n  User me\n\nHost build\n  HostName 192.0.2.30\n  Port 2200\n';
+  return [
+    { source: 'finalshell', location: '~/Library/FinalShell/conn', files: finalshell, error: null },
+    { source: 'putty', location: '~/.putty/sessions', files: [], error: null },
+    { source: 'securecrt', location: '~/Library/Application Support/VanDyke/SecureCRT/Config/Sessions', files: [], error: null },
+    { source: 'openssh', location: '~/.ssh/config', files: [{ path: 'config', bytes: encodeUtf8(sshConfig) }], error: null },
+  ];
+}
+
 const SECRETS_KEY = 'evershell.mock-secrets';
 
 /** 假保险箱：存在 localStorage，只为了让“记住密码”流程能走通 */
@@ -292,6 +328,10 @@ export function createMockBackend(): SshBackend {
     secrets: new MockSecrets(),
     async saveFile(name: string, data: Uint8Array): Promise<string> {
       return browserDownload(name, data);
+    },
+    async findLocalConfigs(): Promise<LocalConfigFiles[]> {
+      await delay(120);
+      return mockLocalConfigs();
     },
     async connect(opts: ConnectOptions, handlers: ShellHandlers): Promise<SshSession> {
       await delay(400 + Math.random() * 500);

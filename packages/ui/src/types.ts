@@ -133,9 +133,26 @@ export interface SecretStore {
   remove(id: string): Promise<void>;
 }
 
+/** 别的 SSH 软件默认存配置的位置，以及在那里读到的文件。一键导入用，见 core/importers/local.ts */
+export interface LocalConfigFiles {
+  /** 来源，取值同 core/importers/types.ts 的 ImportSource；不认识的界面会忽略 */
+  source: string;
+  /** 给用户看的位置，如 ~/Library/FinalShell/conn */
+  location: string;
+  /** 相对路径带所在文件夹名，和浏览器选文件夹时一样；位置不存在时为空 */
+  files: { path: string; bytes: Uint8Array }[];
+  /** 位置在、但读不了的原因 */
+  error: string | null;
+}
+
 export interface SshBackend {
   connect(opts: ConnectOptions, handlers: ShellHandlers): Promise<SshSession>;
   readonly secrets: SecretStore;
   /** 把本地生成的文件（如导出的连接）存给用户：桌面端存进“下载”目录并返回完整路径；网页端交给浏览器下载并返回文件名 */
   saveFile(name: string, data: Uint8Array): Promise<string>;
+  /**
+   * 一键导入：到本机各 SSH 软件默认存配置的位置读文件，只返回本平台查过的来源。
+   * 读哪些位置由后端决定，不接受路径。网页端读不了本机文件，不提供。
+   */
+  findLocalConfigs?(): Promise<LocalConfigFiles[]>;
 }

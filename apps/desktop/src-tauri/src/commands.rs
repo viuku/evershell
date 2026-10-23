@@ -10,6 +10,7 @@ use ssh_core::{Auth, FileEntry, HostKeyProblem, MonitorSnapshot, ShellEvent, Tra
 use tauri::ipc::{Channel, InvokeBody, InvokeResponseBody, JavaScriptChannelId, Request};
 use tauri::{AppHandle, Manager, State, Webview};
 
+use crate::local_import::{self, Dirs, LocalConfig, Platform};
 use crate::secrets::Secrets;
 use crate::session::{self, ConnectParams, SessionManager};
 
@@ -301,6 +302,20 @@ pub async fn save_download(app: AppHandle, request: Request<'_>) -> Result<Strin
         return Err(format!("写入文件失败：{e}"));
     }
     Ok(local.to_string_lossy().into_owned())
+}
+
+/// 一键导入：读各 SSH 软件默认位置的配置文件。读哪些位置由 local_import.rs 的表决定，前端不能传路径
+#[tauri::command]
+pub async fn import_find_local(app: AppHandle) -> Result<Vec<LocalConfig>, String> {
+    let path = app.path();
+    let dirs = Dirs {
+        home: path.home_dir().map_err(|_| "找不到本机的用户目录")?,
+        data: path.data_dir().map_err(|_| "找不到本机的应用数据目录")?,
+        local_data: path.local_data_dir().map_err(|_| "找不到本机的应用数据目录")?,
+    };
+    tauri::async_runtime::spawn_blocking(move || local_import::find(Platform::current(), &dirs))
+        .await
+        .map_err(|e| format!("查找配置文件中断：{e}"))
 }
 
 #[tauri::command]

@@ -99,7 +99,7 @@ packages/ui  ── 界面和业务逻辑（React + TS），桌面端、网页�
 | 心跳、断线原因 | `crates/ssh-core/src/lib.rs` 的 `ConnectConfig` 和 `Client::disconnected` | |
 | 终端回压 | `crates/ssh-core/src/flow.rs` + `packages/ui/src/core/output-ack.ts` | |
 | 连接参数（超时、心跳、算法） | 内核 `crates/ssh-core/src/lib.rs` 的 `ConnectConfig`（心跳默认 15 秒 × 3）和 `Connection::connect`；网页端在 `crates/ssh-wasm` 里开 WebSocket。连接超时还没设；界面“高级”里的心跳间隔只保存、不生效 | `grep -rnE "ConnectConfig|timeout|keepalive" crates/ssh-core/src` |
-| 导入导出 | `packages/ui/src/core/importers/<来源>.ts`，样例在 `__fixtures__`，测试在 `__tests__` | 新来源照现有的抄一份，补样例和测试 |
+| 导入导出 | `packages/ui/src/core/importers/<来源>.ts`，样例在 `__fixtures__`，测试在 `__tests__`；一键导入查的默认位置在 `apps/desktop/src-tauri/src/local_import.rs` | 新来源照现有的抄一份，补样例和测试；有固定配置位置的，在位置表里加一行 |
 | 窗口大小、标题栏、红绿灯 | `apps/desktop/src-tauri/tauri.macos.conf.json`（Mac 专属）、`tauri.conf.json`（共用） | |
 | 窗口权限（拖动等） | `apps/desktop/src-tauri/capabilities/default.json` | |
 | 密码和私钥存哪 | `apps/desktop/src-tauri/src/secrets.rs` + `crates/vault`，规则见需求文档 3.5 | |

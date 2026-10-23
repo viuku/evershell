@@ -49,6 +49,7 @@
 ## 导入导出
 
 - **导入**：来源和规则见需求文档 3.4，代码在 `packages/ui/src/core/importers/`。只导入白名单字段，导入的“会执行的东西”要用户确认（[security.md](security.md#红线)）。
+- **一键导入**：桌面端去各软件默认存配置的位置读文件，位置表在 `apps/desktop/src-tauri/src/local_import.rs`，前端不能传路径；读到的文件交给同一套解析器。规格见 [docs/specs/one-click-import.md](../specs/one-click-import.md)。
 - **导出**：格式名 `evershell-connections`，版本 1，不含密码和私钥（`packages/ui/src/core/importers/export.ts`）。读到更高版本时提示并忽略不认识的字段。
 - **要做**：把导出格式写成一份公开的说明文档（字段含义、版本、以后的加密方式），这是“不跑路”承诺的一部分。写在 `docs/` 下，和导出格式一起改。
 - **以后**：加密导出（含密码），方案见 [security.md](security.md#加密选型)。
