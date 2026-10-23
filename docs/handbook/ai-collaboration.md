@@ -10,7 +10,7 @@
 
 1. **看 `git status`。** main 上常有所有者攒着没提交的改动，不一定是有会话正在改。要判断是否有别的会话在这个文件夹里干活，看三样：最近有没有文件在变（`find packages apps crates -mmin -30 -type f -not -path '*/node_modules/*'`）；有没有不是你开的进程（`ps -o lstart,command -p <进程号>`，比你的会话开得早的就不是你的）；App 给你的“关联会话”提示。
 2. **选地方：**
-   - **自己的 worktree（首选，并行干活时必须）。** 有自己的分支、编译目录，不会踩别人。用 EnterWorktree 工具建（会放在 `.claude/worktrees/` 下），或者所有者在 App 里开会话时就选了 worktree。用完删不删由所有者定。注意 worktree 只带**已提交**的文件：要用的代码、脚本、规范还没提交的话，worktree 里没有，这时先停下来问所有者要不要先提交。
+   - **自己的 worktree（首选，并行干活时必须）。** 有自己的分支、编译目录，不会踩别人。用 EnterWorktree 工具建（会放在 `.claude/worktrees/` 下），或者所有者在 App 里开会话时就选了 worktree。用完删不删由所有者定。每个 worktree 的编译目录大约 5～8G（2026-10-20 量）；所有者要腾空间时，归档会话并不会删 worktree，App 会把它留作新会话的备用目录，编译目录也还在，要腾空间得再删掉它里面的 `target/`（先确认没有 `cargo` 在跑）。注意 worktree 只带**已提交**的文件：要用的代码、脚本、规范还没提交的话，worktree 里没有，这时先停下来问所有者要不要先提交。
    - **共享的主文件夹。** 只在所有者让你在这里干、或者 worktree 用不了时。规矩见下一节。
 3. 新 worktree 第一次开工先跑 `scripts/setup.sh`（见 [environment.md](environment.md#工具链)）。
 
