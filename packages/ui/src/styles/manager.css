@@ -109,6 +109,40 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
+/* 服务器行的齿轮：鼠标指到这一行或选中时出现，靠名称栏右边上下对齐 */
+.mgr__gear {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  flex: 0 0 auto;
+  visibility: hidden;
+}
+
+.mgr__row:hover .mgr__gear,
+.grid-row--on .mgr__gear {
+  visibility: visible;
+}
+
+.mgr__gear:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.grid-row--on .mgr__gear {
+  color: #ffffff;
+}
+
+.grid-row--on .mgr__gear:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
 .mgr__count {
   font-size: 11px;
 }

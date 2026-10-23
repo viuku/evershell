@@ -200,7 +200,7 @@ export function FilesPanel({ files, session, follow }: Props) {
                   >
                     <span className="files__name">
                       {f.kind === 'dir' ? (
-                        <FolderFillIcon size={15} fill={on ? '#FFFFFF' : 'var(--folder)'} />
+                        <FolderFillIcon size={15} />
                       ) : (
                         <FileIcon size={15} style={{ opacity: 0.7, flex: '0 0 auto' }} />
                       )}
@@ -237,7 +237,7 @@ function TreeRow({ node, depth, cwd, files }: { node: TreeNode; depth: number; c
           {node.children?.length === 0 && !node.loading ? null : <DisclosureIcon open={node.expanded} />}
         </button>
         <button type="button" className="tree__pick mono" title={node.path} onClick={() => void files.open(node.path)}>
-          <FolderFillIcon size={14} fill={on ? '#FFFFFF' : 'var(--folder)'} />
+          <FolderFillIcon size={14} />
           <span className="ellipsis">{node.name}</span>
           {node.loading && <span className="tree__loading">…</span>}
         </button>

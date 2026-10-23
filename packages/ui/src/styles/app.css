@@ -385,6 +385,35 @@
   font-size: 11px;
 }
 
+/* ---------- 悬停提示（TooltipLayer） ---------- */
+
+.tip {
+  position: fixed;
+  z-index: 70;
+  max-width: 320px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--sheet);
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+  font-size: 12px;
+  line-height: 17px;
+  white-space: pre-line;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease-out;
+}
+
+.tip--on {
+  opacity: 1;
+}
+
+/* 灰掉的按钮在 Mac 的网页引擎里收不到鼠标事件，让鼠标穿到外层，提示层按坐标找回它 */
+[data-tip]:disabled {
+  pointer-events: none;
+}
+
 /* ---------- 模态窗 ---------- */
 
 .modal-scrim {

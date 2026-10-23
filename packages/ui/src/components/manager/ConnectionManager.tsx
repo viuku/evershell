@@ -23,6 +23,7 @@ import {
   ExpandAllIcon,
   ExportIcon,
   FolderFillIcon,
+  GearIcon,
   ImportIcon,
   NewConnectionIcon,
   NewFolderIcon,
@@ -208,20 +209,27 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
   return (
     <Modal title="连接管理器" onClose={onClose} width={920} height={580} className="mgr">
       <div className="mgr__toolbar">
-        <button type="button" className="tb" title="新建连接" aria-label="新建连接" onClick={() => setEdit({ mode: 'new', parentId: selectedFolderId })}>
+        <button type="button" className="tb" data-tip="新建连接" aria-label="新建连接" onClick={() => setEdit({ mode: 'new', parentId: selectedFolderId })}>
           <NewConnectionIcon size={18} />
         </button>
-        <button type="button" className="tb" title="新建文件夹" aria-label="新建文件夹" onClick={() => void newFolder()}>
+        <button type="button" className="tb" data-tip="新建文件夹" aria-label="新建文件夹" onClick={() => void newFolder()}>
           <NewFolderIcon size={18} />
         </button>
         <span className="mgr__sep" />
-        <button type="button" className="tb" title="编辑" aria-label="编辑" disabled={!selServer && !selFolder} onClick={editSelected}>
+        <button
+          type="button"
+          className="tb"
+          data-tip={selServer || selFolder ? '编辑' : '编辑（先选中一个连接或文件夹）'}
+          aria-label="编辑"
+          disabled={!selServer && !selFolder}
+          onClick={editSelected}
+        >
           <EditIcon size={16} />
         </button>
         <button
           type="button"
           className="tb"
-          title={selDeleted ? '恢复' : '删除（可在“显示已删除”里恢复）'}
+          data-tip={!selServer && !selFolder ? '删除（先选中一个连接或文件夹）' : selDeleted ? '恢复' : '删除（可在「显示已删除」里恢复）'}
           aria-label={selDeleted ? '恢复' : '删除'}
           disabled={!selServer && !selFolder}
           onClick={toggleDeleted}
@@ -229,26 +237,26 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
           <TrashIcon size={16} />
         </button>
         <span className="mgr__sep" />
-        <button type="button" className="tb" title="全部折叠" aria-label="全部折叠" onClick={() => openFolders.set({})}>
+        <button type="button" className="tb" data-tip="全部折叠" aria-label="全部折叠" onClick={() => openFolders.set({})}>
           <CollapseAllIcon size={16} />
         </button>
         <button
           type="button"
           className="tb"
-          title="全部展开"
+          data-tip="全部展开"
           aria-label="全部展开"
           onClick={() => openFolders.set(Object.fromEntries(data.folders.map((f) => [f.id, true])))}
         >
           <ExpandAllIcon size={16} />
         </button>
         <span className="mgr__sep" />
-        <button type="button" className="tb" title="导入连接…" aria-label="导入连接" onClick={() => setImportOpen(true)}>
+        <button type="button" className="tb" data-tip="导入连接…" aria-label="导入连接" onClick={() => setImportOpen(true)}>
           <ImportIcon size={16} />
         </button>
         <button
           type="button"
           className="tb"
-          title={selServer || selFolder ? '导出所选（文件夹或连接）' : '导出全部连接'}
+          data-tip={selServer || selFolder ? '导出所选（文件夹或连接）' : '导出全部连接'}
           aria-label="导出连接"
           onClick={() => void exportNow()}
         >
@@ -285,6 +293,8 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
 
       <div
         className="scroll mgr__list"
+        role="tree"
+        aria-label="连接"
         tabIndex={0}
         onKeyDown={onKey}
         onClick={(e) => {
@@ -309,9 +319,10 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
               const on = sel === id;
               const deleted = row.kind === 'folder' ? !!row.folder.deletedAt : !!row.server.deletedAt;
               return (
-                <button
+                // 行里还要放齿轮按钮，按钮不能套按钮，所以行用 div；键盘操作由外层列表接管
+                <div
                   key={id}
-                  type="button"
+                  role="treeitem"
                   className={`grid-row mgr__cols mgr__row${on ? ' grid-row--on' : ''}${deleted ? ' mgr__row--deleted' : ''}`}
                   aria-expanded={row.kind === 'folder' ? row.open : undefined}
                   aria-selected={on}
@@ -330,22 +341,35 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
                 >
                   <span className="mgr__name" style={{ paddingLeft: row.depth * 18 }}>
                     <span className="mgr__disclosure">{row.kind === 'folder' && <DisclosureIcon open={row.open} />}</span>
-                    {row.kind === 'folder' ? (
-                      <FolderFillIcon size={16} fill={on ? '#FFFFFF' : 'var(--folder)'} />
-                    ) : (
-                      <ServerIcon size={16} fill={on ? 'rgba(255,255,255,0.25)' : 'var(--server)'} />
-                    )}
+                    {/* 选中时图标保持原色，不跟着变白 */}
+                    {row.kind === 'folder' ? <FolderFillIcon size={16} /> : <ServerIcon size={16} fill="var(--server)" />}
                     <span className={`ellipsis${deleted ? ' mgr__strike' : ''}`}>
                       {row.kind === 'folder' ? row.folder.name : row.server.name}
                       {deleted && '（已删除）'}
                     </span>
                     {row.kind === 'folder' && <span className="muted mgr__count">{row.count} 台</span>}
+                    {row.kind === 'server' && (
+                      <button
+                        type="button"
+                        className="mgr__gear"
+                        data-tip="编辑连接"
+                        aria-label={`编辑 ${row.server.name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSel(id);
+                          setEdit({ mode: 'edit', server: row.server });
+                        }}
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        <GearIcon size={14} />
+                      </button>
+                    )}
                   </span>
                   <span className="mono mgr__mono ellipsis">{row.kind === 'server' ? row.server.host : ''}</span>
                   <span className="mono mgr__mono">{row.kind === 'server' ? row.server.port : ''}</span>
                   <span className="ellipsis">{row.kind === 'server' ? row.server.user : ''}</span>
                   <span className="muted ellipsis">{row.kind === 'server' ? row.server.note : ''}</span>
-                </button>
+                </div>
               );
             })
           )}

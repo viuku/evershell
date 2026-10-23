@@ -8,6 +8,7 @@ import './styles/panels.css';
 import './styles/newtab.css';
 import './styles/manager.css';
 import { DialogsProvider, useDialogs } from './components/common/Dialogs';
+import { TooltipLayer } from './components/common/Tooltip';
 import type { MenuItem } from './components/common/Menu';
 import { ConnectionManager } from './components/manager/ConnectionManager';
 import { EditConnectionDialog } from './components/manager/EditConnectionDialog';
@@ -44,6 +45,7 @@ export function App(props: AppProps) {
       <DialogsProvider>
         <AppInner {...props} />
       </DialogsProvider>
+      <TooltipLayer />
     </div>
   );
 }

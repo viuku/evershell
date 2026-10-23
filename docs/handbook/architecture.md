@@ -123,5 +123,6 @@ packages/ui  ── 界面和业务逻辑（React + TS），桌面端、网页�
 ## 约定
 
 - 弹窗、确认框用 `packages/ui/src/components/common/Dialogs.tsx`，菜单用 `Menu.tsx`，分段控件用 `Segmented.tsx`，图标在 `Icons.tsx`。新做之前先看这里有没有。
+- 按钮的悬停说明写在 `data-tip` 上（`Tooltip.tsx` 负责显示），不要用 `title`，原因见 [pitfalls.md](pitfalls.md#系统的-title-悬停提示在-mac-桌面端靠不住2026-10-23)。
 - 注释和界面文字用中文；注释只写“为什么”，不复述代码在做什么。
 - 生成的文件不手改：`crates/ssh-wasm/pkg/` 下除了 `package.json` 都是 `scripts/build-wasm.sh` 生成的。
