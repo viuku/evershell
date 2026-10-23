@@ -3,6 +3,7 @@ import { readJson, writeJson } from '../core/storage';
 import {
   HostKeyError,
   type ConnectOptions,
+  type FileEntry,
   type HostKeyInfo,
   type KnownHostEntry,
   type LocalConfigFiles,
@@ -383,9 +384,23 @@ class MockSession implements SshSession {
     this.fs.rename(from, to);
   }
 
+  async stat(path: string): Promise<FileEntry> {
+    await delay(40);
+    return this.fs.stat(path);
+  }
+
+  async readFile(path: string, maxBytes: number, onProgress?: (p: TransferProgress) => void): Promise<Uint8Array> {
+    const node = this.fs.stat(path);
+    if (node.size > maxBytes) throw new Error(`文件有 ${node.size} 字节，超过了 ${maxBytes} 字节的上限`);
+    await simulateTransfer(node.size, onProgress);
+    return this.fs.readBytes(path);
+  }
+
   async upload(remotePath: string, data: Blob, onProgress?: (p: TransferProgress) => void): Promise<void> {
     await simulateTransfer(data.size, onProgress);
-    this.fs.writeFile(remotePath, data.size, this.opts.user);
+    // 小文件按文本存下来，编辑器保存后再打开能看到改过的内容
+    const content = data.size <= 1024 * 1024 ? await data.text() : null;
+    this.fs.writeFile(remotePath, data.size, this.opts.user, content);
   }
 
   async download(remotePath: string, onProgress?: (p: TransferProgress) => void): Promise<string> {

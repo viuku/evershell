@@ -27,6 +27,8 @@ export class FakeShell {
   private buf = '';
   private esc = '';
   private busy = false;
+  /** 命令跑着时打进来的字 */
+  private ahead = '';
   private closed = false;
   private readonly pending: string[] = [];
 
@@ -87,8 +89,12 @@ export class FakeShell {
       this.esc = ch;
       return;
     }
+    // 命令还在跑时打进来的字先攒着，跑完再处理，和真终端一样（多行命令一次发过来也是这样）
     if (this.busy) {
-      if (ch === '\x03') this.write('^C\r\n');
+      if (ch === '\x03') {
+        this.write('^C\r\n');
+        this.ahead = '';
+      } else this.ahead += ch;
       return;
     }
     switch (ch) {
@@ -149,7 +155,11 @@ export class FakeShell {
       this.write(`${err instanceof Error ? err.message : String(err)}\r\n`);
     }
     this.busy = false;
-    if (!this.closed) this.prompt();
+    if (this.closed) return;
+    this.prompt();
+    const queued = this.ahead;
+    this.ahead = '';
+    for (const c of queued) this.key(c);
   }
 
   private resolve(p: string): string {
@@ -180,7 +190,7 @@ export class FakeShell {
         for (const a of args) if (!a.startsWith('-')) this.fs.mkdir(this.resolve(a), this.user);
         return '';
       case 'touch':
-        for (const a of args) this.fs.writeFile(this.resolve(a), 0, this.user);
+        for (const a of args) this.fs.touch(this.resolve(a), this.user);
         return '';
       case 'rm':
         for (const a of args) if (!a.startsWith('-')) this.fs.remove(this.resolve(a));

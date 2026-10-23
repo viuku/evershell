@@ -67,16 +67,6 @@ export function formatMtime(unixSecs: number): string {
   return `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
-/** 历史命令的时间列：今天显示 HH:mm，昨天显示“昨天”，更早显示 MM-DD */
-export function formatClock(ts: number): string {
-  const d = new Date(ts);
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  if (ts >= startOfToday) return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-  if (ts >= startOfToday - 86400_000) return '昨天';
-  return `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
 /** 相对时间：2 分钟前、昨天、2 周前 */
 export function formatRelative(ts: number, now = Date.now()): string {
   const diff = Math.max(0, now - ts);

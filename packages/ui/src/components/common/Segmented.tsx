@@ -8,7 +8,7 @@ interface Props<T extends string> {
   value: T;
   onChange(value: T): void;
   ariaLabel: string;
-  /** 小号用于快捷命令分组和弹窗页签 */
+  /** 小号用于弹窗里的页签和筛选 */
   size?: 'normal' | 'small';
   /** 用作面板切换时是 tablist，用作筛选时是 group */
   role?: 'tablist' | 'group';

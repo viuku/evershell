@@ -220,6 +220,27 @@ impl WebSession {
         self.sftp().await?.rename(&from, &to).await.map_err(js_err)
     }
 
+    /// 返回 FileEntry（见 types.ts），跟着符号链接走
+    pub async fn stat(&self, path: String) -> Result<JsValue, JsError> {
+        let entry = self.sftp().await?.stat(&path).await.map_err(js_err)?;
+        to_js(&entry)
+    }
+
+    /// 整个文件读进内存（Uint8Array），超过 `max_bytes` 报错。给编辑器用；`on_progress` 每次收到 `{ done, total }`
+    #[wasm_bindgen(js_name = readFile)]
+    pub async fn read_file(
+        &self,
+        path: String,
+        max_bytes: u64,
+        on_progress: Option<Function>,
+    ) -> Result<Vec<u8>, JsError> {
+        self.sftp()
+            .await?
+            .read_file(&path, max_bytes, |p| report(&on_progress, p))
+            .await
+            .map_err(js_err)
+    }
+
     /// `on_progress` 每次收到 `{ done, total }`
     pub async fn upload(
         &self,

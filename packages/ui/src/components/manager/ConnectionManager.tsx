@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import {
   addFolder,
   getServer,
@@ -10,7 +10,7 @@ import {
   type ServerRecord,
 } from '../../core/hosts-store';
 import { exportConnections } from '../../core/importers/export';
-import { isDeleteSelectedKey, isSelectAllKey, isToggleSelect } from '../../core/platform';
+import { dragRegion, isDeleteSelectedKey, isSelectAllKey, isToggleSelect } from '../../core/platform';
 import {
   clickSelect,
   contextSelect,
@@ -60,6 +60,10 @@ interface Props {
   onConnect(server: ServerRecord): void | Promise<void>;
   /** 打开时直接进入导入流程（≡ 菜单的「导入连接…」） */
   openImport?: boolean;
+  /** 已经开着时又要导入：每要一次加一（独立窗口用） */
+  importSeq?: number;
+  /** 'window'：桌面端的独立窗口，铺满整个窗口；默认是主窗口里的弹窗 */
+  frame?: 'modal' | 'window';
 }
 
 type Row =
@@ -70,7 +74,7 @@ const idOf = (r: Row) => (r.kind === 'folder' ? r.folder.id : r.server.id);
 const isDeleted = (r: Row) => !!(r.kind === 'folder' ? r.folder.deletedAt : r.server.deletedAt);
 
 /** 连接管理器：Finder 式的文件夹 + 服务器树，多选的按键也照访达（core/selection.ts） */
-export function ConnectionManager({ backend, onClose, onConnect, openImport = false }: Props) {
+export function ConnectionManager({ backend, onClose, onConnect, openImport = false, importSeq = 0, frame = 'modal' }: Props) {
   const data = useStore(hostsStore);
   const open = useStore(openFolders);
   const closeAfter = useStore(closeManagerAfterConnect);
@@ -82,6 +86,9 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
   const [edit, setEdit] = useState<EditTarget | null>(null);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const [importOpen, setImportOpen] = useState(openImport);
+  useEffect(() => {
+    if (importSeq > 0) setImportOpen(true);
+  }, [importSeq]);
 
   const query = q.trim().toLowerCase();
   const filtering = query !== '' || kind !== 'all';
@@ -266,7 +273,7 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
         : `${selectedRows.length > 1 ? `删除所选 ${selectedRows.length} 项` : '删除'}（可在「显示已删除」里恢复）`;
 
   return (
-    <Modal title="连接管理器" onClose={onClose} width={920} height={580} className="mgr">
+    <Frame window={frame === 'window'} onClose={onClose}>
       <div className="mgr__toolbar">
         <button type="button" className="tb" data-tip="新建连接" aria-label="新建连接" onClick={() => setEdit({ mode: 'new', parentId: selectedFolderId })}>
           <NewConnectionIcon size={18} />
@@ -476,6 +483,27 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
         />
       )}
       {menu && <ContextMenu state={menu} onClose={() => setMenu(null)} />}
-    </Modal>
+    </Frame>
+  );
+}
+
+/** 弹窗，或者独立窗口：顶上一条和主窗口标签栏一样高的标题栏，按住能拖（Mac 的红绿灯叠在左边） */
+function Frame({ window: win, onClose, children }: { window: boolean; onClose(): void; children: ReactNode }) {
+  if (!win) {
+    return (
+      <Modal title="连接管理器" onClose={onClose} width={920} height={580} className="mgr">
+        {children}
+      </Modal>
+    );
+  }
+  return (
+    <div className="mgr mgr-window">
+      <header className="mgr-window__head" {...dragRegion}>
+        <h1 className="mgr-window__title" {...dragRegion}>
+          连接管理器
+        </h1>
+      </header>
+      {children}
+    </div>
   );
 }

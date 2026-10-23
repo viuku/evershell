@@ -1,0 +1,236 @@
+/* 底栏「命令」页：左边分类和快捷命令，中间分隔条，右边命令编辑器 */
+
+.cmds {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+}
+
+.cmds__main {
+  flex: 1 1 auto;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0 6px 8px;
+}
+
+/* ---------- 分类 ---------- */
+
+.cmds__groups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.cmds__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cmds__group svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.cmds__group:hover {
+  background: var(--hover);
+}
+
+.cmds__group--on,
+.cmds__group--on:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  font-weight: 600;
+}
+
+.cmds__group--on svg {
+  color: var(--accent);
+}
+
+/* 「＋ 新建分类」「＋ 新建命令」 */
+.cmds__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cmds__add:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.cmds__add--cmd {
+  height: 24px;
+}
+
+/* ---------- 命令区 ---------- */
+
+.cmds__box {
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--content);
+}
+
+.cmds__flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 4px 6px;
+}
+
+.cmds__cmd {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  height: 24px;
+  border-radius: 5px;
+  color: var(--text);
+}
+
+.cmds__cmd:hover {
+  background: var(--hover);
+}
+
+/* 按下去的一瞬间深一点，松开就恢复，点过的不留颜色（所有者 2026-10-23 定） */
+.cmds__cmd:has(.cmds__name:active) {
+  background: color-mix(in srgb, var(--text) 16%, transparent);
+}
+
+.cmds__name {
+  min-width: 0;
+  height: 24px;
+  padding: 0 3px 0 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmds__gear {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 24px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+}
+
+/* ---------- 底部一行：提示、发送到、发送 ---------- */
+
+.cmds__foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.cmds__flash {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+
+.cmds__flash--ok {
+  color: var(--ok);
+}
+
+.cmds__flash--fail {
+  color: var(--warn);
+}
+
+.cmds__to {
+  margin-left: auto;
+}
+
+.cmds__target {
+  width: 96px;
+}
+
+.cmds__send {
+  min-width: 56px;
+}
+
+/* ---------- 分隔条 ---------- */
+
+.cmds__split {
+  flex: 0 0 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: col-resize;
+}
+
+.cmds__split span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.cmds__split:hover span,
+.cmds__split--on span {
+  background: var(--accent);
+}
+
+/* ---------- 命令编辑器 ---------- */
+
+/* 宽度写在 flex-basis 上（拖分隔条调）；窗口窄时可以被挤窄 */
+.cmds__editor {
+  flex: 0 1 330px;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px 6px 0;
+}
+
+.cmds__title {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.field.cmds__text {
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 6px 8px;
+  resize: none;
+  font-size: 12px;
+  line-height: 1.5;
+}

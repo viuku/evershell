@@ -3,6 +3,7 @@
 #   1. 查工具链：cargo、wasm32 目标、llvm-tools、wasm-bindgen 版本、Node 22+
 #   2. node_modules 没装或 package-lock.json 更新过 → npm install
 #   3. 网页端的 WASM 包没编过 → scripts/build-wasm.sh（网页版 ?mock 预览也要它，否则 vite 报找不到 @evershell/ssh-wasm）
+#   4. 中转服务 services/relay-node 的依赖没装 → npm ci（它不在 npm 工作区里；scripts/check.sh web 的端到端测试要用它）
 # 新 worktree 第一次编 Rust 要几分钟（target/ 不共用），可以放后台跑。
 set -e
 cd "$(dirname "$0")/.."
@@ -41,4 +42,10 @@ if [ ! -f crates/ssh-wasm/pkg/ssh_wasm.js ]; then
   scripts/build-wasm.sh
 fi
 echo "✓ WASM 包"
+
+if [ ! -d services/relay-node/node_modules ]; then
+  echo "… 装中转服务的依赖"
+  npm ci --prefix services/relay-node --no-audit --no-fund > target/npm-relay.log 2>&1 || { tail -20 target/npm-relay.log; exit 1; }
+fi
+echo "✓ 中转服务依赖"
 echo "准备好了"

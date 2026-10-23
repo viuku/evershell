@@ -1,16 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import '@xterm/xterm/css/xterm.css';
 import './styles/base.css';
 import './styles/app.css';
 import './styles/sidebar.css';
 import './styles/terminal.css';
 import './styles/panels.css';
+import './styles/commands.css';
 import './styles/newtab.css';
 import './styles/manager.css';
 import './styles/monitor.css';
 import { DialogsProvider, useDialogs } from './components/common/Dialogs';
 import { TooltipLayer } from './components/common/Tooltip';
 import type { MenuItem } from './components/common/Menu';
+import { RemoteEditContext } from './components/editor/remote-edit-context';
 import { ConnectionManager } from './components/manager/ConnectionManager';
 import { InfoTabView } from './components/monitor/InfoTabView';
 import { EditConnectionDialog } from './components/manager/EditConnectionDialog';
@@ -23,6 +25,9 @@ import { TabBar } from './components/TabBar';
 import { askServerPassword, resolveAuth } from './core/connect';
 import { getServer, hostsStore, touchServerConnected, type ServerRecord } from './core/hosts-store';
 import { exportConnections } from './core/importers/export';
+import { parentPath } from './core/paths';
+import { ManagerLink } from './core/manager-link';
+import { localChannelPair, RemoteEdit } from './core/remote-edit';
 import { pushRecent } from './core/recents-store';
 import { SessionManager, type SessionInfo, type TerminalLook } from './core/session-manager';
 import { isAppShortcut, shortcutLabel } from './core/platform';
@@ -30,6 +35,16 @@ import { appearanceClass, appearanceMode, sidebarOpen, useEffectiveScheme } from
 import { useStore } from './core/store';
 import { resolveScheme, tabNeedsEdge, terminalAppearance, terminalBgImage, toXtermTheme } from './core/terminal-appearance';
 import type { SshBackend } from './types';
+
+// 编辑器（CodeMirror）按需加载，不拖慢启动
+const FloatingEditor = lazy(() => import('./components/editor/FloatingEditor'));
+
+/** 界面现在的底色，新开的独立窗口先铺上它，深色模式下不会先白一下（见 WindowLink.open） */
+function contentColor(): string | undefined {
+  const app = document.querySelector('.app');
+  const value = app ? getComputedStyle(app).getPropertyValue('--content').trim() : '';
+  return /^#[0-9a-f]{6}$/i.test(value) ? value : undefined;
+}
 
 export interface AppProps {
   backend: SshBackend;
@@ -72,6 +87,24 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
   useEffect(() => manager.applyLook(look), [manager, look]);
   useEffect(() => manager.setHostKeyPrompt((problem) => dialogs.hostKey(problem)), [manager, dialogs]);
   useEffect(() => manager.setPasswordPrompt((target) => askServerPassword(target, backend.secrets, dialogs)), [manager, backend, dialogs]);
+
+  // 远程文件编辑：桌面端开独立的编辑窗口，网页端浮在主窗口里（两头用一对内存里的消息口）
+  const editorPorts = useMemo(() => (backend.editorWindow ? null : localChannelPair()), [backend]);
+  const [floatingEditor, setFloatingEditor] = useState(false);
+  const remoteEdit = useMemo(
+    () =>
+      new RemoteEdit(
+        backend.editorWindow ?? editorPorts![0],
+        (sid) => {
+          const c = manager.connected(sid);
+          return c ? { session: c.session, host: `${c.info.user}@${c.info.name}` } : null;
+        },
+        () => (backend.editorWindow ? backend.editorWindow.open(contentColor()) : setFloatingEditor(true)),
+        (sid, path) => manager.getFiles(sid)?.refreshIfShowing(parentPath(path) ?? '/'),
+      ),
+    [backend, manager, editorPorts],
+  );
+  useEffect(() => remoteEdit.start(), [remoteEdit]);
   // 启动时默认打开一个新标签页
   useEffect(() => {
     if (manager.getSnapshot().tabs.length === 0) manager.openNewTab();
@@ -82,7 +115,6 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
   // 信息页也带着所属的会话：状态栏、底部状态条照常显示这台服务器
   const session = active?.session ?? null;
   const monitor = manager.getMonitor(session?.id ?? null);
-  const connectedCount = tabs.filter((t) => !t.info && t.session?.status === 'connected').length;
 
   const [managerOpen, setManagerOpen] = useState(false);
   const [managerImport, setManagerImport] = useState(false);
@@ -110,6 +142,43 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
       touchServerConnected(server.id);
     },
     [backend, manager, dialogs],
+  );
+
+  // 桌面端的连接管理器是独立窗口：它让连哪台，就在这里连；网页端照旧是弹窗
+  const managerLink = useMemo(
+    () =>
+      backend.managerWindow
+        ? new ManagerLink(backend.managerWindow, async (id) => {
+            let server = getServer(hostsStore.get(), id);
+            // 刚在管理器里新建的，同步通知可能还没到，直接从硬盘上读一遍
+            if (!server) {
+              hostsStore.reload();
+              server = getServer(hostsStore.get(), id);
+            }
+            if (server && !server.deletedAt) await connectServer(server);
+          })
+        : null,
+    [backend, connectServer],
+  );
+  useEffect(() => managerLink?.start(), [managerLink]);
+  // 主窗口画好后，在后台把连接管理器窗口先建好藏着，点开时直接亮出来（新建窗口要等它加载）
+  useEffect(() => {
+    const preload = backend.managerWindow?.preload;
+    if (!preload) return;
+    const timer = setTimeout(() => preload(contentColor()), 1500);
+    return () => clearTimeout(timer);
+  }, [backend]);
+  /** 打开连接管理器；importing：直接进导入 */
+  const openManager = useCallback(
+    (importing = false) => {
+      if (managerLink) {
+        void managerLink.open(importing, contentColor());
+        return;
+      }
+      setManagerImport(importing);
+      setManagerOpen(true);
+    },
+    [managerLink],
   );
 
   /** 重连：按连接管理器里的最新设置连（用齿轮改过的这时生效）；记录已经删了就照上次的连 */
@@ -141,9 +210,11 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
   // 快捷键：连接管理器、新标签页、关闭标签，按键见 core/platform.ts（浏览器里后两个可能被浏览器自己接管）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // 浮动编辑器里的 ⌘W、⌘F 归编辑器
+      if ((e.target as HTMLElement | null)?.closest?.('.ed-float')) return;
       if (isAppShortcut(e, 'o')) {
         e.preventDefault();
-        setManagerOpen(true);
+        openManager();
       } else if (isAppShortcut(e, 't')) {
         e.preventDefault();
         manager.openNewTab();
@@ -164,18 +235,15 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [manager, closeTab, openFind]);
+  }, [manager, closeTab, openFind, openManager]);
 
   const menuItems: MenuItem[] = [
-    { label: '连接管理器…', hint: shortcutLabel('o'), onSelect: () => setManagerOpen(true) },
+    { label: '连接管理器…', hint: shortcutLabel('o'), onSelect: () => openManager() },
     { label: '新标签页', hint: shortcutLabel('t'), onSelect: () => manager.openNewTab() },
     { type: 'separator' },
     {
       label: '导入连接…',
-      onSelect: () => {
-        setManagerImport(true);
-        setManagerOpen(true);
-      },
+      onSelect: () => openManager(true),
     },
     {
       label: '导出连接…',
@@ -206,73 +274,79 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
   } as CSSProperties;
 
   return (
-    <div className={`app ${appearanceClass(mode)}`} style={style}>
-      {sidebar && (
-        <MonitorSidebar
-          session={session}
-          monitor={monitor}
-          onToggleSidebar={() => sidebarOpen.set(false)}
-          onOpenInfo={(kind) => session && manager.openInfo(session.id, kind)}
-          leadingInset={windowButtonsInset}
-        />
-      )}
-      <div className="app__main">
-        <TabBar
-          tabs={tabs}
-          activeId={activeId}
-          groups={groups}
-          onSelect={(id) => manager.activate(id)}
-          onClose={(id) => void closeTab(id)}
-          onToggleGroup={(id) => manager.toggleGroup(id)}
-          onNewTab={() => manager.openNewTab()}
-          onOpenManager={() => setManagerOpen(true)}
-          onShowSidebar={sidebar ? undefined : () => sidebarOpen.set(true)}
-          menuItems={menuItems}
-          leadingInset={sidebar ? undefined : windowButtonsInset}
-        />
-        {active?.info && session ? (
-          <InfoTabView
-            key={active.id}
-            kind={active.info}
-            manager={manager}
+    <RemoteEditContext.Provider value={remoteEdit}>
+      <div className={`app ${appearanceClass(mode)}`} style={style}>
+        {sidebar && (
+          <MonitorSidebar
             session={session}
             monitor={monitor}
-            onReconnect={() => void reconnect(session)}
+            onToggleSidebar={() => sidebarOpen.set(false)}
+            onOpenInfo={(kind) => session && manager.openInfo(session.id, kind)}
+            leadingInset={windowButtonsInset}
           />
-        ) : session ? (
-          <SessionView
-            manager={manager}
-            session={session}
-            scheme={scheme}
-            connectedCount={connectedCount}
-            lookOpen={lookOpen}
-            onToggleLook={() => setLookOpen((o) => !o)}
-            bottomTab={bottomTab}
-            onBottomTab={setBottomTab}
-            findSeq={find?.id === session.id ? find.seq : null}
-            onToggleFind={() => (find?.id === session.id ? setFind(null) : openFind(session.id))}
-            onReconnect={() => void reconnect(session)}
-            onEditConnection={editableServer ? () => setEditing(editableServer) : null}
-          />
-        ) : (
-          <NewTabPage onConnect={(s) => void connectServer(s)} onOpenManager={() => setManagerOpen(true)} />
         )}
-        <StatusBar session={session} monitor={monitor} />
+        <div className="app__main">
+          <TabBar
+            tabs={tabs}
+            activeId={activeId}
+            groups={groups}
+            onSelect={(id) => manager.activate(id)}
+            onClose={(id) => void closeTab(id)}
+            onToggleGroup={(id) => manager.toggleGroup(id)}
+            onNewTab={() => manager.openNewTab()}
+            onOpenManager={() => openManager()}
+            onShowSidebar={sidebar ? undefined : () => sidebarOpen.set(true)}
+            menuItems={menuItems}
+            leadingInset={sidebar ? undefined : windowButtonsInset}
+          />
+          {active?.info && session ? (
+            <InfoTabView
+              key={active.id}
+              kind={active.info}
+              manager={manager}
+              session={session}
+              monitor={monitor}
+              onReconnect={() => void reconnect(session)}
+            />
+          ) : session ? (
+            <SessionView
+              manager={manager}
+              session={session}
+              scheme={scheme}
+              lookOpen={lookOpen}
+              onToggleLook={() => setLookOpen((o) => !o)}
+              bottomTab={bottomTab}
+              onBottomTab={setBottomTab}
+              findSeq={find?.id === session.id ? find.seq : null}
+              onToggleFind={() => (find?.id === session.id ? setFind(null) : openFind(session.id))}
+              onReconnect={() => void reconnect(session)}
+              onEditConnection={editableServer ? () => setEditing(editableServer) : null}
+            />
+          ) : (
+            <NewTabPage onConnect={(s) => void connectServer(s)} onOpenManager={() => openManager()} />
+          )}
+          <StatusBar session={session} monitor={monitor} />
+        </div>
+        {managerOpen && (
+          <ConnectionManager
+            backend={backend}
+            openImport={managerImport}
+            onClose={() => {
+              setManagerOpen(false);
+              setManagerImport(false);
+            }}
+            onConnect={connectServer}
+          />
+        )}
+        {editing && (
+          <EditConnectionDialog backend={backend} target={{ mode: 'edit', server: editing }} onClose={() => setEditing(null)} onSaved={() => {}} />
+        )}
+        {floatingEditor && editorPorts && (
+          <Suspense fallback={null}>
+            <FloatingEditor port={editorPorts[1]} onClosed={() => setFloatingEditor(false)} />
+          </Suspense>
+        )}
       </div>
-      {managerOpen && (
-        <ConnectionManager
-          backend={backend}
-          openImport={managerImport}
-          onClose={() => {
-            setManagerOpen(false);
-            setManagerImport(false);
-          }}
-          onConnect={connectServer}
-        />
-      )}
-      {editing && (
-        <EditConnectionDialog backend={backend} target={{ mode: 'edit', server: editing }} onClose={() => setEditing(null)} onSaved={() => {}} />
-      )}
-    </div>
+    </RemoteEditContext.Provider>
   );
 }

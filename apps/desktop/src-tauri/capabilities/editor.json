@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "editor",
+  "description": "远程文件编辑窗口（docs/specs/remote-edit.md）：和主窗口收发消息、拖动窗口；关闭前先问有没有没保存的，所以要能自己关掉窗口",
+  "windows": ["editor"],
+  "permissions": ["core:default", "core:window:allow-start-dragging", "core:window:allow-close", "core:window:allow-destroy"]
+}

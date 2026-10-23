@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "manager",
+  "description": "连接管理器窗口（docs/specs/manager-window.md）：和主窗口收发消息、同步本地数据、拖动窗口、关掉自己",
+  "windows": ["manager"],
+  "permissions": ["core:default", "core:window:allow-start-dragging", "core:window:allow-close", "core:window:allow-destroy"]
+}

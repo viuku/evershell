@@ -1,0 +1,394 @@
+/* 远程文件编辑器：独立窗口和浮动窗口共用（docs/specs/remote-edit.md） */
+
+.ap-light,
+.ap-auto {
+  --ed-comment: #6a6a70;
+  --ed-keyword: #9b2393;
+  --ed-key: #0b5cc4;
+  --ed-string: #1d7f37;
+  --ed-number: #9a5b00;
+  --ed-variable: #0e7490;
+  --ed-type: #a3501b;
+  --ed-func: #3b5bdb;
+  --ed-selection: rgba(0, 104, 214, 0.22);
+  --ed-line: #f2f4f8;
+  --ed-match: rgba(255, 196, 0, 0.32);
+  --ed-match-line: rgba(214, 150, 0, 0.6);
+  --ed-match-on: rgba(255, 150, 0, 0.55);
+}
+
+.ap-dark {
+  --ed-comment: #8a8a8a;
+  --ed-keyword: #ff7ab2;
+  --ed-key: #6ca8ff;
+  --ed-string: #5fd068;
+  --ed-number: #e5b847;
+  --ed-variable: #4fc8d8;
+  --ed-type: #ffa14f;
+  --ed-func: #9db2ff;
+  --ed-selection: rgba(47, 140, 255, 0.35);
+  --ed-line: #26262a;
+  --ed-match: rgba(255, 196, 0, 0.22);
+  --ed-match-line: rgba(255, 196, 0, 0.5);
+  --ed-match-on: rgba(255, 150, 0, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  .ap-auto {
+    --ed-comment: #8a8a8a;
+    --ed-keyword: #ff7ab2;
+    --ed-key: #6ca8ff;
+    --ed-string: #5fd068;
+    --ed-number: #e5b847;
+    --ed-variable: #4fc8d8;
+    --ed-type: #ffa14f;
+    --ed-func: #9db2ff;
+    --ed-selection: rgba(47, 140, 255, 0.35);
+    --ed-line: #26262a;
+    --ed-match: rgba(255, 196, 0, 0.22);
+    --ed-match-line: rgba(255, 196, 0, 0.5);
+    --ed-match-on: rgba(255, 150, 0, 0.45);
+  }
+}
+
+.ed {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--content);
+  color: var(--text);
+}
+
+/* 独立窗口：整个窗口就是编辑器 */
+.ed-window {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 浮动窗口（没有独立窗口的平台）：不挡主窗口操作，右下角能拉大小 */
+.ed-float {
+  position: fixed;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  width: min(960px, calc(100vw - 40px));
+  height: min(640px, calc(100vh - 60px));
+  min-width: 480px;
+  min-height: 300px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  resize: both;
+  background: var(--content);
+  box-shadow: var(--shadow);
+}
+
+/* ---------- 文件标签 ---------- */
+
+.ed__strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 6px 0 6px;
+  background: var(--strip);
+  flex: 0 0 auto;
+  user-select: none;
+}
+
+.ed-float .ed__strip {
+  cursor: grab;
+}
+
+.ed__tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 2px;
+  padding-top: 6px;
+}
+
+.ed__tab {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  max-width: 240px;
+  border-radius: 7px 7px 0 0;
+  color: var(--text);
+  cursor: default;
+}
+
+.ed__tab:hover {
+  background: var(--strip-hover);
+}
+
+.ed__tab--on,
+.ed__tab--on:hover {
+  background: var(--content);
+}
+
+.ed__tab-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px 0 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.ed__tab-close {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  flex: 0 0 auto;
+  cursor: default;
+}
+
+.ed__tab-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* 没保存的标签：关闭按钮的位置显示圆点，指上去才变回叉 */
+.ed__dot {
+  display: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text);
+}
+
+.ed__tab--dirty .ed__dot {
+  display: block;
+}
+
+.ed__tab--dirty .ed__tab-close svg,
+.ed__tab--dirty .ed__tab-close:hover .ed__dot {
+  display: none;
+}
+
+.ed__tab--dirty .ed__tab-close:hover svg {
+  display: block;
+}
+
+.ed__close {
+  align-self: center;
+  cursor: default;
+}
+
+/* ---------- 工具栏、编辑区、状态行 ---------- */
+
+.ed__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--line2);
+  flex: 0 0 auto;
+}
+
+.ed__path {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 11.5px;
+  user-select: text;
+}
+
+.ed__path svg {
+  flex: 0 0 auto;
+  opacity: 0.7;
+}
+
+.ed__status {
+  margin-left: auto;
+  max-width: 45%;
+  padding-left: 12px;
+  white-space: nowrap;
+}
+
+/* 上传、载入时状态文字前面一条进度：网络慢时也看得出在动 */
+.ed__progress {
+  margin-left: auto;
+  flex: 0 0 72px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.ed__progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.2s linear;
+}
+
+/* 还在比对服务器上的版本、没开始传：一小段来回走 */
+.ed__progress > .ed__progress-wait {
+  width: 30% !important;
+  animation: ed-wait 1s ease-in-out infinite alternate;
+}
+
+@keyframes ed-wait {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(240%);
+  }
+}
+
+.ed__status--busy {
+  margin-left: 0;
+  min-width: 92px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ed__status--muted {
+  color: var(--muted);
+}
+
+.ed__status--warn {
+  color: var(--warn);
+}
+
+.ed__status--ok {
+  color: var(--ok);
+}
+
+.ed__status--error {
+  color: var(--danger);
+}
+
+.ed__code {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.ed__code[hidden] {
+  display: none;
+}
+
+.ed__code .cm-editor {
+  height: 100%;
+}
+
+.ed__code .cm-editor.cm-focused {
+  outline: none;
+}
+
+.ed__empty {
+  flex: 1 1 auto;
+}
+
+.ed__foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 22px;
+  padding: 0 12px;
+  background: var(--bar);
+  border-top: 1px solid var(--line2);
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.ed__foot-right {
+  margin-left: auto;
+}
+
+/* CodeMirror 的查找面板换成和界面一样的控件 */
+.ed .cm-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 30px 6px 10px;
+  font-size: 12px;
+}
+
+.ed .cm-search br {
+  flex-basis: 100%;
+  height: 0;
+}
+
+.ed .cm-textfield {
+  height: 22px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 7px;
+  border: 1px solid var(--fieldline);
+  border-radius: 5px;
+  background: var(--field);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  outline: none;
+}
+
+.ed .cm-textfield:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.ed .cm-button {
+  height: 22px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--fieldline);
+  border-radius: 5px;
+  background: var(--field);
+  background-image: none;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.ed .cm-button:hover {
+  background: var(--hover);
+}
+
+.ed .cm-search label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.ed .cm-search input[type='checkbox'] {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.ed .cm-search button[name='close'] {
+  top: 6px;
+  right: 8px;
+  color: var(--muted);
+  font-size: 16px;
+}

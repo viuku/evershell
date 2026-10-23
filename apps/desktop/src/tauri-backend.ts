@@ -1,17 +1,23 @@
 import { HostKeyError } from '@evershell/ui';
 import type {
   ConnectOptions,
+  EditorWindowHost,
   FileEntry,
   HostKeyProblem,
+  ManagerWindowHost,
   MonitorDetail,
   MonitorSnapshot,
   SecretStore,
   SshBackend,
   SshSession,
+  StorageSync,
   SystemInfo,
   TransferProgress,
 } from '@evershell/ui';
 import { Channel, invoke } from '@tauri-apps/api/core';
+import { emit, emitTo, listen } from '@tauri-apps/api/event';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 // 与 src-tauri/src/commands.rs 对应
 interface ConnectReply {
@@ -122,6 +128,17 @@ class TauriSession implements SshSession {
     return call('sftp_rename', { id: this.id, from, to });
   }
 
+  stat(path: string): Promise<FileEntry> {
+    return call('sftp_stat', { id: this.id, path });
+  }
+
+  // Rust 直接回原始字节，这边拿到的是 ArrayBuffer
+  async readFile(path: string, maxBytes: number, onProgress?: (p: TransferProgress) => void): Promise<Uint8Array> {
+    const progress = new Channel<TransferProgress>();
+    progress.onmessage = (p) => onProgress?.(p);
+    return new Uint8Array(await call<ArrayBuffer>('sftp_read', { id: this.id, path, maxBytes, onProgress: progress }));
+  }
+
   async upload(remotePath: string, data: Blob, onProgress?: (p: TransferProgress) => void): Promise<void> {
     const progress = new Channel<TransferProgress>();
     progress.onmessage = (p) => onProgress?.(p);
@@ -176,5 +193,74 @@ export const tauriBackend: SshBackend = {
   async findLocalConfigs() {
     const list = await call<LocalConfigReply[]>('import_find_local');
     return list.map((c) => ({ ...c, files: c.files.map((f) => ({ path: f.path, bytes: Uint8Array.from(f.bytes) })) }));
+  },
+  editorWindow: {
+    open: (background) => call('editor_window_open', { background }),
+    post: (message) => void emitTo(EDITOR_LABEL, EDITOR_MSG, message).catch(() => {}),
+    listen: (handler) => listenHere(EDITOR_MSG, handler),
+  },
+  managerWindow: {
+    open: (background) => call('manager_window_open', { background }),
+    preload: (background) => void invoke('manager_window_preload', { background }).catch(() => {}),
+    post: (message) => void emitTo(MANAGER_LABEL, MANAGER_MSG, message).catch(() => {}),
+    listen: (handler) => listenHere(MANAGER_MSG, handler),
+  },
+};
+
+// ---------- 独立窗口：编辑器（docs/specs/remote-edit.md）、连接管理器（docs/specs/manager-window.md） ----------
+// 和 src-tauri/src/windows.rs 对应。几个窗口加载同一个页面，按窗口标签决定显示哪个界面
+
+const MAIN_LABEL = 'main';
+const EDITOR_LABEL = 'editor';
+const MANAGER_LABEL = 'manager';
+const EDITOR_MSG = 'editor-msg';
+const MANAGER_MSG = 'manager-msg';
+const STORE_SYNC = 'store-sync';
+
+export type WindowKind = 'main' | 'editor' | 'manager';
+
+export function windowKind(): WindowKind {
+  const label = getCurrentWebviewWindow().label;
+  return label === EDITOR_LABEL ? 'editor' : label === MANAGER_LABEL ? 'manager' : 'main';
+}
+
+/** 只收发给本窗口的事件。listen 是异步注册的，取消时等它注册完 */
+function listenHere(event: string, handler: (payload: unknown) => void): () => void {
+  const off = getCurrentWebviewWindow().listen(event, (e) => handler(e.payload));
+  return () => void off.then((f) => f());
+}
+
+export const editorHost: EditorWindowHost = {
+  post: (message) => void emitTo(MAIN_LABEL, EDITOR_MSG, message).catch(() => {}),
+  listen: (handler) => listenHere(EDITOR_MSG, handler),
+  setDirty: (dirty) => void invoke('editor_set_dirty', { dirty }).catch(() => {}),
+  onQuitRequested: (handler) => listenHere('editor-quit-requested', () => handler()),
+  quit: () => void invoke('editor_quit').catch(() => {}),
+  onCloseRequested: (handler) => {
+    const off = getCurrentWindow().onCloseRequested(async (e) => {
+      if (!(await handler())) e.preventDefault();
+    });
+    return () => void off.then((f) => f());
+  },
+  close: () => void getCurrentWindow().destroy(),
+};
+
+export const managerHost: ManagerWindowHost = {
+  post: (message) => void emitTo(MAIN_LABEL, MANAGER_MSG, message).catch(() => {}),
+  listen: (handler) => listenHere(MANAGER_MSG, handler),
+  // 藏起来，不真的关（src-tauri/src/windows.rs）
+  close: () => void invoke('window_hide').catch(() => {}),
+  focusMain: () => void invoke('main_window_focus').catch(() => {}),
+};
+
+/** 一个窗口写了本地数据，发给所有窗口；自己发的不处理（core/storage.ts） */
+export const storageSync: StorageSync = {
+  publish: (key, json) => void emit(STORE_SYNC, { from: getCurrentWebviewWindow().label, key, json }).catch(() => {}),
+  subscribe: (handler) => {
+    const me = getCurrentWebviewWindow().label;
+    const off = listen<{ from: string; key: string; json: string }>(STORE_SYNC, (e) => {
+      if (e.payload.from !== me) handler(e.payload.key, e.payload.json);
+    });
+    return () => void off.then((f) => f());
   },
 };

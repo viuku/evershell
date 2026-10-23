@@ -243,6 +243,10 @@ export interface SshSession {
   mkdir(path: string): Promise<void>;
   remove(path: string, isDir: boolean): Promise<void>;
   rename(from: string, to: string): Promise<void>;
+  /** 一个文件或目录的信息，跟着符号链接走；服务器没给用户名时 owner 是 uid */
+  stat(path: string): Promise<FileEntry>;
+  /** 整个文件读进内存，给编辑器用；比 maxBytes 大就报错，不读 */
+  readFile(path: string, maxBytes: number, onProgress?: (p: TransferProgress) => void): Promise<Uint8Array>;
   upload(remotePath: string, data: Blob, onProgress?: (p: TransferProgress) => void): Promise<void>;
   /** 桌面端保存到“下载”目录并返回本地路径；网页端交给浏览器下载并返回文件名 */
   download(remotePath: string, onProgress?: (p: TransferProgress) => void): Promise<string>;
@@ -279,4 +283,64 @@ export interface SshBackend {
    * 读哪些位置由后端决定，不接受路径。网页端读不了本机文件，不提供。
    */
   findLocalConfigs?(): Promise<LocalConfigFiles[]>;
+  /**
+   * 独立的编辑窗口（docs/specs/remote-edit.md），主窗口这一头。
+   * 没有这项的平台（网页端）编辑器在主窗口里浮着
+   */
+  editorWindow?: WindowLink;
+  /**
+   * 独立的连接管理器窗口（docs/specs/manager-window.md），主窗口这一头。
+   * 没有这项的平台（网页端）连接管理器是主窗口里的弹窗
+   */
+  managerWindow?: WindowLink;
+}
+
+/** 主窗口这一头：打开某个独立窗口、和它收发消息。消息内容由 core/remote-edit.ts、core/manager-link.ts 定 */
+export interface WindowLink {
+  /**
+   * 打开窗口，已经开着就切到前面。background 是界面现在的底色（#rrggbb）：
+   * 新窗口里的网页画出来之前先露出这个颜色，深色模式下不会先白一下
+   */
+  open(background?: string): Promise<void>;
+  /** 先在后台把窗口建好、藏着，之后 open 时直接亮出来，不用等它加载（连接管理器用） */
+  preload?(background?: string): void;
+  post(message: unknown): void;
+  /** 返回取消函数 */
+  listen(handler: (message: unknown) => void): () => void;
+}
+
+/** 连接管理器窗口这一头 */
+export interface ManagerWindowHost {
+  post(message: unknown): void;
+  listen(handler: (message: unknown) => void): () => void;
+  /** 关掉连接管理器窗口（桌面端其实是藏起来，下次打开不用再加载） */
+  close(): void;
+  /** 把主窗口切到前面（连接是在主窗口里开的） */
+  focusMain(): void;
+}
+
+/**
+ * 几个窗口共用本地数据时，一个窗口写了，通知其他窗口换成新内容（见 core/storage.ts）。
+ * 只有桌面端有多个窗口；浏览器多开页签靠自带的 storage 事件，不用这个
+ */
+export interface StorageSync {
+  publish(key: string, json: string): void;
+  /** 收别的窗口写的；返回取消函数 */
+  subscribe(handler: (key: string, json: string) => void): () => void;
+}
+
+/** 编辑窗口这一头，只在有独立编辑窗口的平台上有 */
+export interface EditorWindowHost {
+  post(message: unknown): void;
+  listen(handler: (message: unknown) => void): () => void;
+  /** 告诉平台编辑窗口里有没有没保存的修改：主窗口要关时据此决定先别关 */
+  setDirty(dirty: boolean): void;
+  /** 主窗口要关、编辑窗口里还有没保存的：让编辑窗口问一下。返回取消函数 */
+  onQuitRequested(handler: () => void): () => void;
+  /** 问完了（保存了或不要了），把编辑窗口和主窗口一起关掉 */
+  quit(): void;
+  /** 点了编辑窗口的关闭按钮。handler 返回 false 就不关。返回取消函数 */
+  onCloseRequested(handler: () => Promise<boolean>): () => void;
+  /** 关掉编辑窗口（不再问） */
+  close(): void;
 }
