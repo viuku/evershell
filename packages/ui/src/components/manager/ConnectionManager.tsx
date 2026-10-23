@@ -344,7 +344,10 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
                   <span className="mono mgr__mono ellipsis">{row.kind === 'server' ? row.server.host : ''}</span>
                   <span className="mono mgr__mono">{row.kind === 'server' ? row.server.port : ''}</span>
                   <span className="ellipsis">{row.kind === 'server' ? row.server.user : ''}</span>
-                  <span className="muted ellipsis">{row.kind === 'server' ? row.server.note : ''}</span>
+                  {/* 多行备注在列表里挤成一行，悬停看全文 */}
+                  <span className="muted ellipsis" title={row.kind === 'server' && row.server.note ? row.server.note : undefined}>
+                    {row.kind === 'server' ? row.server.note : ''}
+                  </span>
                 </button>
               );
             })

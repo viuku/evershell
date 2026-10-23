@@ -100,7 +100,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
   const dialogs = useDialogs();
   const editing = target.mode === 'edit' ? target.server : null;
 
-  // 编辑时看看保险箱里有没有已保存的密码 / 私钥，决定占位文案
+  // 编辑时看看保险箱里有没有已保存的密码 / 私钥：有密码就在密码框里显示圆点占位
   useEffect(() => {
     if (!editing || !secrets.available) return;
     const key = editing.auth === 'password' ? secretKeys.password(editing.id) : secretKeys.privateKey(editing.id);
@@ -109,6 +109,10 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
       .then((v) => setHasSavedSecret(v !== null))
       .catch(() => {});
   }, [editing, secrets]);
+
+  // 保险箱里查的是原认证方式那一种：原来用私钥、改选密码时，密码框不显示圆点
+  const savedPassword = hasSavedSecret && editing?.auth === 'password';
+  const savedKey = hasSavedSecret && editing?.auth !== 'password';
 
   const patch = (p: Partial<Form>) => {
     setForm((f) => ({ ...f, ...p }));
@@ -295,7 +299,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
             <label htmlFor="e-note" className="lbl">
               备注
             </label>
-            <input id="e-note" className="field" value={form.note} placeholder="可选" onChange={(e) => patch({ note: e.target.value })} />
+            <textarea id="e-note" className="field" rows={3} value={form.note} placeholder="可选，可换行" onChange={(e) => patch({ note: e.target.value })} />
             <span className="edit__rule" />
             <label htmlFor="e-auth" className="lbl">
               认证方式
@@ -318,10 +322,10 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
                 <div className="edit__stack">
                   <input
                     id="e-pass"
-                    className="field edit__user"
+                    className={`field edit__user${savedPassword ? ' edit__savedPass' : ''}`}
                     type="password"
                     value={form.password}
-                    placeholder={editing ? (hasSavedSecret ? '不修改请留空' : '') : ''}
+                    placeholder={savedPassword ? '••••••••' : ''}
                     autoComplete="new-password"
                     onChange={(e) => patch({ password: e.target.value })}
                   />
@@ -345,7 +349,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
                     fileName={form.keyLabel}
                     onChange={(key, name) => patch({ privateKey: key, keyLabel: name ?? (key ? '已粘贴私钥' : null) })}
                   />
-                  {editing && hasSavedSecret && !form.privateKey && <span className="muted">已保存私钥，不修改请留空</span>}
+                  {savedKey && !form.privateKey && <span className="muted">已保存私钥，不修改请留空</span>}
                   <label htmlFor="e-passphrase" className="muted edit__inlineLabel">
                     口令
                     <input

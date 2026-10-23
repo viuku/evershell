@@ -194,6 +194,12 @@
   max-width: 100%;
 }
 
+/* 已保存密码的圆点占位和输入的密码同色，看起来就是已经填好 */
+.field.edit__savedPass::placeholder {
+  color: var(--text);
+  opacity: 1;
+}
+
 .edit__rule {
   grid-column: 1 / -1;
   height: 1px;
