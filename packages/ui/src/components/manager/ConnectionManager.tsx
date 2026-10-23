@@ -1,7 +1,6 @@
-import { useMemo, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import {
   addFolder,
-  getFolder,
   getServer,
   hostsStore,
   renameFolder,
@@ -11,6 +10,17 @@ import {
   type ServerRecord,
 } from '../../core/hosts-store';
 import { exportConnections } from '../../core/importers/export';
+import { isDeleteSelectedKey, isSelectAllKey, isToggleSelect } from '../../core/platform';
+import {
+  clickSelect,
+  contextSelect,
+  emptySelection,
+  moveSelect,
+  pruneSelection,
+  selectAll,
+  selectOnly,
+  type Selection,
+} from '../../core/selection';
 import { closeManagerAfterConnect } from '../../core/settings';
 import { PersistentStore } from '../../core/storage';
 import { useStore } from '../../core/store';
@@ -46,7 +56,8 @@ const openFolders = new PersistentStore<Record<string, boolean>>('evershell.mana
 interface Props {
   backend: SshBackend;
   onClose(): void;
-  onConnect(server: ServerRecord): void;
+  /** 连好（或放弃）再返回，选了好几台时一台一台连 */
+  onConnect(server: ServerRecord): void | Promise<void>;
   /** 打开时直接进入导入流程（≡ 菜单的「导入连接…」） */
   openImport?: boolean;
 }
@@ -55,13 +66,16 @@ type Row =
   | { kind: 'folder'; folder: FolderRecord; depth: number; open: boolean; count: number }
   | { kind: 'server'; server: ServerRecord; depth: number };
 
-/** 连接管理器：Finder 式的文件夹 + 服务器树 */
+const idOf = (r: Row) => (r.kind === 'folder' ? r.folder.id : r.server.id);
+const isDeleted = (r: Row) => !!(r.kind === 'folder' ? r.folder.deletedAt : r.server.deletedAt);
+
+/** 连接管理器：Finder 式的文件夹 + 服务器树，多选的按键也照访达（core/selection.ts） */
 export function ConnectionManager({ backend, onClose, onConnect, openImport = false }: Props) {
   const data = useStore(hostsStore);
   const open = useStore(openFolders);
   const closeAfter = useStore(closeManagerAfterConnect);
   const dialogs = useDialogs();
-  const [sel, setSel] = useState<string | null>(null);
+  const [sel, setSel] = useState<Selection>(emptySelection);
   const [q, setQ] = useState('');
   const [kind, setKind] = useState<Kind>('all');
   const [showDeleted, setShowDeleted] = useState(false);
@@ -106,16 +120,40 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
     return out;
   }, [data, open, query, kind, showDeleted, filtering]);
 
-  const selServer = getServer(data, sel);
-  const selFolder = getFolder(data, sel);
-  const selectedFolderId = selFolder ? selFolder.id : (selServer?.parentId ?? null);
+  // 看得见的行的顺序，Shift 选段、方向键按它走；折叠、搜索后看不见的项不再算选中
+  const order = useMemo(() => rows.map(idOf), [rows]);
+  useEffect(() => setSel((s) => pruneSelection(s, order)), [order]);
+
+  const selectedRows = rows.filter((r) => sel.ids.has(idOf(r)));
+  const single = selectedRows.length === 1 ? selectedRows[0] : undefined;
+  const selServer = single?.kind === 'server' ? single.server : null;
+  const selFolder = single?.kind === 'folder' ? single.folder : null;
+  /** 最近点的那一项：新建放到它所在的文件夹，←→ 展开折叠它 */
+  const focusRow = sel.focus !== null && sel.ids.has(sel.focus) ? rows.find((r) => idOf(r) === sel.focus) : undefined;
+  const focusFolder = focusRow?.kind === 'folder' ? focusRow.folder : null;
+  const selectedFolderId = focusRow ? (focusRow.kind === 'folder' ? focusRow.folder.id : focusRow.server.parentId) : null;
+  const connectable = selectedRows.flatMap((r) => (r.kind === 'server' && !r.server.deletedAt ? [r.server] : []));
+  const allDeleted = selectedRows.length > 0 && selectedRows.every(isDeleted);
   const visibleCount = data.servers.filter((s) => !s.deletedAt).length;
 
   const toggleFolder = (id: string) => openFolders.set((o) => ({ ...o, [id]: !o[id] }));
-  const connect = (s: ServerRecord) => {
-    if (s.deletedAt) return;
-    onConnect(s);
+  /** 连接一台或几台；几台时按列表顺序一台一台连，要密码的依次弹框 */
+  const connect = (servers: ServerRecord[]) => {
+    const list = servers.filter((s) => !s.deletedAt);
+    if (list.length === 0) return;
+    void (async () => {
+      for (const s of list) await onConnect(s);
+    })();
     if (closeAfter) onClose();
+  };
+
+  /** 删除或恢复几项，已经是那个状态的跳过 */
+  const setRowsDeleted = (targets: Row[], deleted: boolean) => {
+    for (const r of targets) {
+      if (isDeleted(r) === deleted) continue;
+      if (r.kind === 'server') setServerDeleted(r.server.id, deleted);
+      else setFolderDeleted(r.folder.id, deleted);
+    }
   };
 
   const newFolder = async () => {
@@ -123,7 +161,7 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
     if (!name) return;
     const f = addFolder(name.trim(), selectedFolderId);
     if (selectedFolderId) openFolders.set((o) => ({ ...o, [selectedFolderId]: true }));
-    setSel(f.id);
+    setSel(selectOnly(f.id));
   };
 
   const rename = async (f: FolderRecord) => {
@@ -136,16 +174,12 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
     else if (selFolder) void rename(selFolder);
   };
 
-  const toggleDeleted = () => {
-    if (selServer) setServerDeleted(selServer.id, !selServer.deletedAt);
-    else if (selFolder) setFolderDeleted(selFolder.id, !selFolder.deletedAt);
-  };
-
-  const selDeleted = !!(selServer?.deletedAt || selFolder?.deletedAt);
+  /** 选中的全是已删除的就恢复，否则删除 */
+  const toggleDeleted = () => setRowsDeleted(selectedRows, !allDeleted);
 
   /** 选中了文件夹或连接就导出所选，否则导出全部 */
   const exportNow = async () => {
-    const ids = sel && (selServer || selFolder) ? [sel] : null;
+    const ids = selectedRows.length > 0 ? selectedRows.map(idOf) : null;
     try {
       const where = await exportConnections(data, ids, (name, bytes) => backend.saveFile(name, bytes));
       if (!where) await dialogs.alert('导出连接', ids ? '所选内容里没有可导出的连接' : '还没有可导出的连接');
@@ -159,7 +193,7 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
     if (row.kind === 'server') {
       const s = row.server;
       return [
-        { label: '连接', disabled: !!s.deletedAt, onSelect: () => connect(s) },
+        { label: '连接', disabled: !!s.deletedAt, onSelect: () => connect([s]) },
         { label: '编辑…', onSelect: () => setEdit({ mode: 'edit', server: s }) },
         { type: 'separator' },
         s.deletedAt
@@ -178,25 +212,41 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
     ];
   };
 
-  // 方向键在树里移动，左右展开折叠，回车连接
+  /** 在选中的几项上右键：对整组操作 */
+  const groupMenu = (): MenuItem[] => {
+    const n = selectedRows.length;
+    return [
+      {
+        label: connectable.length > 0 ? `连接 ${connectable.length} 台服务器` : '连接',
+        disabled: connectable.length === 0,
+        onSelect: () => connect(connectable),
+      },
+      { label: `导出 ${n} 项…`, onSelect: () => void exportNow() },
+      { type: 'separator' },
+      allDeleted
+        ? { label: `恢复 ${n} 项`, onSelect: () => setRowsDeleted(selectedRows, false) }
+        : { label: `删除 ${n} 项`, danger: true, onSelect: () => setRowsDeleted(selectedRows, true) },
+    ];
+  };
+
+  // 方向键在树里移动（按住 Shift 连选），左右展开折叠，回车连接，全选、删除同访达
   const onKey = (e: KeyboardEvent) => {
     if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'SELECT') return;
-    const idx = rows.findIndex((r) => (r.kind === 'folder' ? r.folder.id : r.server.id) === sel);
-    const idOf = (r: Row) => (r.kind === 'folder' ? r.folder.id : r.server.id);
-    if (e.key === 'ArrowDown') {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
-      const next = rows[Math.min(rows.length - 1, idx + 1)];
-      if (next) setSel(idOf(next));
-    } else if (e.key === 'ArrowUp') {
+      setSel((s) => moveSelect(s, order, e.key === 'ArrowDown' ? 1 : -1, e.shiftKey));
+    } else if (e.key === 'ArrowRight' && focusFolder && !open[focusFolder.id]) {
+      toggleFolder(focusFolder.id);
+    } else if (e.key === 'ArrowLeft' && focusFolder && open[focusFolder.id]) {
+      toggleFolder(focusFolder.id);
+    } else if (e.key === 'Enter') {
+      connect(connectable);
+    } else if (isSelectAllKey(e)) {
       e.preventDefault();
-      const prev = rows[Math.max(0, idx - 1)];
-      if (prev) setSel(idOf(prev));
-    } else if (e.key === 'ArrowRight' && selFolder && !open[selFolder.id]) {
-      toggleFolder(selFolder.id);
-    } else if (e.key === 'ArrowLeft' && selFolder && open[selFolder.id]) {
-      toggleFolder(selFolder.id);
-    } else if (e.key === 'Enter' && selServer) {
-      connect(selServer);
+      setSel((s) => selectAll(s, order));
+    } else if (isDeleteSelectedKey(e)) {
+      e.preventDefault();
+      setRowsDeleted(selectedRows, true);
     }
   };
 
@@ -204,7 +254,16 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
     ? `已选中 ${selServer.name} · 双击连接`
     : selFolder
       ? `已选中文件夹 ${selFolder.name}`
-      : `共 ${visibleCount} 台服务器 · 双击连接`;
+      : selectedRows.length > 1
+        ? `已选中 ${selectedRows.length} 项${connectable.length > 0 ? ` · 点「连接」打开其中 ${connectable.length} 台服务器` : ''}`
+        : `共 ${visibleCount} 台服务器 · 双击连接`;
+  const editTip = selServer || selFolder ? '编辑' : selectedRows.length > 1 ? '编辑（一次只能编辑一项）' : '编辑（先选中一个连接或文件夹）';
+  const deleteTip =
+    selectedRows.length === 0
+      ? '删除（先选中一个连接或文件夹）'
+      : allDeleted
+        ? selectedRows.length > 1 ? `恢复所选 ${selectedRows.length} 项` : '恢复'
+        : `${selectedRows.length > 1 ? `删除所选 ${selectedRows.length} 项` : '删除'}（可在「显示已删除」里恢复）`;
 
   return (
     <Modal title="连接管理器" onClose={onClose} width={920} height={580} className="mgr">
@@ -219,7 +278,7 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
         <button
           type="button"
           className="tb"
-          data-tip={selServer || selFolder ? '编辑' : '编辑（先选中一个连接或文件夹）'}
+          data-tip={editTip}
           aria-label="编辑"
           disabled={!selServer && !selFolder}
           onClick={editSelected}
@@ -229,9 +288,9 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
         <button
           type="button"
           className="tb"
-          data-tip={!selServer && !selFolder ? '删除（先选中一个连接或文件夹）' : selDeleted ? '恢复' : '删除（可在「显示已删除」里恢复）'}
-          aria-label={selDeleted ? '恢复' : '删除'}
-          disabled={!selServer && !selFolder}
+          data-tip={deleteTip}
+          aria-label={allDeleted ? '恢复' : '删除'}
+          disabled={selectedRows.length === 0}
           onClick={toggleDeleted}
         >
           <TrashIcon size={16} />
@@ -256,7 +315,7 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
         <button
           type="button"
           className="tb"
-          data-tip={selServer || selFolder ? '导出所选（文件夹或连接）' : '导出全部连接'}
+          data-tip={selectedRows.length > 0 ? '导出所选（文件夹或连接）' : '导出全部连接'}
           aria-label="导出连接"
           onClick={() => void exportNow()}
         >
@@ -295,10 +354,11 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
         className="scroll mgr__list"
         role="tree"
         aria-label="连接"
+        aria-multiselectable="true"
         tabIndex={0}
         onKeyDown={onKey}
         onClick={(e) => {
-          if (e.target === e.currentTarget) setSel(null);
+          if (e.target === e.currentTarget) setSel(emptySelection);
         }}
       >
         <div className="mgr__inner">
@@ -315,9 +375,9 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
             <div className="empty">{data.servers.length === 0 && !filtering ? '还没有连接。点左上角「新建连接」添加一台服务器。' : '没有匹配的连接'}</div>
           ) : (
             rows.map((row) => {
-              const id = row.kind === 'folder' ? row.folder.id : row.server.id;
-              const on = sel === id;
-              const deleted = row.kind === 'folder' ? !!row.folder.deletedAt : !!row.server.deletedAt;
+              const id = idOf(row);
+              const on = sel.ids.has(id);
+              const deleted = isDeleted(row);
               return (
                 // 行里还要放齿轮按钮，按钮不能套按钮，所以行用 div；键盘操作由外层列表接管
                 <div
@@ -326,17 +386,20 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
                   className={`grid-row mgr__cols mgr__row${on ? ' grid-row--on' : ''}${deleted ? ' mgr__row--deleted' : ''}`}
                   aria-expanded={row.kind === 'folder' ? row.open : undefined}
                   aria-selected={on}
-                  onClick={() => {
-                    setSel(id);
-                    if (row.kind === 'folder') toggleFolder(row.folder.id);
+                  onClick={(e) => {
+                    const mods = { toggle: isToggleSelect(e), range: e.shiftKey };
+                    setSel((s) => clickSelect(s, order, id, mods));
+                    // 按着修饰键只管选，不展开折叠
+                    if (row.kind === 'folder' && !mods.toggle && !mods.range) toggleFolder(row.folder.id);
                   }}
-                  onDoubleClick={() => {
-                    if (row.kind === 'server') connect(row.server);
+                  onDoubleClick={(e) => {
+                    if (row.kind === 'server' && !isToggleSelect(e) && !e.shiftKey) connect([row.server]);
                   }}
                   onContextMenu={(e) => {
                     e.preventDefault();
-                    setSel(id);
-                    setMenu({ x: e.clientX, y: e.clientY, items: rowMenu(row) });
+                    const group = on && selectedRows.length > 1;
+                    setSel((s) => contextSelect(s, id));
+                    setMenu({ x: e.clientX, y: e.clientY, items: group ? groupMenu() : rowMenu(row) });
                   }}
                 >
                   <span className="mgr__name" style={{ paddingLeft: row.depth * 18 }}>
@@ -356,7 +419,7 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
                         aria-label={`编辑 ${row.server.name}`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSel(id);
+                          setSel(selectOnly(id));
                           setEdit({ mode: 'edit', server: row.server });
                         }}
                         onDoubleClick={(e) => e.stopPropagation()}
@@ -388,7 +451,7 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
         <button type="button" className="btn mgr__edit" disabled={!selServer} onClick={() => selServer && setEdit({ mode: 'edit', server: selServer })}>
           编辑…
         </button>
-        <button type="button" className="btn btn-primary" disabled={!selServer || !!selServer.deletedAt} onClick={() => selServer && connect(selServer)}>
+        <button type="button" className="btn btn-primary" disabled={connectable.length === 0} onClick={() => connect(connectable)}>
           连接
         </button>
       </div>
@@ -399,7 +462,7 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
           target={edit}
           onClose={() => setEdit(null)}
           onSaved={(id) => {
-            setSel(id);
+            setSel(selectOnly(id));
             const s = getServer(hostsStore.get(), id);
             if (s?.parentId) openFolders.set((o) => ({ ...o, [s.parentId!]: true }));
           }}
