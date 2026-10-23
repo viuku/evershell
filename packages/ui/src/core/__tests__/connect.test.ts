@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { askServerPassword, isAuthFailure, isBlankPassword, resolveAuth, secretKeys, type AuthPrompts } from '../connect';
+import { askServerPassword, authForReconnect, isAuthFailure, isBlankPassword, resolveAuth, secretKeys, type AuthPrompts } from '../connect';
 import { DEFAULT_ADVANCED, type ServerRecord } from '../hosts-store';
 import type { SecretStore } from '../../types';
 
@@ -91,5 +91,31 @@ describe('认出“服务器要密码”', () => {
   it('按内核报错的开头认认证失败', () => {
     expect(isAuthFailure('认证失败：用户名、密码或私钥不正确')).toBe(true);
     expect(isAuthFailure('连接超时：服务器无响应')).toBe(false);
+  });
+});
+
+describe('重连用哪份认证', () => {
+  const typed = { host: '192.0.2.1', port: 22, user: 'root', auth: { type: 'password' as const, password: 'typed-in' } };
+
+  it('连接管理器没存密码时，沿用这次输过的', () => {
+    const fresh = { ...typed, auth: { type: 'password' as const, password: '' } };
+    expect(authForReconnect(fresh, typed)).toEqual(typed.auth);
+  });
+
+  it('连接管理器里有新密码就用新的', () => {
+    const fresh = { ...typed, auth: { type: 'password' as const, password: 'saved' } };
+    expect(authForReconnect(fresh, typed)).toEqual(fresh.auth);
+  });
+
+  it('改了主机、端口或用户名，不带旧密码过去', () => {
+    const blank = { type: 'password' as const, password: '' };
+    expect(authForReconnect({ ...typed, host: '192.0.2.9', auth: blank }, typed)).toEqual(blank);
+    expect(authForReconnect({ ...typed, port: 2222, auth: blank }, typed)).toEqual(blank);
+    expect(authForReconnect({ ...typed, user: 'admin', auth: blank }, typed)).toEqual(blank);
+  });
+
+  it('改成公钥认证就用公钥', () => {
+    const fresh = { ...typed, auth: { type: 'key' as const, privateKey: 'k' } };
+    expect(authForReconnect(fresh, typed)).toEqual(fresh.auth);
   });
 });

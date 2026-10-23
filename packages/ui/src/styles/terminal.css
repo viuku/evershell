@@ -82,6 +82,91 @@
   flex: 1 1 240px;
 }
 
+/* 命令栏右边的图标按钮：连接状态、搜索、连接设置、底栏开关 */
+.cmdbar__tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.cmdbar__sep {
+  width: 1px;
+  height: 14px;
+  margin-right: 2px;
+  background: var(--line);
+}
+
+.cmdbar__tool {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.cmdbar__tool:hover:not(:disabled),
+.cmdbar__tool--on {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.cmdbar__tool:disabled {
+  opacity: 0.4;
+}
+
+/* 闪电的颜色就是连接状态，悬停时也不变 */
+.cmdbar__bolt--connected,
+.cmdbar__bolt--connected:hover:not(:disabled) {
+  color: var(--ok);
+}
+
+.cmdbar__bolt--connecting,
+.cmdbar__bolt--connecting:hover:not(:disabled) {
+  color: var(--muted);
+  background: transparent;
+}
+
+.cmdbar__bolt--closed,
+.cmdbar__bolt--error,
+.cmdbar__bolt--closed:hover:not(:disabled),
+.cmdbar__bolt--error:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+/* 终端右上角的搜索框 */
+.term-find {
+  position: absolute;
+  top: 6px;
+  right: 16px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bar);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  box-shadow: var(--shadow);
+}
+
+.term-find__input {
+  width: 200px;
+  margin-right: 4px;
+}
+
+.term-find__count {
+  min-width: 40px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+
 /* 外观浮层 */
 .look {
   position: absolute;

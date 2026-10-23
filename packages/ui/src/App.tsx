@@ -10,6 +10,7 @@ import './styles/manager.css';
 import { DialogsProvider, useDialogs } from './components/common/Dialogs';
 import type { MenuItem } from './components/common/Menu';
 import { ConnectionManager } from './components/manager/ConnectionManager';
+import { EditConnectionDialog } from './components/manager/EditConnectionDialog';
 import { NewTabPage } from './components/newtab/NewTabPage';
 import type { BottomTab } from './components/panels/BottomPanels';
 import { SessionView } from './components/SessionView';
@@ -17,10 +18,10 @@ import { MonitorSidebar } from './components/sidebar/MonitorSidebar';
 import { StatusBar } from './components/StatusBar';
 import { TabBar } from './components/TabBar';
 import { askServerPassword, resolveAuth } from './core/connect';
-import { hostsStore, touchServerConnected, type ServerRecord } from './core/hosts-store';
+import { getServer, hostsStore, touchServerConnected, type ServerRecord } from './core/hosts-store';
 import { exportConnections } from './core/importers/export';
 import { pushRecent } from './core/recents-store';
-import { SessionManager, type TerminalLook } from './core/session-manager';
+import { SessionManager, type SessionInfo, type TerminalLook } from './core/session-manager';
 import { isAppShortcut, shortcutLabel } from './core/platform';
 import { appearanceClass, appearanceMode, sidebarOpen, useEffectiveScheme } from './core/settings';
 import { useStore } from './core/store';
@@ -57,7 +58,7 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
 
   const resolved = useMemo(() => resolveScheme(appearance, scheme), [appearance, scheme]);
   const look = useMemo<TerminalLook>(
-    () => ({ theme: toXtermTheme(resolved, !!bgImage), fontSize: appearance.fontSize }),
+    () => ({ theme: toXtermTheme(resolved, !!bgImage), fontSize: appearance.fontSize, isLight: resolved.isLight }),
     [resolved, bgImage, appearance.fontSize],
   );
   const lookRef = useRef(look);
@@ -82,6 +83,12 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
   const [managerImport, setManagerImport] = useState(false);
   const [lookOpen, setLookOpen] = useState(false);
   const [bottomTab, setBottomTab] = useState<BottomTab>('files');
+  /** 搜索框开在哪个标签上；seq 每按一次快捷键加一，用来重新选中输入框 */
+  const [find, setFind] = useState<{ id: string; seq: number } | null>(null);
+  const [editing, setEditing] = useState<ServerRecord | null>(null);
+  const hosts = useStore(hostsStore);
+  const savedServer = getServer(hosts, session?.serverId);
+  const editableServer = savedServer && !savedServer.deletedAt ? savedServer : null;
 
   /** 连接一台服务器：凑齐认证信息，开一个会话标签（当前是新标签页则原地替换） */
   const connectServer = useCallback(
@@ -99,6 +106,20 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
     },
     [backend, manager, dialogs],
   );
+
+  /** 重连：按连接管理器里的最新设置连（用齿轮改过的这时生效）；记录已经删了就照上次的连 */
+  const reconnect = useCallback(
+    async (s: SessionInfo) => {
+      const server = getServer(hostsStore.get(), s.serverId);
+      if (!server || server.deletedAt) return manager.reconnect(s.id);
+      const auth = await resolveAuth(server, backend.secrets, dialogs);
+      if (!auth) return;
+      manager.reconnect(s.id, { serverId: server.id, name: server.name, host: server.host, port: server.port, user: server.user, auth });
+    },
+    [backend, manager, dialogs],
+  );
+
+  const openFind = useCallback((id: string) => setFind((f) => ({ id, seq: (f?.seq ?? 0) + 1 })), []);
 
   const closeTab = useCallback(
     async (id: string) => {
@@ -127,11 +148,17 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
           e.preventDefault();
           void closeTab(id);
         }
+      } else if (isAppShortcut(e, 'f')) {
+        const { tabs, activeId } = manager.getSnapshot();
+        if (activeId && tabs.find((t) => t.id === activeId)?.session) {
+          e.preventDefault();
+          openFind(activeId);
+        }
       }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [manager, closeTab]);
+  }, [manager, closeTab, openFind]);
 
   const menuItems: MenuItem[] = [
     { label: '连接管理器…', hint: shortcutLabel('o'), onSelect: () => setManagerOpen(true) },
@@ -205,6 +232,10 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
             onToggleLook={() => setLookOpen((o) => !o)}
             bottomTab={bottomTab}
             onBottomTab={setBottomTab}
+            findSeq={find?.id === session.id ? find.seq : null}
+            onToggleFind={() => (find?.id === session.id ? setFind(null) : openFind(session.id))}
+            onReconnect={() => void reconnect(session)}
+            onEditConnection={editableServer ? () => setEditing(editableServer) : null}
           />
         ) : (
           <NewTabPage onConnect={(s) => void connectServer(s)} onOpenManager={() => setManagerOpen(true)} />
@@ -221,6 +252,9 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
           }}
           onConnect={(s) => void connectServer(s)}
         />
+      )}
+      {editing && (
+        <EditConnectionDialog backend={backend} target={{ mode: 'edit', server: editing }} onClose={() => setEditing(null)} onSaved={() => {}} />
       )}
     </div>
   );
