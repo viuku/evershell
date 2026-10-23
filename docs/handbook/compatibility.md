@@ -42,20 +42,21 @@
 
 ## 监控采集
 
-监控靠一条 shell 命令读 `/proc` 和跑 `ps`（`crates/ssh-core/src/monitor.rs`），不同环境差别很大：
+监控靠一条 shell 命令读 `/proc`（`crates/ssh-core/src/monitor.rs`），不同环境差别很大。进程列表不用 `ps`（它的 CPU 是进程启动以来的平均值，几乎不动），改成读每个进程的 `/proc/<pid>/stat`，用 awk 截出要的几项，CPU 用前后两次采样的差值算（2026-10-23）：
 
 | 环境 | 要注意的 | 现状 |
 |---|---|---|
 | 所有者的服务器 | 发行版未记录，下次连上后看 `/etc/os-release` | 连上过，监控显示是否正常没有确认 |
 | Debian / Ubuntu | 最常见的环境 | 未单独测 |
 | CentOS 7 | 老内核没有 MemAvailable | 代码里已兼容，未实测 |
-| Alpine / BusyBox | BusyBox 的 `ps` 不支持现在用的字段，进程列表可能是空的 | **推断有问题，未实测** |
+| Alpine / BusyBox | 进程列表靠 awk；BusyBox 的 awk 应该支持用到的写法；`getconf` 可能没有，取不到页大小时按 4K 算 | 未实测 |
+| 各种 awk | 用到 `getline` 读进变量、`match`、`split`、`substr`，不碰 `$0` 和字符串常量 | 2026-10-23 在 macOS 自带 awk 上，经 sh / bash / zsh / tcsh / csh 跑过；gawk、mawk、BusyBox 未实测 |
 | Docker 容器里 | `/proc` 显示的是宿主机的内存，用户会误以为内存很多；应读 cgroup 的限制 | 未处理 |
 | 非英文语言环境 | 命令输出会变 | 命令里已经强制 `LC_ALL=C` |
 | 登录脚本会打印文字 | 污染命令输出和 SFTP 数据 | SFTP 有已知问题（[pitfalls.md](pitfalls.md#sftp-报-packet-length-limit-exceeded2026-10-18)） |
 | macOS / BSD 服务器 | 没有 `/proc` | 应该显示“不支持”而不是报错；test-sshd 上是 `supported=false` |
 
-建议的改法（做的时候再定）：进程列表直接读 `/proc/<pid>/stat`，不依赖 `ps` 的扩展字段；容器里读 cgroup v2 的 `memory.max` / `memory.current`（附录 C 2.6）。
+建议的改法（做的时候再定）：容器里读 cgroup v2 的 `memory.max` / `memory.current`（附录 C 2.6）。
 
 ## 终端显示
 

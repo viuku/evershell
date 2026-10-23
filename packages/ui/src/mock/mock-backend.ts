@@ -69,14 +69,21 @@ function checkHostKey(opts: ConnectOptions): HostKeyInfo {
   throw new HostKeyError({ kind: 'unknown', host: opts.host, port: opts.port, key, otherTypes: [] });
 }
 
+// 后面几个内存小、CPU 高，按 CPU 排时才排得上来
 const PROCS = [
-  { name: 'node', mem: 1.1 * 2 ** 30, cpu: 12.4 },
-  { name: 'dockerd', mem: 612 * 2 ** 20, cpu: 3.1 },
-  { name: 'redis-server', mem: 488 * 2 ** 20, cpu: 0.8 },
-  { name: 'nginx', mem: 236 * 2 ** 20, cpu: 4.6 },
-  { name: 'containerd', mem: 142 * 2 ** 20, cpu: 0.2 },
-  { name: 'systemd-journald', mem: 64 * 2 ** 20, cpu: 0.1 },
-  { name: 'sshd', mem: 38 * 2 ** 20, cpu: 0.1 },
+  { pid: 2314, name: 'node', mem: 1.1 * 2 ** 30, cpu: 12.4 },
+  { pid: 981, name: 'dockerd', mem: 612 * 2 ** 20, cpu: 3.1 },
+  { pid: 1420, name: 'redis-server', mem: 488 * 2 ** 20, cpu: 0.8 },
+  { pid: 1102, name: 'nginx', mem: 236 * 2 ** 20, cpu: 4.6 },
+  { pid: 873, name: 'containerd', mem: 142 * 2 ** 20, cpu: 0.2 },
+  { pid: 412, name: 'systemd-journal', mem: 64 * 2 ** 20, cpu: 0.1 },
+  { pid: 4410, name: 'php-fpm', mem: 52 * 2 ** 20, cpu: 6.2 },
+  { pid: 1033, name: 'sshd', mem: 38 * 2 ** 20, cpu: 0.1 },
+  { pid: 1, name: 'systemd', mem: 12 * 2 ** 20, cpu: 0 },
+  { pid: 702, name: 'cron', mem: 3 * 2 ** 20, cpu: 0 },
+  { pid: 5120, name: 'tar', mem: 6 * 2 ** 20, cpu: 38 },
+  { pid: 5121, name: 'gzip', mem: 2 * 2 ** 20, cpu: 96 },
+  { pid: 23, name: 'kswapd0', mem: 0, cpu: 1.5 },
 ];
 
 const DISKS = [
@@ -154,7 +161,13 @@ class MockMonitor {
               { iface: 'eth0', rxPerSec: this.rx.next(), txPerSec: this.tx.next() },
               { iface: 'docker0', rxPerSec: this.dockerRx.next(), txPerSec: this.dockerRx.next() / 3 },
             ],
-      procs: PROCS.map((p) => ({ name: p.name, memBytes: p.mem, cpuPercent: Math.max(0, p.cpu + (Math.random() - 0.5) * 2) })),
+      // 真实后端只给内存前 10 和 CPU 前 10，这里进程少，全给；第一次采样 CPU 算不出来
+      procs: PROCS.map((p) => ({
+        pid: p.pid,
+        name: p.name,
+        memBytes: p.mem,
+        cpuPercent: this.samples === 1 ? 0 : p.cpu * (0.6 + Math.random() * 0.8),
+      })),
       disks: DISKS,
       latencyMs: Math.round(this.latency.next()),
     };

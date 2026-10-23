@@ -1,6 +1,7 @@
 //! 服务器监控：不装 agent，每次采样只在服务器上执行一条命令，把 /proc 的几段文本一次性取回来，
 //! 在本地解析。CPU 使用率和网速要靠相邻两次采样的差值算出来。
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -11,8 +12,14 @@ use crate::Connection;
 
 /// 一次采样命令：各段用 `==NAME==` 分隔。
 /// 用 `env LC_ALL=C sh -c` 包一层，不依赖用户的登录 shell 是不是 POSIX 的；
-/// 字符串里不含 `$`、反引号和反斜杠，所以放在双引号里对 bash / zsh / fish / csh 都一样。
+/// 字符串里不含 `$`、反引号、反斜杠和双引号，所以放在双引号里对 bash / zsh / fish / csh 都一样。
 /// `df -kPT` 能给文件系统类型（GNU、busybox 都支持），不支持时退回 `df -kP`。
+///
+/// 进程不用 `ps`：它给的 CPU 是进程从启动到现在的平均值，几乎不动；BusyBox 的 `ps` 也不支持要用的字段。
+/// 改成读每个进程的 `/proc/<pid>/stat`，用 awk 只挑出 `pid utime stime rss comm` 五项
+/// （第 1、14、15、24、2 项），整行五十多项原样传回来每次要多几十 KB。comm 在括号里，
+/// 可能含空格和右括号，所以用最后一个右括号定位。awk 不能写 `$0` 和字符串常量，
+/// 所以用 getline 读进变量、用正则找括号；只截取不做加法，老版 mawk 会把超过 2^31 的数打成科学计数法。
 const COMMAND: &str = "env LC_ALL=C sh -c \"\
 echo ==UPTIME==; cat /proc/uptime; \
 echo ==LOADAVG==; cat /proc/loadavg; \
@@ -21,7 +28,15 @@ echo ==CORES==; nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo; \
 echo ==MEMINFO==; cat /proc/meminfo; \
 echo ==NETDEV==; cat /proc/net/dev; \
 echo ==DF==; df -kPT 2>/dev/null || df -kP 2>/dev/null; \
-echo ==PS==; ps -eo rss=,pcpu=,comm= 2>/dev/null | sort -rn | head -n 10\"";
+echo ==PAGESIZE==; getconf PAGESIZE 2>/dev/null; \
+echo ==PROCS==; cat /proc/[0-9]*/stat 2>/dev/null | awk 'BEGIN{while((getline l)>0){\
+if(match(l,/[(]/)==0)continue;o=RSTART;\
+if(match(l,/.*[)]/)==0)continue;c=RLENGTH;\
+if(split(substr(l,c+2),f)<22)continue;\
+print substr(l,1,o-2),f[12],f[13],f[22],substr(l,o+1,c-o-1)}}'\"";
+
+/// 进程列表给界面多少个。实际传内存前这么多个、CPU 前这么多个的并集，界面按哪列排都能拿到真正的前几名。
+pub const TOP_PROCS: usize = 10;
 
 /// 一次监控采样。数值都是原始单位（字节、0–100 的百分比），格式化交给界面。
 /// 字段与 packages/ui/src/types.ts 里的 `MonitorSnapshot` 一一对应。
@@ -41,7 +56,7 @@ pub struct MonitorSnapshot {
     pub swap_used: u64,
     /// 各网卡（不含 lo）的速率；第一次采样还算不出速率，为空
     pub net: Vec<NetRate>,
-    /// 按内存占用从高到低，最多 10 个
+    /// 内存前 [`TOP_PROCS`] 和 CPU 前 [`TOP_PROCS`] 的并集，按内存从高到低
     pub procs: Vec<ProcInfo>,
     /// 真实文件系统的挂载点（不含 tmpfs、overlay 等）
     pub disks: Vec<DiskInfo>,
@@ -60,9 +75,10 @@ pub struct NetRate {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProcInfo {
+    pub pid: u32,
     pub name: String,
     pub mem_bytes: u64,
-    /// ps 给的是进程生命周期内的平均占用，不是瞬时值
+    /// 两次采样之间的占用，和 top 一样 100 表示占满一个核，多线程的进程可以超过 100；第一次采样为 0
     pub cpu_percent: f64,
 }
 
@@ -88,8 +104,19 @@ pub struct Sample {
     pub swap_used: u64,
     /// (网卡, 累计收字节, 累计发字节)
     pub net: Vec<(String, u64, u64)>,
-    pub procs: Vec<ProcInfo>,
+    /// 全部进程
+    pub procs: Vec<ProcSample>,
     pub disks: Vec<DiskInfo>,
+}
+
+/// 一次采样里的一个进程
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcSample {
+    pub pid: u32,
+    /// 累计用掉的 CPU 时间（用户态 + 内核态），单位和 /proc/stat 一样是时钟滴答
+    pub ticks: u64,
+    pub mem_bytes: u64,
+    pub name: String,
 }
 
 /// 解析采样命令的输出。缺少核心段（uptime / loadavg / stat / meminfo）时返回 None。
@@ -120,6 +147,12 @@ pub fn parse(output: &str) -> Option<Sample> {
     let cpu = parse_stat(section("STAT"))?;
     let (mem_total, mem_used, swap_total, swap_used) = parse_meminfo(section("MEMINFO"))?;
     let cores = parse_cores(section("CORES")).unwrap_or(0);
+    // 取不到页大小时按最常见的 4K 算
+    let page_size = section("PAGESIZE")
+        .iter()
+        .find_map(|l| l.trim().parse::<u64>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(4096);
 
     Some(Sample {
         uptime,
@@ -131,7 +164,7 @@ pub fn parse(output: &str) -> Option<Sample> {
         swap_total,
         swap_used,
         net: parse_netdev(section("NETDEV")),
-        procs: parse_ps(section("PS")),
+        procs: parse_procs(section("PROCS"), page_size),
         disks: parse_df(section("DF")),
     })
 }
@@ -173,7 +206,7 @@ pub fn snapshot(prev: Option<&Sample>, cur: &Sample, latency_ms: Option<f64>) ->
         swap_total: cur.swap_total,
         swap_used: cur.swap_used,
         net,
-        procs: cur.procs.clone(),
+        procs: top_procs(prev, cur),
         disks: cur.disks.clone(),
         latency_ms,
     }
@@ -262,25 +295,67 @@ fn parse_netdev(lines: &[&str]) -> Vec<(String, u64, u64)> {
         .collect()
 }
 
-/// `rss pcpu comm`，rss 单位 kB；comm 可能含空格，取剩余全部
-fn parse_ps(lines: &[&str]) -> Vec<ProcInfo> {
+/// 采样命令里 awk 的输出：`pid utime stime rss comm`，rss 单位是页；comm 可能含空格，取剩余全部
+fn parse_procs(lines: &[&str], page_size: u64) -> Vec<ProcSample> {
     lines
         .iter()
         .filter_map(|l| {
             let mut it = l.split_whitespace();
+            let pid: u32 = it.next()?.parse().ok()?;
+            let utime: u64 = it.next()?.parse().ok()?;
+            let stime: u64 = it.next()?.parse().ok()?;
             let rss: u64 = it.next()?.parse().ok()?;
-            let cpu: f64 = it.next()?.parse().ok()?;
             let name = it.collect::<Vec<_>>().join(" ");
             if name.is_empty() {
                 return None;
             }
-            Some(ProcInfo {
+            Some(ProcSample {
+                pid,
+                ticks: utime.saturating_add(stime),
+                mem_bytes: rss.saturating_mul(page_size),
                 name,
-                mem_bytes: rss * 1024,
-                cpu_percent: cpu,
             })
         })
-        .take(10)
+        .collect()
+}
+
+/// 用两次采样的 CPU 时间差算每个进程的占用，再挑出内存前 [`TOP_PROCS`] 和 CPU 前 [`TOP_PROCS`]，按内存从高到低排。
+fn top_procs(prev: Option<&Sample>, cur: &Sample) -> Vec<ProcInfo> {
+    let cores = cur.cores.max(1) as f64;
+    // 这段时间里一个核走过的滴答数；/proc/stat 第一行是所有核加起来的
+    let per_core = prev.map_or(0.0, |p| cur.cpu.0.saturating_sub(p.cpu.0) as f64 / cores);
+    let before: HashMap<u32, u64> = prev
+        .map(|p| p.procs.iter().map(|q| (q.pid, q.ticks)).collect())
+        .unwrap_or_default();
+    let mut all: Vec<ProcInfo> = cur
+        .procs
+        .iter()
+        .map(|p| {
+            // 上次没有的是新进程，这次先记 0；进程号被重用时差值可能离谱，最多算满所有核
+            let used = before.get(&p.pid).map_or(0, |t| p.ticks.saturating_sub(*t));
+            let cpu_percent = if per_core > 0.0 {
+                (used as f64 / per_core * 100.0).min(cores * 100.0)
+            } else {
+                0.0
+            };
+            ProcInfo {
+                pid: p.pid,
+                name: p.name.clone(),
+                mem_bytes: p.mem_bytes,
+                cpu_percent,
+            }
+        })
+        .collect();
+    all.sort_by_key(|p| std::cmp::Reverse(p.mem_bytes));
+    let mut keep = vec![false; all.len()];
+    keep.iter_mut().take(TOP_PROCS).for_each(|k| *k = true);
+    // 稳定排序：CPU 一样时（大多是 0）内存大的在前
+    let mut by_cpu: Vec<usize> = (0..all.len()).collect();
+    by_cpu.sort_by(|&a, &b| all[b].cpu_percent.total_cmp(&all[a].cpu_percent));
+    by_cpu.iter().take(TOP_PROCS).for_each(|&i| keep[i] = true);
+    all.into_iter()
+        .zip(keep)
+        .filter_map(|(p, k)| k.then_some(p))
         .collect()
 }
 
@@ -461,10 +536,14 @@ overlay        overlay     50000000 20000000  27000000      43% /var/lib/docker/
 /dev/sdb1      xfs        100000000 10000000  90000000      10% /data
 /dev/sda1      ext4        50000000 20000000  27000000      43% /mnt/bind
 server:/export nfs4       200000000 50000000 150000000      25% /mnt/nfs with space
-==PS==
- 512000  1.5 mysqld
- 204800  0.3 nginx: worker
-  10240  0.0 sshd
+==PAGESIZE==
+4096
+==PROCS==
+1 300 200 3000 systemd
+812 5000 1000 128000 mysqld
+977 100 50 51200 nginx: worker
+1203 10 5 2560 sshd
+2 0 40 0 kthreadd
 ";
 
     const SAMPLE_B: &str = "\
@@ -490,7 +569,7 @@ Filesystem     1024-blocks     Used Available Capacity Mounted on
 udev               4000000        0   4000000       0% /dev
 /dev/vda1         50000000 20000000  27000000      43% /
 tmpfs              4000000        0   4000000       0% /run
-==PS==
+==PROCS==
 ";
 
     #[test]
@@ -505,13 +584,10 @@ tmpfs              4000000        0   4000000       0% /run
         assert_eq!(s.swap_total, 2_000_000 * 1024);
         assert_eq!(s.swap_used, 500_000 * 1024);
         assert_eq!(s.net, vec![("eth0".to_string(), 1000, 500)]);
+        assert_eq!(s.procs.len(), 5);
         assert_eq!(
-            s.procs,
-            vec![
-                ProcInfo { name: "mysqld".into(), mem_bytes: 512000 * 1024, cpu_percent: 1.5 },
-                ProcInfo { name: "nginx: worker".into(), mem_bytes: 204800 * 1024, cpu_percent: 0.3 },
-                ProcInfo { name: "sshd".into(), mem_bytes: 10240 * 1024, cpu_percent: 0.0 },
-            ]
+            s.procs[2],
+            ProcSample { pid: 977, ticks: 150, mem_bytes: 51200 * 4096, name: "nginx: worker".into() }
         );
     }
 
@@ -554,6 +630,114 @@ tmpfs              4000000        0   4000000       0% /run
         assert!(second.procs.is_empty());
     }
 
+    /// 只留进程段，方便单独测进程列表
+    fn with_procs(base: &str, cpu_total: u64, procs: &str) -> Sample {
+        let mut s = parse(base).unwrap();
+        s.cpu.0 = cpu_total;
+        s.procs = parse_procs(&procs.lines().collect::<Vec<_>>(), 4096);
+        s
+    }
+
+    #[test]
+    fn proc_cpu_comes_from_deltas() {
+        // 4 核，两次采样之间所有核一共走了 800 个滴答，也就是每个核 200 个
+        let a = with_procs(SAMPLE_A, 10_000, "10 1000 0 100 java\n20 50 50 900 mysqld\n30 0 0 10 sleeper\n40 9000 0 5 reused");
+        let b = with_procs(SAMPLE_A, 10_800, "10 1300 100 100 java\n20 110 50 900 mysqld\n30 0 0 10 sleeper\n40 10 0 5 reused\n50 999 0 1 newcomer");
+
+        let first = snapshot(None, &a, None);
+        assert!(first.procs.iter().all(|p| p.cpu_percent == 0.0), "第一次采样没有参照");
+
+        let second = snapshot(Some(&a), &b, None);
+        let cpu = |name: &str| second.procs.iter().find(|p| p.name == name).unwrap().cpu_percent;
+        // java 用了 400 个滴答 = 两个核跑满，和 top 一样显示 200
+        assert!((cpu("java") - 200.0).abs() < 1e-9);
+        assert!((cpu("mysqld") - 30.0).abs() < 1e-9);
+        assert_eq!(cpu("sleeper"), 0.0);
+        // 进程号被重用、累计时间变小了，不能算成负数
+        assert_eq!(cpu("reused"), 0.0);
+        // 上次没有的新进程先记 0
+        assert_eq!(cpu("newcomer"), 0.0);
+        assert_eq!(second.procs[0].pid, 20, "默认按内存从高到低");
+    }
+
+    #[test]
+    fn keeps_top_by_memory_and_top_by_cpu() {
+        // 30 个进程：内存越往后越小，CPU 越往后越大
+        let lines = |cpu_scale: u64| -> String {
+            (1..=30u64)
+                .map(|i| format!("{i} {} 0 {} p{i}", i * cpu_scale, 1000 - i))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let a = with_procs(SAMPLE_A, 10_000, &lines(0));
+        let b = with_procs(SAMPLE_A, 20_000, &lines(1));
+        let snap = snapshot(Some(&a), &b, None);
+        let pids: Vec<u32> = snap.procs.iter().map(|p| p.pid).collect();
+        // 内存前 10 是 1..=10，CPU 前 10 是 21..=30，按内存排
+        let expected: Vec<u32> = (1..=10).chain(21..=30).collect();
+        assert_eq!(pids, expected);
+
+        // CPU 都是 0 时两份前 10 重合，只给 10 个
+        let snap = snapshot(None, &b, None);
+        assert_eq!(snap.procs.len(), TOP_PROCS);
+    }
+
+    #[test]
+    fn procs_parse_rejects_garbage() {
+        let lines = ["abc 1 2 3 x", "12 1 2 3", "", "7 1 2 notnum x", "8 1 2 3 a  b"];
+        let procs = parse_procs(&lines, 4096);
+        assert_eq!(procs.len(), 1);
+        assert_eq!(procs[0].name, "a b");
+        // 拿不到页大小时按 4K 算
+        let text = "==UPTIME==\n1 1\n==LOADAVG==\n0 0 0 1/1 1\n==STAT==\ncpu 1 1 1 1\n==MEMINFO==\n\
+MemTotal: 1000 kB\nMemAvailable: 500 kB\n==PROCS==\n9 1 1 2 init\n";
+        assert_eq!(parse(text).unwrap().procs[0].mem_bytes, 2 * 4096);
+    }
+
+    #[test]
+    fn command_is_safe_inside_double_quotes() {
+        // 外层双引号里的内容交给用户的登录 shell，这几个字符在 bash / zsh / fish / csh 里含义各不相同
+        let inner = COMMAND
+            .strip_prefix("env LC_ALL=C sh -c \"")
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap();
+        for bad in ['$', '`', '\\', '"', '!'] {
+            assert!(!inner.contains(bad), "采样命令里不能有 {bad}");
+        }
+    }
+
+    /// 把采样命令里读 /proc 的地方换成假文件，在本机的 sh 和 awk 上真跑一遍
+    #[cfg(unix)]
+    #[test]
+    fn procs_awk_extracts_fields() {
+        let dir = std::env::temp_dir().join(format!("evershell-procs-{}", std::process::id()));
+        let stats = [
+            ("1", "1 (systemd) S 0 1 1 0 -1 4194560 46525 2370516 113 1287 297 263 4527 2104 20 0 1 0 2 172544000 3170 18446744073709551615 1 1 0 0 0 0 671173123 4096 1260 0 0 0 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0"),
+            ("333", "333 (tmux: server) S 1 333 333 0 -1 4194368 1000 0 0 0 9000000000 123 0 0 20 0 1 0 500 10000000 2500 18446744073709551615 1 1 0 0 0 0 0 4096 1260 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0"),
+            ("4444", "4444 (a) b) R 1 333 333 0 -1 4194368 1000 0 0 0 7 8 0 0 20 0 1 0 500 10000000 12 18446744073709551615 1 1 0 0 0 0 0 4096 1260 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0"),
+            ("55", "55 (short) S 1 2 3"),
+        ];
+        for (pid, line) in stats {
+            std::fs::create_dir_all(dir.join(pid)).unwrap();
+            std::fs::write(dir.join(pid).join("stat"), format!("{line}\n")).unwrap();
+        }
+        let cmd = COMMAND.replace("/proc/[0-9]*/stat", &format!("{}/[0-9]*/stat", dir.display()));
+        let out = std::process::Command::new("sh").arg("-c").arg(&cmd).output().unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let procs_section: Vec<&str> = stdout.split("==PROCS==\n").nth(1).unwrap().lines().collect();
+        let mut procs = parse_procs(&procs_section, 4096);
+        procs.sort_by_key(|p| p.pid);
+        assert_eq!(
+            procs,
+            vec![
+                ProcSample { pid: 1, ticks: 297 + 263, mem_bytes: 3170 * 4096, name: "systemd".into() },
+                ProcSample { pid: 333, ticks: 9_000_000_123, mem_bytes: 2500 * 4096, name: "tmux: server".into() },
+                ProcSample { pid: 4444, ticks: 15, mem_bytes: 12 * 4096, name: "a) b".into() },
+            ]
+        );
+    }
+
     #[test]
     fn meminfo_without_memavailable_falls_back() {
         let text = "==UPTIME==\n1 1\n==LOADAVG==\n0 0 0 1/1 1\n==STAT==\ncpu 1 1 1 1\n==MEMINFO==\n\
@@ -568,7 +752,7 @@ MemTotal: 1000 kB\nMemFree: 100 kB\nBuffers: 200 kB\nCached: 300 kB\n";
     fn non_linux_output_is_unsupported() {
         // macOS 没有 /proc：各段都是空的（错误进了 stderr）
         let text = "==UPTIME==\n==LOADAVG==\n==STAT==\n==CORES==\n8\n==MEMINFO==\n==NETDEV==\n==DF==\n\
-Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/disk3s1 1000 500 500 50% /\n==PS==\n";
+Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/disk3s1 1000 500 500 50% /\n==PAGESIZE==\n4096\n==PROCS==\n";
         assert!(parse(text).is_none());
         assert!(parse("").is_none());
         assert!(parse("bash: /proc/uptime: No such file\n").is_none());
@@ -589,7 +773,8 @@ Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/disk3s1 1000 500
         assert_eq!(json["cpuCores"], 4);
         assert_eq!(json["memTotal"], 8_000_000u64 * 1024);
         assert_eq!(json["latencyMs"], serde_json::Value::Null);
-        assert_eq!(json["procs"][0]["memBytes"], 512000u64 * 1024);
+        assert_eq!(json["procs"][0]["memBytes"], 128000u64 * 4096);
+        assert_eq!(json["procs"][0]["pid"], 812);
         assert_eq!(json["disks"][0]["mount"], "/");
     }
 }
