@@ -254,9 +254,8 @@
 }
 
 .sidebar__bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 1px;
+  position: relative;
+  overflow: hidden;
   height: 56px;
   border-bottom: 1px solid var(--line);
 }
@@ -265,12 +264,30 @@
   height: 28px;
 }
 
-.sidebar__barPair {
-  flex: 1 1 0;
+/*
+ * 一格一根（网速是上传、下载两根挨着），从右往左排：--age 是离最新那根隔几格，--slots 是图上几格。
+ * 每格宽 (总宽 + 1px) / 格数，减掉 1px 当缝；平移的 100% 是格子自己的宽，再加 1px 正好挪一格。
+ */
+.sidebar__slot {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: calc((100% + 1px) / var(--slots) - 1px);
   height: 100%;
   display: flex;
   align-items: flex-end;
-  min-width: 0;
+  transform: translateX(calc(var(--age) * (-100% - 1px)));
+  transition: transform 0.3s ease;
+}
+
+.sidebar__slot--new {
+  animation: sidebar-slot-in 0.3s ease;
+}
+
+@keyframes sidebar-slot-in {
+  from {
+    transform: translateX(calc(100% + 1px));
+  }
 }
 
 .sidebar__bar {

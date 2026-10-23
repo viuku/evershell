@@ -54,10 +54,15 @@ export interface OpenSessionOptions {
 /** 状态栏用的监控数据：最新快照 + 最近若干次采样画图 */
 export interface MonitorState {
   snapshot: MonitorSnapshot | null;
-  /** 最近的网速采样，字节/秒 */
+  /** 图上画的网速：选中网卡（没选就是所有网卡相加）最近的采样，字节/秒。比图上的格数多留一个，给正在滑出左边的那根柱子 */
   net: { rx: number; tx: number }[];
-  /** 最近的延迟采样，毫秒；测不出的点记 0 */
+  /** 和 net 一一对应：每次采样时各网卡各自的网速。换网卡时从这里重算 net，不用从头攒 */
+  netByIface: MonitorSnapshot['net'][];
+  /** 最近的延迟采样，毫秒；测不出的点记 0。同样多留一个 */
   ping: number[];
+  /** 到现在一共收到几次网速、延迟采样，清空时不归零；柱状图拿它给每根柱子编号 */
+  netTotal: number;
+  pingTotal: number;
   /** 选中的网卡；null 表示所有网卡求和 */
   iface: string | null;
 }
@@ -68,32 +73,40 @@ const MONITOR_INTERVAL = 2000;
 
 export class MonitorStore extends Store<MonitorState> {
   constructor() {
-    super({ snapshot: null, net: [], ping: [], iface: null });
+    super({ snapshot: null, net: [], netByIface: [], ping: [], netTotal: 0, pingTotal: 0, iface: null });
   }
 
   push(snapshot: MonitorSnapshot): void {
     this.set((s) => {
       const iface = s.iface && snapshot.net.some((n) => n.iface === s.iface) ? s.iface : null;
-      const picked = iface ? snapshot.net.filter((n) => n.iface === iface) : snapshot.net;
-      const rx = picked.reduce((a, n) => a + n.rxPerSec, 0);
-      const tx = picked.reduce((a, n) => a + n.txPerSec, 0);
+      const hasNet = snapshot.net.length > 0;
+      const netByIface = hasNet ? [...s.netByIface, snapshot.net].slice(-(NET_SAMPLES + 1)) : s.netByIface;
       return {
         snapshot,
         iface,
-        net: snapshot.net.length ? [...s.net, { rx, tx }].slice(-NET_SAMPLES) : s.net,
-        ping: [...s.ping, snapshot.latencyMs ?? 0].slice(-PING_SAMPLES),
+        netByIface,
+        // 选中的网卡没了会改回相加，这时整条都要重算
+        net: hasNet || iface !== s.iface ? netByIface.map((rates) => pickRate(rates, iface)) : s.net,
+        ping: [...s.ping, snapshot.latencyMs ?? 0].slice(-(PING_SAMPLES + 1)),
+        netTotal: hasNet ? s.netTotal + 1 : s.netTotal,
+        pingTotal: s.pingTotal + 1,
       };
     });
   }
 
   setIface(iface: string | null): void {
-    // 换网卡后旧曲线没意义，清掉重画
-    this.set((s) => ({ ...s, iface, net: [] }));
+    this.set((s) => ({ ...s, iface, net: s.netByIface.map((rates) => pickRate(rates, iface)) }));
   }
 
   reset(): void {
-    this.set((s) => ({ ...s, snapshot: null, net: [], ping: [] }));
+    this.set((s) => ({ ...s, snapshot: null, net: [], netByIface: [], ping: [] }));
   }
+}
+
+/** 一次采样里选中网卡的网速；iface 为 null 时所有网卡相加，这次没出现的网卡记 0 */
+function pickRate(rates: MonitorSnapshot['net'], iface: string | null): { rx: number; tx: number } {
+  const picked = iface ? rates.filter((n) => n.iface === iface) : rates;
+  return { rx: picked.reduce((a, n) => a + n.rxPerSec, 0), tx: picked.reduce((a, n) => a + n.txPerSec, 0) };
 }
 
 interface Entry {
