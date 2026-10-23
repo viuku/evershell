@@ -252,7 +252,7 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
             setManagerOpen(false);
             setManagerImport(false);
           }}
-          onConnect={(s) => void connectServer(s)}
+          onConnect={connectServer}
         />
       )}
       {editing && (

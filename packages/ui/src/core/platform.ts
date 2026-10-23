@@ -21,6 +21,27 @@ export function shortcutLabel(key: string): string {
 
 export const modEnterLabel = isMac ? '⌘⏎' : 'Ctrl+Enter';
 
+// 列表多选的按键照各系统的文件管理器：Mac 同访达，其他系统同资源管理器。
+
+type Mods = { metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean };
+
+/** 单击时按住的是不是“加选/取消这一项”的键：Mac ⌘，其他系统 Ctrl */
+export function isToggleSelect(e: Mods): boolean {
+  return isMac ? e.metaKey : e.ctrlKey;
+}
+
+/** 全选：Mac ⌘A，其他系统 Ctrl+A */
+export function isSelectAllKey(e: Mods & { key: string }): boolean {
+  if (e.altKey || e.shiftKey || e.key.toLowerCase() !== 'a') return false;
+  return isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+}
+
+/** 删除所选：Mac ⌘⌫（访达的“移到废纸篓”），其他系统 Delete */
+export function isDeleteSelectedKey(e: Mods & { key: string }): boolean {
+  if (e.altKey || e.shiftKey) return false;
+  return isMac ? e.metaKey && e.key === 'Backspace' : !e.metaKey && !e.ctrlKey && e.key === 'Delete';
+}
+
 /**
  * 标记“按住能拖动窗口”的空白处。桌面端 Mac 隐藏了系统标题栏，窗口靠标签栏、状态栏顶部的空白拖动；
  * 只对元素本身生效，里面的按钮照常点击。网页端没有这回事，属性留着也无影响。
