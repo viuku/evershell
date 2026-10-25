@@ -27,13 +27,17 @@ interface ConnectReply {
   fingerprint: string | null;
 }
 
-/** import_find_local 的一项，见 src-tauri/src/local_import.rs 的 LocalConfig */
+/** import_find_local / import_find_local_commands 的一项，见 src-tauri/src/local_import.rs 的 LocalConfig */
 interface LocalConfigReply {
   source: string;
   location: string;
   files: { path: string; bytes: number[] }[];
   error: string | null;
 }
+
+/** 文件内容是 JSON 里的数字数组（配置文件很小），这里转回字节 */
+const toLocalConfigs = (list: LocalConfigReply[]) =>
+  list.map((c) => ({ ...c, files: c.files.map((f) => ({ path: f.path, bytes: Uint8Array.from(f.bytes) })) }));
 
 /** 远端输出是原始字节（ArrayBuffer），退出事件是一条 JSON */
 type ShellEvent = ArrayBuffer | Uint8Array | { exit: number | null; reason: string | null };
@@ -191,10 +195,11 @@ export const tauriBackend: SshBackend = {
   // WKWebView 不处理 <a download>，交给 Rust 写进"下载"目录
   saveFile: (name, data) =>
     invoke<string>('save_download', data, { headers: { 'x-name': encodeURIComponent(name) } }).catch(rethrow),
-  // 文件内容是 JSON 里的数字数组（配置文件很小），这里转回字节
   async findLocalConfigs() {
-    const list = await call<LocalConfigReply[]>('import_find_local');
-    return list.map((c) => ({ ...c, files: c.files.map((f) => ({ path: f.path, bytes: Uint8Array.from(f.bytes) })) }));
+    return toLocalConfigs(await call<LocalConfigReply[]>('import_find_local'));
+  },
+  async findLocalCommands() {
+    return toLocalConfigs(await call<LocalConfigReply[]>('import_find_local_commands'));
   },
   // 网页内核读不了云盘里“仅在线”的文件，弹框、读文件都交给 Rust（src-tauri/src/local_file.rs）
   pickPrivateKeyFile: () => call<LocalTextFile | null>('local_pick_key_file'),

@@ -1,0 +1,33 @@
+{
+  "theme": "default",
+  "password": "FAKE-NOT-A-REAL-PASSWORD-0000000",
+  "secret_key_list": [
+    { "id": "k1", "name": "假私钥", "private_key": "-----BEGIN FAKE KEY-----\nAAAA\n-----END FAKE KEY-----" }
+  ],
+  "selected_cmd_group": "g2",
+  "quick_commands": [
+    {
+      "id": "g2", "name": "Docker", "order": 2, "create_time": 1700000000000, "modified_time": 0, "delete_time": 0,
+      "commands": [
+        { "id": "c21", "parent_id": "g2", "name": "进容器", "command": "docker exec -it ", "append_cr": false, "order": 1, "delete_time": 0, "param_history": { "#1": [], "#2": [] } },
+        { "id": "c20", "parent_id": "g2", "name": "容器状态", "command": "docker ps", "append_cr": true, "order": 0, "delete_time": 0 }
+      ]
+    },
+    {
+      "id": "g1", "name": "常用", "order": 1, "delete_time": 0,
+      "commands": [
+        { "id": "c10", "parent_id": "g1", "name": "查看磁盘", "command": "df -h", "append_cr": true, "order": 0, "delete_time": 0 },
+        { "id": "c11", "parent_id": "g1", "name": "删掉的命令", "command": "echo gone", "append_cr": true, "order": 1, "delete_time": 1700000500000 },
+        { "id": "c12", "parent_id": "g1", "name": "发布", "command": "cd /srv/app\r\ngit pull\r\nsystemctl restart app", "append_cr": true, "order": 2, "delete_time": 0 },
+        { "id": "c13", "parent_id": "g1", "name": "", "command": "uptime", "order": 3 },
+        { "id": "c14", "parent_id": "g1", "name": "空命令", "command": "  ", "append_cr": true, "order": 4 }
+      ]
+    },
+    {
+      "id": "g3", "name": "删掉的分类", "order": 3, "delete_time": 1700000600000,
+      "commands": [{ "id": "c30", "parent_id": "g3", "name": "不该出现", "command": "echo no", "append_cr": true, "order": 0 }]
+    },
+    { "id": "g4", "name": "", "order": 4, "delete_time": 0, "commands": [{ "id": "c40", "name": "没分类名", "command": "whoami", "append_cr": true, "order": 0 }] },
+    { "id": "g5", "name": "空分类", "order": 5, "delete_time": 0, "commands": [] }
+  ]
+}

@@ -12,11 +12,13 @@ import {
   removeSnippet,
   renameGroup,
   snippetsStore,
+  tidyCommand,
   updateSnippet,
   withGroupAdded,
   withGroupRemoved,
   withGroupRenamed,
   withSnippetAdded,
+  withSnippetUpdated,
   type Snippet,
   type SnippetData,
 } from '../snippets-store';
@@ -103,10 +105,45 @@ describe('分类的增删改（纯函数）', () => {
 
   it('没填名称用命令第一行', () => {
     expect(defaultSnippetName('  cd /opt/app\ngit pull\n')).toBe('cd /opt/app');
-    expect(withSnippetAdded(data, { name: ' ', cmd: ' df -h ', group: '常用' }, 'n', 5).snippets.at(-1)).toMatchObject({
+    expect(withSnippetAdded(data, { name: ' ', cmd: 'df -h', group: '常用' }, 'n', 5).snippets.at(-1)).toMatchObject({
       name: 'df -h',
       cmd: 'df -h',
     });
+  });
+
+  it('不自动回车：勾上才存这一项，取消勾选时去掉', () => {
+    const added = withSnippetAdded(data, { name: '杀进程', cmd: 'kill -9', group: '常用', noEnter: true }, 'n', 5);
+    expect(added.snippets.at(-1)).toEqual({ id: 'n', name: '杀进程', cmd: 'kill -9', group: '常用', updatedAt: 5, noEnter: true });
+    const plain = withSnippetAdded(data, { name: 'x', cmd: 'ls', group: '常用', noEnter: false }, 'm', 5);
+    expect(plain.snippets.at(-1)).not.toHaveProperty('noEnter');
+    const off = withSnippetUpdated(added, 'n', { name: '杀进程', cmd: 'kill -9 1234', group: '常用' }, 6);
+    expect(off.snippets.find((s) => s.id === 'n')).toEqual({ id: 'n', name: '杀进程', cmd: 'kill -9 1234', group: '常用', updatedAt: 6 });
+  });
+
+  it('空格按输入的原样保存，不加也不删，和回不回车无关', () => {
+    for (const noEnter of [true, false]) {
+      const typed = withSnippetAdded(data, { name: 'a', cmd: 'kill -9 ', group: '常用', noEnter }, 'a', 5);
+      expect(typed.snippets.at(-1)?.cmd).toBe('kill -9 ');
+      const bare = withSnippetAdded(data, { name: 'b', cmd: 'kill -9', group: '常用', noEnter }, 'b', 5);
+      expect(bare.snippets.at(-1)?.cmd).toBe('kill -9');
+    }
+    // 取消勾选再保存，末尾的空格还在
+    const on = withSnippetAdded(data, { name: 'c', cmd: 'grep ', group: '常用', noEnter: true }, 'c', 5);
+    expect(withSnippetUpdated(on, 'c', { name: 'c', cmd: 'grep ', group: '常用' }, 6).snippets.at(-1)?.cmd).toBe('grep ');
+  });
+});
+
+describe('tidyCommand', () => {
+  it('换行统一成 \\n，只去掉开头和末尾多出来的空行', () => {
+    expect(tidyCommand('\r\ncd /srv\r\ngit pull\r\n')).toBe('cd /srv\ngit pull');
+    expect(tidyCommand('\n  \ndocker exec -it \n  \n')).toBe('docker exec -it ');
+  });
+
+  it('开头、末尾和中间的空格原样保留', () => {
+    expect(tidyCommand('  df -h  ')).toBe('  df -h  ');
+    expect(tidyCommand('kill -9 ')).toBe('kill -9 ');
+    expect(tidyCommand('kill -9')).toBe('kill -9');
+    expect(tidyCommand('if true; then\n  echo hi\nfi')).toBe('if true; then\n  echo hi\nfi');
   });
 });
 

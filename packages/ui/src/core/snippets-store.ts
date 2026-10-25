@@ -7,9 +7,11 @@ export interface Snippet {
   /** 所在分类的名字；改名时一起改，见 renameGroup */
   group: string;
   updatedAt: number;
+  /** 点了只把文字放进终端、不按回车（要补参数的命令）。没有这项就是自动回车，规格见 docs/specs/command-import.md */
+  noEnter?: true;
 }
 
-export type SnippetInput = Pick<Snippet, 'name' | 'cmd' | 'group'>;
+export type SnippetInput = Pick<Snippet, 'name' | 'cmd' | 'group'> & { noEnter?: boolean };
 
 /** 分类全删光以后，新建的命令放进这里 */
 export const DEFAULT_GROUP = '默认分类';
@@ -30,6 +32,7 @@ export const snippetsStore = new PersistentStore<Snippet[]>('evershell.snippets.
         .filter((s) => s && typeof s.id === 'string' && typeof s.cmd === 'string')
         // 缺分类的记录放进默认分类，不然哪个分类下都看不到它
         .map((s) => (typeof s.group === 'string' && s.group.trim() ? s : { ...s, group: DEFAULT_GROUP }))
+        .map(({ noEnter, ...s }) => (noEnter === true ? { ...s, noEnter } : s))
     : fb,
 );
 
@@ -109,18 +112,43 @@ export function withGroupRemoved(data: SnippetData, name: string): SnippetData {
   };
 }
 
+/**
+ * 存之前整理命令：换行统一成 \n，只去掉开头和末尾多出来的空行。空格按用户输入的原样保存，
+ * 不加也不删，和回不回车无关（所有者 2026-10-26 定）
+ */
+export function tidyCommand(cmd: string): string {
+  return cmd
+    .replace(/\r\n?/g, '\n')
+    .replace(/^([ \t]*\n)+/, '')
+    .replace(/(\n[ \t]*)+$/, '');
+}
+
+/** 名称、命令、分类、回车方式；id 和 updatedAt 由调用方给 */
+function snippetFields(input: SnippetInput, groups: string[]): Omit<Snippet, 'id' | 'updatedAt'> {
+  const noEnter = input.noEnter === true;
+  return {
+    name: input.name.trim() || defaultSnippetName(input.cmd),
+    cmd: tidyCommand(input.cmd),
+    group: resolveGroup(input.group, groups),
+    ...(noEnter ? { noEnter } : {}),
+  };
+}
+
 export function withSnippetAdded(data: SnippetData, input: SnippetInput, id: string, now: number): SnippetData {
-  const group = resolveGroup(input.group, data.groups);
-  const snippet: Snippet = { id, name: input.name.trim() || defaultSnippetName(input.cmd), cmd: input.cmd.trim(), group, updatedAt: now };
-  return { groups: withGroup(data.groups, group), snippets: [...data.snippets, snippet] };
+  const snippet: Snippet = { id, ...snippetFields(input, data.groups), updatedAt: now };
+  return { groups: withGroup(data.groups, snippet.group), snippets: [...data.snippets, snippet] };
 }
 
 export function withSnippetUpdated(data: SnippetData, id: string, input: SnippetInput, now: number): SnippetData {
-  const group = resolveGroup(input.group, data.groups);
-  const name = input.name.trim() || defaultSnippetName(input.cmd);
+  const fields = snippetFields(input, data.groups);
   return {
-    groups: withGroup(data.groups, group),
-    snippets: data.snippets.map((s) => (s.id === id ? { ...s, name, cmd: input.cmd.trim(), group, updatedAt: now } : s)),
+    groups: withGroup(data.groups, fields.group),
+    snippets: data.snippets.map((s) => {
+      if (s.id !== id) return s;
+      // 取消勾选时要去掉旧记录上的 noEnter，所以不能直接在 s 上合并
+      const { noEnter: _old, ...rest } = s;
+      return { ...rest, ...fields, updatedAt: now };
+    }),
   };
 }
 
@@ -170,3 +198,6 @@ export function renameGroup(from: string, to: string): void {
 export function removeGroup(name: string): void {
   commit(withGroupRemoved(current(), name));
 }
+
+/** 导入快捷命令用：读出当前数据，合并好再整份写回（components/panels/CommandImportDialog.tsx） */
+export { current as currentSnippetData, commit as commitSnippetData };

@@ -634,6 +634,33 @@
   padding: 0 8px;
 }
 
+/* 导入快捷命令（components/panels/CommandImportDialog.tsx）：名称 / 命令 / 回车 */
+.imp__cols--cmd {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) 56px;
+}
+
+/* 命令行缩进到分类名下面：分类行的展开箭头 12px + 文件夹图标 16px + 两个间距 */
+.imp__cmdName {
+  padding-left: 38px;
+}
+
+.imp__lines {
+  margin-left: 8px;
+  font-family: var(--font);
+  font-size: 11px;
+}
+
+.imp__tag--accent {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.imp__note {
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
 .imp__row {
   height: 24px;
   font-size: 12.5px;

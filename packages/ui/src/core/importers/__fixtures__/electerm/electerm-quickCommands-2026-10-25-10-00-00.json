@@ -1,0 +1,49 @@
+[
+  {
+    "id": "q1",
+    "name": "查看磁盘",
+    "commands": [{ "id": "q1-1", "command": "df -h", "delay": 100 }],
+    "inputOnly": false,
+    "labels": ["常用"],
+    "shortcut": ""
+  },
+  {
+    "id": "q2",
+    "name": "发布",
+    "commands": [
+      { "id": "q2-1", "command": "cd /srv/app", "delay": 100 },
+      { "id": "q2-2", "command": "git pull", "delay": 500 },
+      { "id": "q2-3", "command": "systemctl restart app", "enter": true, "delay": 100 }
+    ],
+    "labels": ["部署", "常用"]
+  },
+  {
+    "id": "q3",
+    "name": "杀进程",
+    "commands": [{ "id": "q3-1", "command": "kill -9 ", "delay": 100 }],
+    "inputOnly": true,
+    "labels": []
+  },
+  {
+    "_id": "q4",
+    "name": "老格式",
+    "command": "uptime",
+    "inputOnly": false
+  },
+  {
+    "id": "q5",
+    "name": "登录后等提示",
+    "commands": [
+      { "id": "q5-1", "command": "su -", "delay": 100 },
+      { "id": "q5-2", "type": "wait", "text": "Password:", "timeout": 10 },
+      { "id": "q5-3", "type": "prompt", "text": "输入密码", "hidden": true }
+    ],
+    "labels": ["常用"]
+  },
+  {
+    "id": "q6",
+    "name": "贴剪贴板",
+    "commands": [{ "id": "q6-1", "command": "echo {{clipboard}}", "delay": 100 }],
+    "labels": ["常用"]
+  }
+]

@@ -2,6 +2,8 @@
 
 > 2026-10-23。所有者选了设计稿方案 A，已做；Windows 的位置还没实测。
 
+> 快捷命令的一键导入另有一张位置表，见 [command-import.md](command-import.md)。
+
 ## 问题
 
 导入连接要用户自己在访达里找到别的 SSH 软件存配置的位置。FinalShell 的在隐藏的 `~/Library/FinalShell/conn`，要按 ⇧⌘G 输路径，一般人找不到。

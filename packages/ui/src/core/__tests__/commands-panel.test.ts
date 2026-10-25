@@ -3,15 +3,17 @@ import { sendTo, toTerminalInput, type CommandSender } from '../commands-panel';
 
 /** 记下发了什么，connected 是已连接的会话 */
 function fakeSender(connected: string[]) {
-  const sent: { to: string; cmd: string }[] = [];
+  const sent: { to: string; cmd: string; enter?: false }[] = [];
+  // 不按回车的才记 enter: false，其余用例照旧只比 to 和 cmd
+  const record = (to: string, cmd: string, enter = true) => sent.push(enter ? { to, cmd } : { to, cmd, enter: false });
   const sender: CommandSender = {
-    sendCommand(id, cmd) {
+    sendCommand(id, cmd, enter) {
       if (!connected.includes(id)) return false;
-      sent.push({ to: id, cmd });
+      record(id, cmd, enter);
       return true;
     },
-    sendToAll(cmd) {
-      for (const id of connected) sent.push({ to: id, cmd });
+    sendToAll(cmd, enter) {
+      for (const id of connected) record(id, cmd, enter);
       return connected.length;
     },
   };
@@ -36,7 +38,7 @@ describe('toTerminalInput', () => {
 describe('sendTo', () => {
   it('发到当前会话，提示带上快捷命令的名字', () => {
     const { sender, sent } = fakeSender(['s1', 's2']);
-    expect(sendTo(sender, 's1', 'current', 'df -h', '查看磁盘')).toEqual({ ok: true, text: '已发送「查看磁盘」到当前会话' });
+    expect(sendTo(sender, 's1', 'current', 'df -h', { name: '查看磁盘' })).toEqual({ ok: true, text: '已发送「查看磁盘」到当前会话' });
     expect(sendTo(sender, 's1', 'current', 'a\nb')).toEqual({ ok: true, text: '已发送到当前会话' });
     expect(sent).toEqual([
       { to: 's1', cmd: 'df -h' },
@@ -52,7 +54,7 @@ describe('sendTo', () => {
 
   it('发到全部会话', () => {
     const { sender, sent } = fakeSender(['s1', 's2', 's3']);
-    expect(sendTo(sender, 's1', 'all', 'uptime', '负载')).toEqual({ ok: true, text: '已发送到 3 个会话' });
+    expect(sendTo(sender, 's1', 'all', 'uptime', { name: '负载' })).toEqual({ ok: true, text: '已发送到 3 个会话' });
     expect(sent).toHaveLength(3);
     expect(sendTo(fakeSender([]).sender, 's1', 'all', 'uptime')).toEqual({ ok: false, text: '没有已连接的会话' });
   });
@@ -62,5 +64,25 @@ describe('sendTo', () => {
     expect(sendTo(sender, 's1', 'current', '  \n ')).toBeNull();
     expect(sendTo(sender, 's1', 'all', '')).toBeNull();
     expect(sent).toEqual([]);
+  });
+
+  it('不自动回车：末尾不按回车，提示写明没按', () => {
+    const { sender, sent } = fakeSender(['s1', 's2']);
+    expect(sendTo(sender, 's1', 'current', 'kill -9 ', { name: '杀进程', noEnter: true })).toEqual({
+      ok: true,
+      text: '已把「杀进程」放进当前会话，没按回车',
+    });
+    expect(sendTo(sender, 's1', 'all', 'docker exec -it ', { noEnter: true })).toEqual({ ok: true, text: '已放进 2 个会话，没按回车' });
+    expect(sent).toEqual([
+      { to: 's1', cmd: 'kill -9 ', enter: false },
+      { to: 's1', cmd: 'docker exec -it ', enter: false },
+      { to: 's2', cmd: 'docker exec -it ', enter: false },
+    ]);
+  });
+
+  it('不自动回车的多行命令：前面几行照样带回车，只有最后一行等用户按', () => {
+    const { sender, sent } = fakeSender(['s1']);
+    sendTo(sender, 's1', 'current', 'cd /srv/app\ngit checkout ', { noEnter: true });
+    expect(sent).toEqual([{ to: 's1', cmd: 'cd /srv/app\rgit checkout ', enter: false }]);
   });
 });

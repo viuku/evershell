@@ -1,4 +1,3 @@
-import type { SourceInfo } from '../../core/importers/sources';
 import { extOf, fileName } from '../../core/importers/text';
 import type { ImportFile } from '../../core/importers/types';
 
@@ -51,14 +50,18 @@ export interface CollectResult {
   skipped: number;
 }
 
-/** 按来源过滤扩展名，跳过隐藏文件和大文件，读出字节 */
-export async function collectImportFiles(picked: PickedFile[], source: SourceInfo): Promise<CollectResult> {
+/** 按来源过滤扩展名，跳过隐藏文件和大文件，读出字节。导入连接和导入快捷命令共用 */
+export async function collectImportFiles(
+  picked: PickedFile[],
+  source: { extensions: string[]; maxBytes?: number },
+): Promise<CollectResult> {
   const files: ImportFile[] = [];
   let skipped = 0;
+  const maxBytes = source.maxBytes ?? MAX_FILE_BYTES;
   for (const { file, path } of picked) {
     const name = fileName(path);
     const wrongExt = source.extensions.length > 0 && !source.extensions.includes(extOf(path));
-    if (name.startsWith('.') || file.size > MAX_FILE_BYTES || wrongExt) {
+    if (name.startsWith('.') || file.size > maxBytes || wrongExt) {
       skipped++;
       continue;
     }

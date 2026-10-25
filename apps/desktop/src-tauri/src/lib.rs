@@ -56,6 +56,7 @@ pub fn run() {
             commands::sftp_download,
             commands::save_download,
             commands::import_find_local,
+            commands::import_find_local_commands,
             commands::local_pick_key_file,
             commands::key_inspect,
             commands::secret_get,

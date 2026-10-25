@@ -301,6 +301,11 @@ export interface SshBackend {
    */
   findLocalConfigs?(): Promise<LocalConfigFiles[]>;
   /**
+   * 一键导入快捷命令：同 findLocalConfigs，查的是各软件存快捷命令的位置。大配置文件（FinalShell 的 config.json）
+   * 只交出命令那一块（docs/specs/command-import.md）。网页端不提供
+   */
+  findLocalCommands?(): Promise<LocalConfigFiles[]>;
+  /**
    * 选私钥文件，由后端读出内容。取消返回 null，读不了抛错（文案直接给用户看）。
    * 桌面端用：网页内核读不了 OneDrive、iCloud 里“仅在线”的文件，选了没反应（docs/handbook/pitfalls.md）。
    * 没有这项的平台（网页端）用浏览器的选文件框

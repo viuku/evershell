@@ -5,20 +5,23 @@ import { ResultBuilder, type ImportFile, type ImportResult } from './types';
 // 行格式依据 VanDyke 官方脚本示例里的注释：S:"Protocol Name"=SSH2（字符串）、D:"[SSH2] Port"=00000016（8 位十六进制整数）；
 // Z: 是多行字符串（先写行数，再逐行缩进一格），Description 用的就是它。密码加密保存，不导入。
 
-interface CrtValue {
+export interface CrtValue {
+  /** 原样大小写的键名；Map 的键是小写的 */
+  name: string;
   type: 'S' | 'D' | 'Z' | 'B';
   text: string;
   lines: string[];
 }
 
-function parseCrtIni(text: string): Map<string, CrtValue> {
+/** 也给快捷命令的按钮栏用（commands/securecrt.ts）：按钮栏就是一个 Z: 多行字符串 */
+export function parseCrtIni(text: string): Map<string, CrtValue> {
   const out = new Map<string, CrtValue>();
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const m = /^([SDZB]):"([^"]+)"=(.*)$/.exec(lines[i]!.replace(/\r$/, ''));
     if (!m) continue;
     const type = m[1] as CrtValue['type'];
-    const value: CrtValue = { type, text: m[3]!.trim(), lines: [] };
+    const value: CrtValue = { name: m[2]!, type, text: m[3]!.trim(), lines: [] };
     if (type === 'Z') {
       let n = parseInt(value.text, 16);
       while (n-- > 0 && i + 1 < lines.length && /^\s/.test(lines[i + 1]!)) value.lines.push(lines[++i]!.replace(/^\s/, '').replace(/\r$/, ''));

@@ -1,5 +1,6 @@
 //! 一键导入：到别的 SSH 软件默认存配置的位置读文件，交给前端的解析器（packages/ui/src/core/importers）。
-//! 前端只能调用、不能传路径，能读哪些位置由这里的表决定。规格见 docs/specs/one-click-import.md。
+//! 前端只能调用、不能传路径，能读哪些位置由这里的表决定。连接和快捷命令各一张表，
+//! 规格见 docs/specs/one-click-import.md、docs/specs/command-import.md。
 
 use std::fs;
 use std::io;
@@ -9,6 +10,8 @@ use serde::Serialize;
 
 /// 单个文件的上限，和前端 import-files.ts 的 MAX_FILE_BYTES 一致；超过的跳过
 const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
+/// 只取一部分的 JSON 配置（FinalShell 的 config.json 带着几千条历史命令）可以大一些，交出去的只是其中一块
+const MAX_JSON_BYTES: u64 = 16 * 1024 * 1024;
 /// 一个来源最多读的文件数、总字节数、看过的目录项数。配置都很小，超了多半是位置不对，整个不读
 const MAX_FILES: usize = 2000;
 const MAX_TOTAL_BYTES: u64 = 16 * 1024 * 1024;
@@ -47,6 +50,8 @@ enum Kind {
     File,
     /// 整个文件夹（含子文件夹），只读这些扩展名；空表示不限
     Dir(&'static [&'static str]),
+    /// 一个 JSON 文件，只把顶层这几项交给前端。FinalShell 的 config.json 里还有它自己的密码和私钥列表，不能整个交出去
+    JsonPart(&'static [&'static str]),
 }
 
 #[derive(Debug)]
@@ -113,6 +118,40 @@ fn locations(platform: Platform, dirs: &Dirs) -> Vec<Location> {
     }
 }
 
+/// 快捷命令在各平台查哪些位置。依据见 packages/ui/src/core/importers/commands/ 下各解析器的文件头
+fn command_locations(platform: Platform, dirs: &Dirs) -> Vec<Location> {
+    let home = &dirs.home;
+    // SecureCRT 8.7 起所有按钮栏都在这一个文件里；Electerm 只认它自己导出的文件，不在表里
+    let button_bar = "ButtonBarV5.ini";
+    match platform {
+        Platform::Mac => vec![
+            Location {
+                source: "finalshell",
+                candidates: vec![home.join("Library").join("FinalShell").join("config.json")],
+                kind: Kind::JsonPart(&["quick_commands"]),
+            },
+            Location {
+                source: "securecrt",
+                candidates: vec![dirs.data.join("VanDyke").join("SecureCRT").join("Config").join(button_bar)],
+                kind: Kind::File,
+            },
+        ],
+        Platform::Windows => vec![
+            Location {
+                source: "finalshell",
+                candidates: vec![dirs.local_data.join("finalshell").join("config.json")],
+                kind: Kind::JsonPart(&["quick_commands"]),
+            },
+            Location {
+                source: "securecrt",
+                candidates: vec![dirs.data.join("VanDyke").join("Config").join(button_bar)],
+                kind: Kind::File,
+            },
+        ],
+        Platform::Linux => vec![],
+    }
+}
+
 /// 一个来源的查找结果，和前端 types.ts 的 LocalConfigFiles 对应
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -133,9 +172,18 @@ pub struct LocalFile {
     bytes: Vec<u8>,
 }
 
-/// 查本平台的所有位置。读文件是同步的，调用方放到阻塞线程里跑
+/// 查本平台存连接的所有位置。读文件是同步的，调用方放到阻塞线程里跑
 pub fn find(platform: Platform, dirs: &Dirs) -> Vec<LocalConfig> {
-    locations(platform, dirs)
+    scan(locations(platform, dirs), platform, dirs)
+}
+
+/// 查本平台存快捷命令的所有位置，同 find
+pub fn find_commands(platform: Platform, dirs: &Dirs) -> Vec<LocalConfig> {
+    scan(command_locations(platform, dirs), platform, dirs)
+}
+
+fn scan(locations: Vec<Location>, platform: Platform, dirs: &Dirs) -> Vec<LocalConfig> {
+    locations
         .into_iter()
         .map(|loc| {
             let path = loc
@@ -176,6 +224,13 @@ fn read(path: &Path, kind: &Kind) -> Result<Vec<LocalFile>, String> {
             }
             let bytes = fs::read(path).map_err(|e| describe(&e))?;
             Ok(vec![LocalFile { path: name, bytes }])
+        }
+        Kind::JsonPart(keys) if meta.is_file() => {
+            if meta.len() > MAX_JSON_BYTES {
+                return Err("文件太大，不像是配置文件".into());
+            }
+            let bytes = fs::read(path).map_err(|e| describe(&e))?;
+            Ok(vec![LocalFile { path: name, bytes: json_part(&bytes, keys)? }])
         }
         Kind::Dir(exts) if meta.is_dir() => {
             let mut walker = Walker {
@@ -245,6 +300,20 @@ impl Walker<'_> {
                 .rsplit_once('.')
                 .is_some_and(|(stem, ext)| !stem.is_empty() && self.exts.iter().any(|e| e.eq_ignore_ascii_case(ext)))
     }
+}
+
+/// 只留顶层的这几项，重新写成 JSON。顶层不是对象时交出一个空对象，前端会说没找到
+fn json_part(bytes: &[u8], keys: &[&str]) -> Result<Vec<u8>, String> {
+    let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| "不是有效的 JSON 文件".to_string())?;
+    let mut part = serde_json::Map::new();
+    if let serde_json::Value::Object(mut all) = value {
+        for key in keys {
+            if let Some(v) = all.remove(*key) {
+                part.insert((*key).to_string(), v);
+            }
+        }
+    }
+    serde_json::to_vec(&part).map_err(|e| format!("整理配置失败：{e}"))
 }
 
 fn too_many() -> String {
@@ -408,6 +477,49 @@ mod tests {
         let putty = by_source(&found, "putty");
         assert_eq!(putty.location, "~/.config/putty/sessions");
         assert_eq!(paths(&putty.files), ["sessions/web"]);
+    }
+
+    #[test]
+    fn command_locations_per_platform() {
+        let dirs = Dirs {
+            home: PathBuf::from("/Users/me"),
+            data: PathBuf::from("/Users/me/Library/Application Support"),
+            local_data: PathBuf::from("/Users/me/Library/Application Support"),
+        };
+        let mac = command_locations(Platform::Mac, &dirs);
+        assert_eq!(mac.iter().map(|l| l.source).collect::<Vec<_>>(), ["finalshell", "securecrt"]);
+        assert_eq!(mac[0].candidates[0], Path::new("/Users/me/Library/FinalShell/config.json"));
+        assert_eq!(
+            mac[1].candidates[0],
+            Path::new("/Users/me/Library/Application Support/VanDyke/SecureCRT/Config/ButtonBarV5.ini")
+        );
+        let win = command_locations(Platform::Windows, &dirs);
+        assert_eq!(win.iter().map(|l| l.source).collect::<Vec<_>>(), ["finalshell", "securecrt"]);
+        assert!(command_locations(Platform::Linux, &dirs).is_empty());
+    }
+
+    #[test]
+    fn finalshell_config_only_hands_over_quick_commands() {
+        let t = TempDir::new("fs-cmds");
+        t.write(
+            "Library/FinalShell/config.json",
+            br#"{"password":"FAKE-PASSWORD","secret_key_list":[{"private_key":"FAKE-KEY"}],"quick_commands":[{"name":"g","commands":[]}],"theme":"x"}"#,
+        );
+        let found = find_commands(Platform::Mac, &t.dirs());
+        let fs_conf = by_source(&found, "finalshell");
+        assert_eq!(fs_conf.location, "~/Library/FinalShell/config.json");
+        assert_eq!(paths(&fs_conf.files), ["config.json"]);
+        let text = String::from_utf8(fs_conf.files[0].bytes.clone()).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(value, serde_json::json!({ "quick_commands": [{ "name": "g", "commands": [] }] }));
+        assert!(!text.contains("FAKE"));
+    }
+
+    #[test]
+    fn json_part_rejects_broken_json_and_tolerates_other_shapes() {
+        assert_eq!(json_part(b"{oops", &["quick_commands"]).unwrap_err(), "不是有效的 JSON 文件");
+        assert_eq!(json_part(b"[1,2]", &["quick_commands"]).unwrap(), b"{}");
+        assert_eq!(json_part(br#"{"theme":1}"#, &["quick_commands"]).unwrap(), b"{}");
     }
 
     #[test]
