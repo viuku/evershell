@@ -50,7 +50,7 @@ export default function ManagerApp({ backend, host }: ManagerAppProps) {
 
   return (
     <div className={`app-root ${appearanceClass(mode)}`}>
-      <DialogsProvider>
+      <DialogsProvider pickKeyFile={backend.pickPrivateKeyFile}>
         <ConnectionManager
           frame="window"
           backend={backend}

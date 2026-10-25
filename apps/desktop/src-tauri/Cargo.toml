@@ -30,5 +30,11 @@ keyring = "4"
 # 上传的远端路径走 HTTP 头，要 percent 编码
 percent-encoding = "2"
 
+# 选私钥文件时自己弹系统的选文件框（src/local_file.rs）。Tauri 本来就带着这几个包，版本跟着它走
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSOpenPanel", "NSPanel", "NSResponder", "NSSavePanel", "NSWindow"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSURL"] }
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }

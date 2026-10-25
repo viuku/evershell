@@ -23,6 +23,7 @@ import { MonitorSidebar } from './components/sidebar/MonitorSidebar';
 import { StatusBar } from './components/StatusBar';
 import { TabBar } from './components/TabBar';
 import { askServerPassword, resolveAuth } from './core/connect';
+import { KeyLibrary, migrateServerKeys } from './core/key-library';
 import { getServer, hostsStore, touchServerConnected, type ServerRecord } from './core/hosts-store';
 import { exportConnections } from './core/importers/export';
 import { parentPath } from './core/paths';
@@ -59,7 +60,7 @@ export function App(props: AppProps) {
   // 询问密码等小对话框渲染在 .app 旁边，主题变量和字体要放在它们共同的外层
   return (
     <div className={`app-root ${appearanceClass(mode)}`}>
-      <DialogsProvider>
+      <DialogsProvider pickKeyFile={props.backend.pickPrivateKeyFile}>
         <AppInner {...props} />
       </DialogsProvider>
       <TooltipLayer />
@@ -84,6 +85,9 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
   lookRef.current = look;
 
   const manager = useMemo(() => new SessionManager(backend, lookRef.current), [backend]);
+  const keyLibrary = useMemo(() => KeyLibrary.of(backend), [backend]);
+  // 以前跟着服务器存的私钥搬进私钥库（docs/specs/key-library.md），只在主窗口跑
+  useEffect(() => void migrateServerKeys(keyLibrary, backend.secrets), [keyLibrary, backend]);
   useEffect(() => manager.applyLook(look), [manager, look]);
   useEffect(() => manager.setHostKeyPrompt((problem) => dialogs.hostKey(problem)), [manager, dialogs]);
   useEffect(() => manager.setPasswordPrompt((target) => askServerPassword(target, backend.secrets, dialogs)), [manager, backend, dialogs]);
@@ -130,7 +134,7 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
   /** 连接一台服务器：凑齐认证信息，开一个会话标签（当前是新标签页则原地替换） */
   const connectServer = useCallback(
     async (server: ServerRecord) => {
-      const auth = await resolveAuth(server, backend.secrets, dialogs);
+      const auth = await resolveAuth(server, backend.secrets, dialogs, keyLibrary);
       if (!auth) return;
       const snap = manager.getSnapshot();
       const current = snap.tabs.find((t) => t.id === snap.activeId);
@@ -141,7 +145,7 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
       pushRecent(server.id);
       touchServerConnected(server.id);
     },
-    [backend, manager, dialogs],
+    [backend, manager, dialogs, keyLibrary],
   );
 
   // 桌面端的连接管理器是独立窗口：它让连哪台，就在这里连；网页端照旧是弹窗
@@ -207,11 +211,11 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
     async (s: SessionInfo) => {
       const server = getServer(hostsStore.get(), s.serverId);
       if (!server || server.deletedAt) return manager.reconnect(s.id);
-      const auth = await resolveAuth(server, backend.secrets, dialogs);
+      const auth = await resolveAuth(server, backend.secrets, dialogs, keyLibrary);
       if (!auth) return;
       manager.reconnect(s.id, { serverId: server.id, name: server.name, host: server.host, port: server.port, user: server.user, auth });
     },
-    [backend, manager, dialogs],
+    [backend, manager, dialogs, keyLibrary],
   );
 
   const openFind = useCallback((id: string) => setFind((f) => ({ id, seq: (f?.seq ?? 0) + 1 })), []);

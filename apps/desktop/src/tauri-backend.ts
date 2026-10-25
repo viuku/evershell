@@ -4,9 +4,11 @@ import type {
   EditorWindowHost,
   FileEntry,
   HostKeyProblem,
+  LocalTextFile,
   ManagerWindowHost,
   MonitorDetail,
   MonitorSnapshot,
+  PrivateKeyInfo,
   SecretStore,
   SshBackend,
   SshSession,
@@ -194,6 +196,10 @@ export const tauriBackend: SshBackend = {
     const list = await call<LocalConfigReply[]>('import_find_local');
     return list.map((c) => ({ ...c, files: c.files.map((f) => ({ path: f.path, bytes: Uint8Array.from(f.bytes) })) }));
   },
+  // 网页内核读不了云盘里“仅在线”的文件，弹框、读文件都交给 Rust（src-tauri/src/local_file.rs）
+  pickPrivateKeyFile: () => call<LocalTextFile | null>('local_pick_key_file'),
+  inspectPrivateKey: (privateKey, passphrase) =>
+    call<PrivateKeyInfo>('key_inspect', { privateKey, passphrase: passphrase || null }),
   editorWindow: {
     open: (background) => call('editor_window_open', { background }),
     post: (message) => void emitTo(EDITOR_LABEL, EDITOR_MSG, message).catch(() => {}),

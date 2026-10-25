@@ -273,6 +273,23 @@ export interface LocalConfigFiles {
   error: string | null;
 }
 
+/** 用户在本机选的一个文本文件 */
+export interface LocalTextFile {
+  name: string;
+  text: string;
+}
+
+/** 认出来的私钥，见 crates/ssh-core/src/keys.rs */
+export interface PrivateKeyInfo {
+  /** RSA、ED25519、ECDSA、DSA… */
+  algorithm: string;
+  bits: number;
+  /** 公钥指纹 SHA256:… */
+  fingerprint: string;
+  /** 设了口令 */
+  encrypted: boolean;
+}
+
 export interface SshBackend {
   connect(opts: ConnectOptions, handlers: ShellHandlers): Promise<SshSession>;
   readonly secrets: SecretStore;
@@ -283,6 +300,17 @@ export interface SshBackend {
    * 读哪些位置由后端决定，不接受路径。网页端读不了本机文件，不提供。
    */
   findLocalConfigs?(): Promise<LocalConfigFiles[]>;
+  /**
+   * 选私钥文件，由后端读出内容。取消返回 null，读不了抛错（文案直接给用户看）。
+   * 桌面端用：网页内核读不了 OneDrive、iCloud 里“仅在线”的文件，选了没反应（docs/handbook/pitfalls.md）。
+   * 没有这项的平台（网页端）用浏览器的选文件框
+   */
+  pickPrivateKeyFile?: () => Promise<LocalTextFile | null>;
+  /**
+   * 认私钥的类型、长度和指纹；是公钥、要口令、口令不对、认不出来时抛错（文案直接给用户看）。
+   * 私钥库要用（docs/specs/key-library.md）；网页端不保存私钥，没有这项
+   */
+  inspectPrivateKey?: (privateKey: string, passphrase?: string) => Promise<PrivateKeyInfo>;
   /**
    * 点了主窗口的关闭按钮（桌面端）：handler 返回 true 才真的关，用来先问一句“确定关闭窗口吗”。
    * 返回取消函数。网页端关页签由浏览器管，没有这项

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import type { AskableHostKeyProblem, HostKeyDecision } from '../../core/known-hosts';
+import type { LocalTextFile } from '../../types';
 import { CautionIcon } from './Icons';
 import { Modal } from './Modal';
 
@@ -55,6 +56,8 @@ export interface KeyResult {
   privateKey: string;
   passphrase: string;
   remember: boolean;
+  /** 选的文件名；粘贴的为 null。记住时用来给私钥库里的这把起名 */
+  fileName: string | null;
 }
 
 interface DialogsApi {
@@ -88,7 +91,14 @@ export function useDialogs(): DialogsApi {
   return api;
 }
 
-export function DialogsProvider({ children }: { children: ReactNode }) {
+/** pickKeyFile：问私钥时“选择…”由后端弹框读文件，见 KeyPicker */
+export function DialogsProvider({
+  children,
+  pickKeyFile,
+}: {
+  children: ReactNode;
+  pickKeyFile?: () => Promise<LocalTextFile | null>;
+}) {
   const [queue, setQueue] = useState<Pending[]>([]);
   const push = useCallback((p: Pending) => setQueue((q) => [...q, p]), []);
   const pop = useCallback(() => setQueue((q) => q.slice(1)), []);
@@ -114,7 +124,7 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
       {current?.kind === 'confirm' && <ConfirmDialog key={queue.length} pending={current} done={pop} />}
       {current?.kind === 'choose' && <ChooseDialog key={queue.length} pending={current} done={pop} />}
       {current?.kind === 'password' && <PasswordDialog key={queue.length} pending={current} done={pop} />}
-      {current?.kind === 'key' && <KeyDialog key={queue.length} pending={current} done={pop} />}
+      {current?.kind === 'key' && <KeyDialog key={queue.length} pending={current} done={pop} pickFile={pickKeyFile} />}
       {current?.kind === 'alert' && <AlertDialog key={queue.length} pending={current} done={pop} />}
       {current?.kind === 'hostKey' && <HostKeyDialog key={queue.length} pending={current} done={pop} />}
     </Ctx.Provider>
@@ -367,7 +377,15 @@ function PasswordDialog({ pending, done }: { pending: Extract<Pending, { kind: '
   );
 }
 
-function KeyDialog({ pending, done }: { pending: Extract<Pending, { kind: 'key' }>; done(): void }) {
+function KeyDialog({
+  pending,
+  done,
+  pickFile,
+}: {
+  pending: Extract<Pending, { kind: 'key' }>;
+  done(): void;
+  pickFile?: () => Promise<LocalTextFile | null>;
+}) {
   const { opts } = pending;
   const [privateKey, setPrivateKey] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
@@ -384,12 +402,20 @@ function KeyDialog({ pending, done }: { pending: Extract<Pending, { kind: 'key' 
         onSubmit={(e) => {
           e.preventDefault();
           if (!privateKey.trim()) return;
-          pending.resolve({ privateKey, passphrase, remember });
+          pending.resolve({ privateKey, passphrase, remember, fileName });
           done();
         }}
       >
         <p className="dialog-message">{opts.message}</p>
-        <KeyPicker value={privateKey} fileName={fileName} onChange={(key, name) => { setPrivateKey(key); setFileName(name); }} />
+        <KeyPicker
+          value={privateKey}
+          fileName={fileName}
+          pickFile={pickFile}
+          onChange={(key, name) => {
+            setPrivateKey(key);
+            setFileName(name);
+          }}
+        />
         <label htmlFor="dlg-passphrase">私钥口令（没有则留空）</label>
         <input
           id="dlg-passphrase"
@@ -418,21 +444,44 @@ function KeyDialog({ pending, done }: { pending: Extract<Pending, { kind: 'key' 
   );
 }
 
-/** 私钥选择：选文件读入，或直接粘贴 PEM */
+/**
+ * 私钥选择：选文件读入，或直接粘贴 PEM。
+ * 有 pickFile（桌面端）就由后端弹框、读文件，否则用网页的选文件框（读不了云盘里“仅在线”的文件，见 SshBackend.pickPrivateKeyFile）
+ */
 export function KeyPicker({
   value,
   fileName,
+  pickFile,
   onChange,
 }: {
   value: string;
   fileName: string | null;
+  pickFile?: () => Promise<LocalTextFile | null>;
   onChange(privateKey: string, fileName: string | null): void;
 }) {
-  const pick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [error, setError] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+  const take = (file: LocalTextFile | null) => {
+    if (!file) return;
+    setError(null);
+    onChange(file.text, file.name);
+  };
+  const pickWithBackend = (pick: () => Promise<LocalTextFile | null>) => {
+    setPicking(true);
+    pick()
+      .then(take, (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setPicking(false));
+  };
+  const pickWithInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    onChange(await file.text(), file.name);
+    // 读失败时得说一声，不然看起来就是选了没反应
+    try {
+      take({ name: file.name, text: await file.text() });
+    } catch {
+      setError(`读不了「${file.name}」。文件在云盘里的话，先下载到本机再选`);
+    }
   };
   return (
     <div className="keypick">
@@ -440,18 +489,32 @@ export function KeyPicker({
         <span className={`field keypick__name${fileName || value ? '' : ' muted'}`}>
           {fileName ?? (value ? '已粘贴私钥' : '未选择')}
         </span>
-        <label className="btn">
-          选择…
-          <input type="file" className="sr-only" tabIndex={-1} onChange={(e) => void pick(e)} />
-        </label>
+        {pickFile ? (
+          <button type="button" className="btn" disabled={picking} onClick={() => pickWithBackend(pickFile)}>
+            选择…
+          </button>
+        ) : (
+          <label className="btn">
+            选择…
+            <input type="file" className="sr-only" tabIndex={-1} onChange={(e) => void pickWithInput(e)} />
+          </label>
+        )}
       </div>
+      {error && (
+        <span role="alert" className="dialog-error">
+          {error}
+        </span>
+      )}
       <textarea
         className="field mono keypick__text"
         rows={3}
         value={value}
         placeholder="或在这里粘贴 PEM 格式私钥"
         spellCheck={false}
-        onChange={(e) => onChange(e.target.value, null)}
+        onChange={(e) => {
+          setError(null);
+          onChange(e.target.value, null);
+        }}
       />
     </div>
   );

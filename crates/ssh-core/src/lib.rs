@@ -7,6 +7,7 @@
 //! 开 SFTP 会话和监控采样，它们各自走独立的 SSH channel，互不干扰。
 
 mod flow;
+pub mod keys;
 pub mod known_hosts;
 pub mod monitor;
 pub mod sftp;
