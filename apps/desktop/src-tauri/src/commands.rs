@@ -359,15 +359,28 @@ pub async fn save_download(app: AppHandle, request: Request<'_>) -> Result<Strin
 /// 一键导入：读各 SSH 软件默认位置的配置文件。读哪些位置由 local_import.rs 的表决定，前端不能传路径
 #[tauri::command]
 pub async fn import_find_local(app: AppHandle) -> Result<Vec<LocalConfig>, String> {
-    let path = app.path();
-    let dirs = Dirs {
-        home: path.home_dir().map_err(|_| "找不到本机的用户目录")?,
-        data: path.data_dir().map_err(|_| "找不到本机的应用数据目录")?,
-        local_data: path.local_data_dir().map_err(|_| "找不到本机的应用数据目录")?,
-    };
+    let dirs = local_dirs(&app)?;
     tauri::async_runtime::spawn_blocking(move || local_import::find(Platform::current(), &dirs))
         .await
         .map_err(|e| format!("查找配置文件中断：{e}"))
+}
+
+/// 一键导入快捷命令：同 import_find_local，读的是另一张位置表；大配置文件只交出命令那一块
+#[tauri::command]
+pub async fn import_find_local_commands(app: AppHandle) -> Result<Vec<LocalConfig>, String> {
+    let dirs = local_dirs(&app)?;
+    tauri::async_runtime::spawn_blocking(move || local_import::find_commands(Platform::current(), &dirs))
+        .await
+        .map_err(|e| format!("查找配置文件中断：{e}"))
+}
+
+fn local_dirs(app: &AppHandle) -> Result<Dirs, String> {
+    let path = app.path();
+    Ok(Dirs {
+        home: path.home_dir().map_err(|_| "找不到本机的用户目录")?,
+        data: path.data_dir().map_err(|_| "找不到本机的应用数据目录")?,
+        local_data: path.local_data_dir().map_err(|_| "找不到本机的应用数据目录")?,
+    })
 }
 
 /// 选私钥文件并读出内容，取消返回 None。不用网页的选文件框，原因见 local_file.rs

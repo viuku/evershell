@@ -38,7 +38,7 @@ export const lastSentSnippet = new Store<string | null>(null);
 
 /**
  * 交给终端的文字：换行统一成回车（终端里回车才是“执行”），去掉首尾的空行。
- * 末尾的回车由 SessionManager.sendCommand / sendToAll 补，所以这里不带。
+ * 末尾的回车由 SessionManager.sendCommand / sendToAll 补，所以这里不带；不自动回车的命令就不补。
  */
 export function toTerminalInput(text: string): string {
   const lines = text.split(/\r\n|\r|\n/);
@@ -47,10 +47,10 @@ export function toTerminalInput(text: string): string {
   return lines.join('\r');
 }
 
-/** SessionManager 里发命令的两个方法，单独拿出来方便测试 */
+/** SessionManager 里发命令的两个方法，单独拿出来方便测试。enter 为 false 时末尾不按回车 */
 export interface CommandSender {
-  sendCommand(sessionId: string, cmd: string): boolean;
-  sendToAll(cmd: string): number;
+  sendCommand(sessionId: string, cmd: string, enter?: boolean): boolean;
+  sendToAll(cmd: string, enter?: boolean): number;
 }
 
 export interface SendResult {
@@ -59,23 +59,29 @@ export interface SendResult {
   text: string;
 }
 
-/**
- * 发一条命令。name 是快捷命令的名字，提示里会带上；命令编辑器发的不带。
- * 内容是空的返回 null，什么都不发。
- */
+export interface SendOptions {
+  /** 快捷命令的名字，提示里会带上；命令编辑器发的不带 */
+  name?: string;
+  /** 只把文字放进终端，不按回车 */
+  noEnter?: boolean;
+}
+
+/** 发一条命令。内容是空的返回 null，什么都不发 */
 export function sendTo(
   sender: CommandSender,
   sessionId: string,
   target: SendTarget,
   text: string,
-  name?: string,
+  { name, noEnter = false }: SendOptions = {},
 ): SendResult | null {
   const cmd = toTerminalInput(text);
   if (!cmd.trim()) return null;
   if (target === 'all') {
-    const n = sender.sendToAll(cmd);
-    return n > 0 ? { ok: true, text: `已发送到 ${n} 个会话` } : { ok: false, text: '没有已连接的会话' };
+    const n = sender.sendToAll(cmd, !noEnter);
+    if (n === 0) return { ok: false, text: '没有已连接的会话' };
+    return { ok: true, text: noEnter ? `已放进 ${n} 个会话，没按回车` : `已发送到 ${n} 个会话` };
   }
-  if (!sender.sendCommand(sessionId, cmd)) return { ok: false, text: '当前会话没连上' };
+  if (!sender.sendCommand(sessionId, cmd, !noEnter)) return { ok: false, text: '当前会话没连上' };
+  if (noEnter) return { ok: true, text: name ? `已把「${name}」放进当前会话，没按回车` : '已放进当前会话，没按回车' };
   return { ok: true, text: name ? `已发送「${name}」到当前会话` : '已发送到当前会话' };
 }

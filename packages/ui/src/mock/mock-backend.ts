@@ -477,6 +477,34 @@ function mockLocalConfigs(): LocalConfigFiles[] {
   ];
 }
 
+/** 一键导入快捷命令的样例：FinalShell 的 config.json 只交出 quick_commands 那一块（和桌面端一样） */
+function mockLocalCommands(): LocalConfigFiles[] {
+  let order = 0;
+  const cmd = (name: string, command: string, appendCr = true) => ({ id: `c${++order}`, name, command, append_cr: appendCr, order, delete_time: 0 });
+  const group = (id: string, name: string, commands: ReturnType<typeof cmd>[]) => ({ id, name, order: ++order, delete_time: 0, commands });
+  const quick_commands = [
+    group('g1', '常用', [
+      cmd('查看磁盘', 'df -h'),
+      cmd('内存占用前 10', 'ps aux --sort=-%mem | head -11'),
+      cmd('杀进程', 'kill -9 ', false),
+      cmd('查端口', 'ss -lntp | grep ', false),
+      cmd('系统负载', 'uptime'),
+    ]),
+    group('g2', 'Docker', [
+      cmd('容器状态', 'docker ps'),
+      cmd('进容器', 'docker exec -it ', false),
+      cmd('看容器日志', 'docker logs --tail 100 -f ', false),
+      cmd('清理镜像', 'docker image prune -f'),
+    ]),
+    group('g3', '部署', [cmd('发布', 'cd /srv/app\ngit pull\nsystemctl restart app'), cmd('服务状态', 'systemctl status app')]),
+    group('g4', '日志', [cmd('访问日志', 'tail -n 50 /var/log/nginx/access.log'), cmd('某个服务的日志', 'journalctl -u ', false)]),
+  ];
+  return [
+    { source: 'finalshell', location: '~/Library/FinalShell/config.json', files: [{ path: 'config.json', bytes: encodeUtf8(JSON.stringify({ quick_commands })) }], error: null },
+    { source: 'securecrt', location: '~/Library/Application Support/VanDyke/SecureCRT/Config/ButtonBarV5.ini', files: [], error: null },
+  ];
+}
+
 const SECRETS_KEY = 'evershell.mock-secrets';
 
 /** 假保险箱：存在 localStorage，只为了让“记住密码”流程能走通 */
@@ -509,6 +537,10 @@ export function createMockBackend(): SshBackend {
     async findLocalConfigs(): Promise<LocalConfigFiles[]> {
       await delay(120);
       return mockLocalConfigs();
+    },
+    async findLocalCommands(): Promise<LocalConfigFiles[]> {
+      await delay(120);
+      return mockLocalCommands();
     },
     inspectPrivateKey: mockInspectKey,
     async connect(opts: ConnectOptions, handlers: ShellHandlers): Promise<SshSession> {

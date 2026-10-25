@@ -3,6 +3,7 @@ import type { SessionInfo, SessionManager } from '../../core/session-manager';
 import { followTerminalDir } from '../../core/settings';
 import { PersistentStore } from '../../core/storage';
 import { useStore } from '../../core/store';
+import type { SshBackend } from '../../types';
 import { Segmented } from '../common/Segmented';
 import { CommandsPanel } from './CommandsPanel';
 import { FilesPanel } from './FilesPanel';
@@ -17,12 +18,13 @@ const bottomHeight = new PersistentStore<number>('evershell.bottom-height', 280,
 interface Props {
   manager: SessionManager;
   session: SessionInfo;
+  backend: SshBackend;
   tab: BottomTab;
   onTab(tab: BottomTab): void;
 }
 
 /** 终端下方的两个分页：文件 / 命令 */
-export function BottomPanels({ manager, session, tab, onTab }: Props) {
+export function BottomPanels({ manager, session, backend, tab, onTab }: Props) {
   const follow = useStore(followTerminalDir);
   const height = useStore(bottomHeight);
   const files = manager.getFiles(session.status === 'connected' ? session.id : null);
@@ -48,7 +50,7 @@ export function BottomPanels({ manager, session, tab, onTab }: Props) {
         )}
       </div>
       {tab === 'files' && <FilesPanel files={files} session={session} follow={follow} />}
-      {tab === 'commands' && <CommandsPanel manager={manager} session={session} />}
+      {tab === 'commands' && <CommandsPanel manager={manager} session={session} backend={backend} />}
     </section>
   );
 }

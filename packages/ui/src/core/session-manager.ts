@@ -578,25 +578,25 @@ export class SessionManager {
 
   // ---------- 命令 ----------
 
-  /** 发到指定会话；没连上时返回 false */
-  sendCommand(id: string, cmd: string): boolean {
+  /** 发到指定会话；没连上时返回 false。enter 为 false 时只放进终端、不按回车，也不记历史（没有执行） */
+  sendCommand(id: string, cmd: string, enter = true): boolean {
     const entry = this.entries.get(id);
     if (!entry?.session || entry.info.status !== 'connected') return false;
-    entry.session.write(encoder.encode(`${cmd}\r`));
-    pushHistory(cmd, entry.info.name);
+    entry.session.write(encoder.encode(enter ? `${cmd}\r` : cmd));
+    if (enter) pushHistory(cmd, entry.info.name);
     return true;
   }
 
-  /** 发到所有已连接的会话，返回发送数量 */
-  sendToAll(cmd: string): number {
+  /** 发到所有已连接的会话，返回发送数量；enter 同 sendCommand */
+  sendToAll(cmd: string, enter = true): number {
     let count = 0;
     for (const entry of this.entries.values()) {
       if (entry.session && entry.info.status === 'connected') {
-        entry.session.write(encoder.encode(`${cmd}\r`));
+        entry.session.write(encoder.encode(enter ? `${cmd}\r` : cmd));
         count++;
       }
     }
-    if (count > 0) pushHistory(cmd, count === 1 ? this.onlyConnectedName() : `全部会话（${count}）`);
+    if (count > 0 && enter) pushHistory(cmd, count === 1 ? this.onlyConnectedName() : `全部会话（${count}）`);
     return count;
   }
 

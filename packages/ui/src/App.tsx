@@ -337,6 +337,7 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
             <SessionView
               manager={manager}
               session={session}
+              backend={backend}
               scheme={scheme}
               lookOpen={lookOpen}
               onToggleLook={() => setLookOpen((o) => !o)}

@@ -1,6 +1,7 @@
 import type { SessionInfo, SessionManager } from '../core/session-manager';
 import { bottomPanelOpen, type Scheme } from '../core/settings';
 import { useStore } from '../core/store';
+import type { SshBackend } from '../types';
 import { BottomPanels, type BottomTab } from './panels/BottomPanels';
 import { AppearancePanel } from './terminal/AppearancePanel';
 import { CommandBar } from './terminal/CommandBar';
@@ -10,6 +11,7 @@ import { TerminalView } from './terminal/TerminalView';
 interface Props {
   manager: SessionManager;
   session: SessionInfo;
+  backend: SshBackend;
   scheme: Scheme;
   lookOpen: boolean;
   onToggleLook(): void;
@@ -57,7 +59,7 @@ export function SessionView(props: Props) {
         />
         {lookOpen && <AppearancePanel scheme={scheme} onClose={onToggleLook} />}
       </section>
-      {bottomOpen && <BottomPanels manager={manager} session={session} tab={bottomTab} onTab={onBottomTab} />}
+      {bottomOpen && <BottomPanels manager={manager} session={session} backend={props.backend} tab={bottomTab} onTab={onBottomTab} />}
     </>
   );
 }

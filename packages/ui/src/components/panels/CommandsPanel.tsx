@@ -8,6 +8,7 @@ import {
   selectedGroup,
   sendTo,
   snippetSendTarget,
+  type SendOptions,
   type SendResult,
   type SendTarget,
 } from '../../core/commands-panel';
@@ -29,14 +30,18 @@ import {
   type Snippet,
 } from '../../core/snippets-store';
 import { useStore } from '../../core/store';
+import type { SshBackend } from '../../types';
 import { useDialogs } from '../common/Dialogs';
-import { FolderOutlineIcon, GearIcon } from '../common/Icons';
+import { FolderOutlineIcon, GearIcon, ImportIcon, NoEnterIcon } from '../common/Icons';
 import { ContextMenu, Dropdown, type ContextMenuState, type MenuItem } from '../common/Menu';
 import { Modal } from '../common/Modal';
+import { CommandImportDialog } from './CommandImportDialog';
 
 interface Props {
   manager: SessionManager;
   session: SessionInfo;
+  /** 导入快捷命令时一键查找本机别的软件的配置 */
+  backend: SshBackend;
 }
 
 type Editing =
@@ -50,7 +55,7 @@ const MAIN_MIN = 260;
 const EDITOR_MIN = 200;
 
 /** 底栏「命令」页，照 FinalShell：左边分类和快捷命令，单击就发送；右边命令编辑器，能写多行 */
-export function CommandsPanel({ manager, session }: Props) {
+export function CommandsPanel({ manager, session, backend }: Props) {
   const dialogs = useDialogs();
   const saved = useStore(groupsStore);
   const list = useStore(snippetsStore);
@@ -69,14 +74,15 @@ export function CommandsPanel({ manager, session }: Props) {
 
   const [editing, setEditing] = useState<Editing | null>(null);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
+  const [importing, setImporting] = useState(false);
   const [flash, setFlash] = useState<SendResult | null>(null);
   const flashTimer = useRef(0);
   const editorRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => () => window.clearTimeout(flashTimer.current), []);
 
-  const send = (cmd: string, to: SendTarget, name?: string): SendResult | null => {
-    const result = sendTo(manager, session.id, to, cmd, name);
+  const send = (cmd: string, to: SendTarget, opts?: SendOptions): SendResult | null => {
+    const result = sendTo(manager, session.id, to, cmd, opts);
     if (result) {
       setFlash(result);
       window.clearTimeout(flashTimer.current);
@@ -87,7 +93,7 @@ export function CommandsPanel({ manager, session }: Props) {
 
   const sendSnippet = (s: Snippet) => {
     lastSentSnippet.set(s.id);
-    send(s.cmd, target, s.name);
+    send(s.cmd, target, { name: s.name, noEnter: s.noEnter });
   };
 
   const sendEditor = () => {
@@ -192,6 +198,10 @@ export function CommandsPanel({ manager, session }: Props) {
           <button type="button" className="cmds__add" onClick={() => void newGroup()}>
             ＋ 新建分类
           </button>
+          <button type="button" className="cmds__add cmds__import" onClick={() => setImporting(true)}>
+            <ImportIcon size={13} />
+            导入…
+          </button>
         </div>
         <div
           className="scroll cmds__box"
@@ -199,6 +209,8 @@ export function CommandsPanel({ manager, session }: Props) {
             openMenu(e, [
               { label: '新建命令…', onSelect: newSnippet },
               { label: '新建分类…', onSelect: () => void newGroup() },
+              { type: 'separator' },
+              { label: '导入快捷命令…', onSelect: () => setImporting(true) },
             ])
           }
         >
@@ -208,11 +220,12 @@ export function CommandsPanel({ manager, session }: Props) {
                 <button
                   type="button"
                   className="cmds__name"
-                  data-tip={s.cmd}
+                  data-tip={s.noEnter ? `${s.cmd}\n不自动回车` : s.cmd}
                   // 双击的第二下不再发：习惯双击的人不会把命令发两遍
                   onClick={(e) => e.detail < 2 && sendSnippet(s)}
                 >
-                  {s.name}
+                  <span className="cmds__label">{s.name}</span>
+                  {s.noEnter && <NoEnterIcon size={12} className="cmds__noEnter" role="img" aria-label="不自动回车" aria-hidden={false} />}
                 </button>
                 <button
                   type="button"
@@ -296,6 +309,13 @@ export function CommandsPanel({ manager, session }: Props) {
         />
       )}
       {menu && <ContextMenu state={menu} onClose={() => setMenu(null)} />}
+      {importing && (
+        <CommandImportDialog
+          backend={backend}
+          onClose={() => setImporting(false)}
+          onImported={(g) => g && selectedGroup.set(g)}
+        />
+      )}
     </div>
   );
 }
@@ -376,6 +396,7 @@ function SnippetDialog({
   const options = groups.length > 0 ? groups : [DEFAULT_GROUP];
   const [name, setName] = useState(init?.name ?? '');
   const [cmd, setCmd] = useState(init ? init.cmd : editing.mode === 'new' ? editing.cmd : '');
+  const [noEnter, setNoEnter] = useState(init?.noEnter === true);
   const [group, setGroup] = useState(() => {
     const want = init ? init.group : editing.mode === 'new' ? editing.group : null;
     return want !== null && options.includes(want) ? want : options[0]!;
@@ -384,7 +405,7 @@ function SnippetDialog({
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!cmd.trim()) return;
-    const input = { name, cmd, group };
+    const input = { name, cmd, group, noEnter };
     if (init) {
       updateSnippet(init.id, input);
       onSaved(group);
@@ -416,6 +437,14 @@ function SnippetDialog({
             if (isModEnter(e)) submit(e);
           }}
         />
+        <span />
+        <div className="snp__enter">
+          <label className="check">
+            <input type="checkbox" checked={noEnter} onChange={(e) => setNoEnter(e.target.checked)} />
+            不自动回车
+          </label>
+          <span className="muted">点这条命令时，只把文字放进终端，不按回车。适合要补参数的命令，比如 kill -9 后面填进程号。</span>
+        </div>
         <label htmlFor="snp-group" className="lbl">
           分类
         </label>

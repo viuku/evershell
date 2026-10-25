@@ -122,6 +122,15 @@ export const GearIcon = (p: P) => (
   </Svg>
 );
 
+/** 回车键被划掉：快捷命令「不自动回车」 */
+export const NoEnterIcon = (p: P) => (
+  <Svg strokeWidth={2} {...p}>
+    <path d="M9 10l-4 4 4 4" />
+    <path d="M19 5v5a4 4 0 0 1-4 4H5" />
+    <path d="M4 4l16 16" />
+  </Svg>
+);
+
 export const RefreshIcon = (p: P) => (
   <Svg strokeWidth={2} {...p}>
     <path d="M20 11a8 8 0 1 0-2.3 5.7" />

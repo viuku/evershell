@@ -14,7 +14,7 @@
 |---|---|---|---|
 | 连接和文件夹 | `evershell.hosts.v1`；服务器的 `keyId` 指向私钥库里的私钥。搬私钥进私钥库之前的原样备份在 `evershell.hosts.v1.before-key-library` | 数据里 `version: 1` | 有 id、updatedAt、deletedAt（墓碑） |
 | 私钥库清单 | `evershell.keys.v1`：名称、类型、长度、公钥指纹，不含机密（`packages/ui/src/core/key-library.ts`，规格 [key-library.md](../specs/key-library.md)） | 数据里 `version: 1` | 有 id、updatedAt、deletedAt（墓碑） |
-| 快捷命令 | `evershell.snippets.v1`（`group` 是分类名） | 键名里的 v1 | 有 id、updatedAt，**没有墓碑** |
+| 快捷命令 | `evershell.snippets.v1`（`group` 是分类名；不自动回车的带 `noEnter: true`，没有这项就是自动回车，规格 [command-import.md](../specs/command-import.md)） | 键名里的 v1 | 有 id、updatedAt，**没有墓碑** |
 | 快捷命令的分类 | `evershell.snippet-groups.v1`：分类名的数组，顺序即显示顺序（规格 [command-groups.md](../specs/command-groups.md)） | 键名里的 v1 | 没有，M2 定 |
 | 历史命令 | `evershell.history.v1` | 键名里的 v1 | 没有 |
 | 最近连接 | `evershell.recents.v1` | 键名里的 v1 | 没有（只是本机记录，可以不同步） |
@@ -48,7 +48,7 @@
 - `updatedAt`：最后修改时间。M2 可能换成混合逻辑时钟（见下面“同步冲突”），字段先占着。
 - `deletedAt`：删除不真删，记下删除时间当墓碑，界面上隐藏。
 
-现在连接和文件夹已经齐了；快捷命令缺墓碑，历史命令都没有，下次改到它们时补上（属于格式变化，按上面的规则迁移）。快捷命令的分类清单只是名字数组，三个字段都没有，M2 设计同步时一起定（[规格](../specs/command-groups.md#导出和以后的同步)）。
+现在连接和文件夹已经齐了；历史命令都没有，下次改到时补上（属于格式变化，按上面的规则迁移）。快捷命令缺墓碑、分类清单只是名字数组，这两样留到 M2 设计同步时一起定（[规格](../specs/command-groups.md#导出和以后的同步)）：2026-10-25 加「不自动回车」时只加了一个可选字段，没有顺带改删除方式。
 
 ## 导入导出
 
