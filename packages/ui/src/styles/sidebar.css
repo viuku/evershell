@@ -293,11 +293,11 @@
 }
 
 .sidebar__bars--ping {
-  height: 28px;
+  height: 42px;
 }
 
 /*
- * 一格一根（网速是上传、下载两根挨着），从右往左排：--age 是离最新那根隔几格，--slots 是图上几格。
+ * 一格一根（网速是上传、下载两根叠在同一格），从右往左排：--age 是离最新那根隔几格，--slots 是图上几格。
  * 每格宽 (总宽 + 1px) / 格数，减掉 1px 当缝；平移的 100% 是格子自己的宽，再加 1px 正好挪一格。
  */
 .sidebar__slot {
@@ -329,6 +329,15 @@
   transition: height 0.3s ease;
 }
 
+/* 网速照 FinalShell：上传、下载都从底边画起、叠在一起，各自半透明，重合的那段颜色变深 */
+.sidebar__bars--net .sidebar__bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0.5;
+}
+
 .sidebar__bar.up {
   background: var(--up);
 }
@@ -353,10 +362,10 @@
 }
 
 .sidebar__emptyPlot--ping {
-  height: 36px;
+  height: 40px;
 }
 
-/* 进程表身、网速图整块是按钮：点了在新标签页打开进程 / 网络页，悬停时底色深一档 */
+/* 进程表身、网速图整块是按钮：点了在新标签页打开进程 / 网络页。悬停时指针变手形，不加底色（所有者 2026-10-26 定） */
 .sidebar__open {
   width: 100%;
   padding: 0;
@@ -366,7 +375,7 @@
   color: inherit;
   font: inherit;
   text-align: left;
-  cursor: default;
+  cursor: pointer;
 }
 
 .sidebar__table > .sidebar__open {
@@ -375,10 +384,6 @@
 
 .sidebar__netPlot.sidebar__open {
   border-radius: 4px;
-}
-
-.sidebar__open:hover {
-  background: var(--hover);
 }
 
 .sidebar__open:focus-visible {

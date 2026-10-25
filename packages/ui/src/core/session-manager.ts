@@ -100,7 +100,7 @@ export interface MonitorState {
   iface: string | null;
 }
 
-export const NET_SAMPLES = 30;
+export const NET_SAMPLES = 60;
 export const PING_SAMPLES = 40;
 const MONITOR_INTERVAL = 2000;
 
