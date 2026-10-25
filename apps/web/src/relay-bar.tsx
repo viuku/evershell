@@ -58,7 +58,7 @@ export function RelaySettingsDialog(props: { initial: RelayConfig; onSave(relay:
           令牌
         </label>
         <input id="relay-token" className="field mono" type="password" value={token} autoComplete="off" onChange={(e) => setToken(e.target.value)} />
-        <span className="relay__hint">SSH 在浏览器内加密，中转只转发字节，看不到密码和私钥。</span>
+        <span className="relay__hint">SSH 加密在浏览器内完成，中转服务器仅转发加密数据，无法获取密码和私钥。</span>
         <div className="relay__actions">
           <button type="button" className="btn" onClick={props.onClose}>
             取消

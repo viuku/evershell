@@ -30,7 +30,7 @@ export function NewTabPage({ onConnect, onOpenManager }: Props) {
       <section aria-label="快速连接" className="quick">
         <div className="quick__head">
           <strong>快速连接</strong>
-          <span className="muted">最近连接过的服务器，点一下就连</span>
+          <span className="muted">最近连接的服务器，单击即可连接</span>
           <button type="button" className="btn quick__manager" onClick={onOpenManager}>
             连接管理器…
           </button>
@@ -65,7 +65,7 @@ export function NewTabPage({ onConnect, onOpenManager }: Props) {
             </div>
           </div>
         ) : (
-          <div className="empty quick__empty">还没有最近连接。点左上角的文件夹图标打开连接管理器。</div>
+          <div className="empty quick__empty">暂无最近连接。单击左上角的文件夹图标可打开连接管理器。</div>
         )}
       </section>
     </main>

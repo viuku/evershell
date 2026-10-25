@@ -138,7 +138,7 @@ export function createWasmBackend(getRelay: () => RelayConfig): SshBackend {
       await ready;
 
       const relay = getRelay();
-      if (!relay.url) throw new Error('请先在顶部填写中转地址');
+      if (!relay.url) throw new Error('请先在菜单的「中转设置」中填写中转地址');
       const host = opts.host.includes(':') ? `[${opts.host}]` : opts.host;
       const url =
         `${relay.url.replace(/\/+$/, '')}/relay` +

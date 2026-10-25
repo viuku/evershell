@@ -12,14 +12,14 @@ export function parseMobaXterm(files: ImportFile[]): ImportResult {
   const b = new ResultBuilder('mobaxterm');
   const candidates = files.filter((f) => ['mxtsessions', 'ini'].includes(extOf(f.path)));
   if (candidates.length === 0) {
-    b.issue('', '没有找到 .mxtsessions 或 MobaXterm.ini');
+    b.issue('', '未找到 .mxtsessions 或 MobaXterm.ini');
     return b.result;
   }
 
   let found = false;
   for (const f of candidates) {
     const sections = parseIni(decodeText(f.bytes));
-    if (sections.some((s) => /^passwords$/i.test(s.name))) b.warn('MobaXterm 的密码单独加密保存，未导入，连接时再输入');
+    if (sections.some((s) => /^passwords$/i.test(s.name))) b.warn('MobaXterm 的密码单独加密保存，未导入，请在连接时输入');
     for (const sec of sections) {
       if (!/^bookmarks(_\d+)?$/i.test(sec.name)) continue;
       found = true;
@@ -59,6 +59,6 @@ export function parseMobaXterm(files: ImportFile[]): ImportResult {
       }
     }
   }
-  if (!found) b.issue('', '没有找到 [Bookmarks] 段');
+  if (!found) b.issue('', '未找到 [Bookmarks] 段');
   return b.result;
 }

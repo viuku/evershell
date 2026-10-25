@@ -79,9 +79,9 @@ export function sendTo(
   if (target === 'all') {
     const n = sender.sendToAll(cmd, !noEnter);
     if (n === 0) return { ok: false, text: '没有已连接的会话' };
-    return { ok: true, text: noEnter ? `已放进 ${n} 个会话，没按回车` : `已发送到 ${n} 个会话` };
+    return { ok: true, text: noEnter ? `已填入 ${n} 个会话，未发送回车` : `已发送到 ${n} 个会话` };
   }
-  if (!sender.sendCommand(sessionId, cmd, !noEnter)) return { ok: false, text: '当前会话没连上' };
-  if (noEnter) return { ok: true, text: name ? `已把「${name}」放进当前会话，没按回车` : '已放进当前会话，没按回车' };
-  return { ok: true, text: name ? `已发送「${name}」到当前会话` : '已发送到当前会话' };
+  if (!sender.sendCommand(sessionId, cmd, !noEnter)) return { ok: false, text: '当前会话未连接' };
+  if (noEnter) return { ok: true, text: name ? `已将「${name}」填入当前会话，未发送回车` : '已填入当前会话，未发送回车' };
+  return { ok: true, text: name ? `已将「${name}」发送到当前会话` : '已发送到当前会话' };
 }

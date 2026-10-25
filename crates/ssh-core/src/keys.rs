@@ -21,13 +21,13 @@ pub struct KeyInfo {
 /// 认不出来的原因，文案直接给用户看
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum KeyProblem {
-    #[error("这是公钥（一般是 .pub 文件），请选不带 .pub 的那个私钥文件")]
+    #[error("所选文件是公钥（通常为 .pub 文件），请选择不带 .pub 扩展名的私钥文件")]
     PublicKey,
-    #[error("这把私钥设了口令，请填上口令")]
+    #[error("该私钥已设置口令，请输入口令")]
     NeedsPassphrase,
-    #[error("口令不对")]
+    #[error("口令不正确")]
     WrongPassphrase,
-    #[error("认不出这个私钥。支持 OpenSSH、PEM（RSA、EC、PKCS#8）和 PuTTY 格式")]
+    #[error("无法识别该私钥。支持 OpenSSH、PEM（RSA、EC、PKCS#8）和 PuTTY 格式")]
     Unrecognized,
 }
 

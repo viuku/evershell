@@ -122,7 +122,7 @@ export class KeyLibrary {
 
   /** 认出类型、长度和指纹；认不出来抛错，文案直接给用户看 */
   inspect(privateKey: string, passphrase?: string): Promise<PrivateKeyInfo> {
-    if (!this.inspectKey) return Promise.reject(new Error('这里不能保存私钥'));
+    if (!this.inspectKey) return Promise.reject(new Error('当前环境不支持保存私钥'));
     return this.inspectKey(privateKey, passphrase || undefined);
   }
 
@@ -228,7 +228,7 @@ async function runMigration(library: KeyLibrary, secrets: SecretStore): Promise<
         // 读回来核对过才动旧条目
         const back = await secrets.get(keySecrets.text(keyId));
         const backPass = passphrase ? await secrets.get(keySecrets.passphrase(keyId)) : '';
-        if (back !== text || backPass !== passphrase) throw new Error('保险箱写入后读回来对不上');
+        if (back !== text || backPass !== passphrase) throw new Error('保险箱写入后校验失败');
         const now = Date.now();
         const record: KeyRecord = {
           id: keyId,

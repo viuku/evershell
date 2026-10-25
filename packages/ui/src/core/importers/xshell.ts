@@ -9,7 +9,7 @@ export function parseXshell(files: ImportFile[]): ImportResult {
   const b = new ResultBuilder('xshell');
   const sessions = stripCommonRoot(files.filter((f) => extOf(f.path) === 'xsh'));
   if (sessions.length === 0) {
-    b.issue('', '没有找到 .xsh 会话文件');
+    b.issue('', '未找到 .xsh 会话文件');
     return b.result;
   }
 
@@ -18,7 +18,7 @@ export function parseXshell(files: ImportFile[]): ImportResult {
     const sections = parseIni(decodeText(f.bytes));
     const conn = iniSection(sections, 'CONNECTION');
     if (!conn) {
-      b.issue(f.path, '没有 [CONNECTION] 段，不是 Xshell 会话文件');
+      b.issue(f.path, '缺少 [CONNECTION] 段，不是 Xshell 会话文件');
       continue;
     }
     const proto = (iniGet(conn, 'Protocol') ?? '').trim();
@@ -38,7 +38,7 @@ export function parseXshell(files: ImportFile[]): ImportResult {
     const notes: string[] = [];
     const desc = (iniGet(conn, 'Description') ?? '').trim();
     if (desc) notes.push(desc);
-    if (userKey) notes.push(`Xshell 用户密钥：${userKey}（私钥请重新选择）`);
+    if (userKey) notes.push(`Xshell 用户密钥：${userKey}（请重新选择私钥）`);
 
     b.addServer({
       parentId: b.folderFor(dirParts(f.path)),
@@ -53,6 +53,6 @@ export function parseXshell(files: ImportFile[]): ImportResult {
       password: null,
     });
   }
-  if (savedPasswords > 0) b.warn(`${savedPasswords} 个会话保存了密码，但 Xshell 的密码加密与 Windows 账户绑定，无法导入，连接时再输入`);
+  if (savedPasswords > 0) b.warn(`${savedPasswords} 个会话保存了密码，但 Xshell 的密码加密与 Windows 账户绑定，无法导入，请在连接时输入`);
   return b.result;
 }

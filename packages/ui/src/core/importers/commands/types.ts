@@ -61,7 +61,7 @@ export class CommandResultBuilder {
     const cmd = input.cmd.replace(/\r\n?/g, '\n');
     const name = input.name.trim();
     if (!cmd.trim()) {
-      this.issue(file, `「${name || '未命名'}」是空命令`);
+      this.issue(file, `「${name || '未命名'}」的命令内容为空`);
       return null;
     }
     const c: ImportedCommand = {

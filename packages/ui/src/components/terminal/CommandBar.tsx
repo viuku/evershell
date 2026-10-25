@@ -24,10 +24,10 @@ interface Props {
 }
 
 const BOLT_TITLES: Record<SessionStatus, string> = {
-  connected: '已连接，点一下断开',
+  connected: '已连接，单击可断开',
   connecting: '正在连接…',
-  closed: '已断开，点一下重新连接',
-  error: '已断开，点一下重新连接',
+  closed: '已断开，单击可重新连接',
+  error: '已断开，单击可重新连接',
 };
 
 /** 终端下方的命令栏：外观、历史、输入框、发送；右边是连接状态、搜索、连接设置、底栏开关。发到全部会话在底栏的「命令」页 */
@@ -57,7 +57,7 @@ export function CommandBar(props: Props) {
 
   const historyItems: MenuItem[] =
     recent.length === 0
-      ? [{ type: 'label', label: '还没有历史命令' }]
+      ? [{ type: 'label', label: '暂无历史命令' }]
       : [
           ...recent.map((c) => ({
             label: historyLine(c),
@@ -100,7 +100,7 @@ export function CommandBar(props: Props) {
         ref={inputRef}
         className="field cmdbar__input mono"
         value={cmd}
-        placeholder={notice ?? '输入命令后回车，发送到当前会话'}
+        placeholder={notice ?? '输入命令后按回车键发送到当前会话'}
         autoComplete="off"
         spellCheck={false}
         onChange={(e) => setCmd(e.target.value)}

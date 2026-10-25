@@ -43,31 +43,31 @@ export function parseElectermCommands(files: ImportFile[]): CommandImportResult 
       steps.forEach((s, i) => {
         const type = str(s.type);
         if (STEP_TYPES[type]) {
-          odd.add(`有${STEP_TYPES[type]}步骤`);
+          odd.add(`${STEP_TYPES[type]}步骤`);
           return;
         }
-        if (i < steps.length - 1 && !enterOf(s)) odd.add('中间有不回车的步骤');
+        if (i < steps.length - 1 && !enterOf(s)) odd.add('不发送回车的中间步骤');
         lines.push(str(s.command));
       });
       const cmd = lines.join('\n');
-      if (TEMPLATE.test(cmd)) odd.add('用了 {{clipboard}} 这类模板');
+      if (TEMPLATE.test(cmd)) odd.add('{{clipboard}} 等模板');
       const last = steps[steps.length - 1];
 
       const labels = Array.isArray(rec.labels) ? rec.labels.filter((l): l is string => typeof l === 'string' && l.trim() !== '') : [];
-      if (labels.length > 1) b.warn('有的命令带了好几个标签，放进了第一个标签的分类');
+      if (labels.length > 1) b.warn('部分命令带有多个标签，已放入第一个标签对应的分类');
       b.add(
         {
           group: labels[0] ?? '',
           name: str(rec.name),
           cmd,
           noEnter: last ? !enterOf(last) : false,
-          unsupported: odd.size > 0 ? `用了 Electerm 专用的功能：${[...odd].join('、')}` : undefined,
+          unsupported: odd.size > 0 ? `使用了 Electerm 专有功能：${[...odd].join('、')}` : undefined,
         },
         file,
       );
     }
   }
 
-  if (!found) b.issue('', '没有找到快捷命令，请选择从 Electerm 导出的 electerm-quickCommands-….json');
+  if (!found) b.issue('', '未找到快捷命令，请选择从 Electerm 导出的 electerm-quickCommands-….json');
   return b.result;
 }

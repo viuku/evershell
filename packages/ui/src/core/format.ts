@@ -84,10 +84,10 @@ export function formatRelative(ts: number, now = Date.now()): string {
 
 export function formatEta(secs: number): string {
   if (!Number.isFinite(secs) || secs < 0) return '';
-  if (secs < 60) return `剩 ${Math.ceil(secs)} 秒`;
+  if (secs < 60) return `剩余 ${Math.ceil(secs)} 秒`;
   const m = Math.floor(secs / 60);
   const s = Math.round(secs % 60);
-  return `剩 ${m} 分 ${s} 秒`;
+  return `剩余 ${m} 分 ${s} 秒`;
 }
 
 export function formatPercent(n: number): string {

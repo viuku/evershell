@@ -134,7 +134,7 @@ function GroupChip({ name, group, onToggle }: { name: string; group: TabGroup; o
         type="button"
         className="tab-chip__btn"
         aria-expanded={!group.collapsed}
-        title={group.collapsed ? `展开 ${name} 这一组` : `收起 ${name} 这一组`}
+        title={group.collapsed ? `展开标签组「${name}」` : `收起标签组「${name}」`}
         onClick={onToggle}
       >
         {name}

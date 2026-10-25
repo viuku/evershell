@@ -262,7 +262,7 @@ fn set_aside(path: &Path, reason: &str) -> Result<(), String> {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     let backup = path.with_file_name(format!("vault-unreadable-{secs}.json"));
-    std::fs::rename(path, &backup).map_err(|e| format!("无法备份打不开的保险箱：{e}"))?;
+    std::fs::rename(path, &backup).map_err(|e| format!("备份无法解密的保险箱失败：{e}"))?;
     log::warn!("保险箱打不开（{reason}），已改名为 {}，换一个新的", backup.display());
     Ok(())
 }

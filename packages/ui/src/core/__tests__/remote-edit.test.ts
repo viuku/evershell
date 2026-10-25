@@ -184,7 +184,7 @@ describe('RemoteEdit 和 EditorDocs', () => {
     expect(await t.main.open('s1', '/big')).toEqual({ kind: 'too-large', size: EDIT_MAX_BYTES + 1 });
     expect(await t.main.open('s1', '/bin')).toEqual({ kind: 'not-text' });
     expect(t.main.openCount).toBe(0);
-    await expect(t.main.open('s2', '/big')).rejects.toThrow('会话没连上');
+    await expect(t.main.open('s2', '/big')).rejects.toThrow('会话未连接');
   });
 
   it('保存：换行符换回去，上传后状态变成已保存', async () => {
@@ -272,7 +272,7 @@ describe('RemoteEdit 和 EditorDocs', () => {
     t.disconnect();
     t.docs.save(t.docs.store.get().activeId!, 'y');
     await settle();
-    expect(t.docs.store.get().tabs[0]).toMatchObject({ status: 'error', error: '会话已断开，重新连上后再保存' });
+    expect(t.docs.store.get().tabs[0]).toMatchObject({ status: 'error', error: '会话已断开，请重新连接后再保存' });
   });
 
   it('关掉文件、编辑器整个关掉，主窗口都忘掉它们', async () => {

@@ -115,7 +115,7 @@ impl Sftp {
             .into_iter()
             .next()
             .map(|f| f.filename)
-            .ok_or_else(|| Error::Sftp("服务器没有返回家目录".into()))
+            .ok_or_else(|| Error::Sftp("服务器未返回用户主目录".into()))
     }
 
     /// 列目录，不含 `.` 和 `..`，按名字排序
@@ -153,7 +153,7 @@ impl Sftp {
         if is_dir {
             self.raw.rmdir(path).await.map_err(|e| match e {
                 SftpError::Status(s) if s.status_code == StatusCode::Failure => {
-                    Error::Sftp("目录不为空或没有权限".into())
+                    Error::Sftp("目录不为空或权限不足".into())
                 }
                 e => sftp_err(e),
             })?;
@@ -167,7 +167,7 @@ impl Sftp {
         self.raw.rename(from, to).await.map_err(|e| match e {
             // SFTP v3 的 rename 在目标已存在时失败，OpenSSH 返回的是笼统的 Failure
             SftpError::Status(s) if s.status_code == StatusCode::Failure => {
-                Error::Sftp("重命名失败：目标已存在或没有权限".into())
+                Error::Sftp("重命名失败：目标已存在或权限不足".into())
             }
             e => sftp_err(e),
         })?;
@@ -192,7 +192,7 @@ impl Sftp {
             Err(e) => return Err(sftp_err(e)),
         };
         match target.as_ref().map(|t| t.file_type()) {
-            Some(FileType::Dir) => return Err(Error::Sftp("目标是目录，不能覆盖".into())),
+            Some(FileType::Dir) => return Err(Error::Sftp("目标是目录，无法覆盖".into())),
             // 符号链接直接写，改的是它指向的文件；改名的话会把链接本身换成普通文件。
             // 设备、管道这类特殊文件（或服务器没给类型）同样只能直接写
             Some(FileType::Symlink | FileType::Other) => {
@@ -314,7 +314,7 @@ impl Sftp {
         self.raw
             .rename(part, path)
             .await
-            .map_err(|e| Error::Sftp(format!("改名失败，上传的内容在 {part}：{}", sftp_err(e))))?;
+            .map_err(|e| Error::Sftp(format!("重命名失败，已上传的内容保存在 {part}：{}", sftp_err(e))))?;
         Ok(())
     }
 
@@ -328,7 +328,7 @@ impl Sftp {
         match self.raw.extended(POSIX_RENAME, data).await.map_err(sftp_err)? {
             Packet::Status(s) if s.status_code == StatusCode::Ok => Ok(()),
             Packet::Status(s) => Err(sftp_err(SftpError::Status(s))),
-            _ => Err(Error::Sftp("服务器对改名请求的答复不对".into())),
+            _ => Err(Error::Sftp("服务器对重命名请求的响应无效".into())),
         }
     }
 
@@ -411,11 +411,11 @@ impl Sftp {
     ) -> Result<Vec<u8>> {
         let attrs = self.raw.stat(path).await.map_err(sftp_err)?.attrs;
         if attrs.file_type() == FileType::Dir {
-            return Err(Error::Sftp("这是一个目录".into()));
+            return Err(Error::Sftp("该路径是目录".into()));
         }
         let size = attrs.size.unwrap_or(0);
         if size > max {
-            return Err(Error::Sftp(format!("文件有 {size} 字节，超过了 {max} 字节的上限")));
+            return Err(Error::Sftp(format!("文件大小为 {size} 字节，超过 {max} 字节的上限")));
         }
         let handle = self
             .raw
@@ -439,7 +439,7 @@ impl Sftp {
     ) -> Result<u64> {
         let attrs = self.raw.stat(path).await.map_err(sftp_err)?.attrs;
         if attrs.file_type() == FileType::Dir {
-            return Err(Error::Sftp("不能下载目录".into()));
+            return Err(Error::Sftp("无法下载目录".into()));
         }
         let total = attrs.size.unwrap_or(0);
         let handle = self
@@ -596,7 +596,7 @@ fn sftp_err(e: SftpError) -> Error {
     Error::Sftp(match e {
         SftpError::Status(s) => match s.status_code {
             StatusCode::NoSuchFile => "文件或目录不存在".into(),
-            StatusCode::PermissionDenied => "没有权限".into(),
+            StatusCode::PermissionDenied => "权限不足".into(),
             StatusCode::OpUnsupported => "服务器不支持该操作".into(),
             StatusCode::Failure if s.error_message.is_empty() || s.error_message == "Failure" => {
                 "操作失败".into()

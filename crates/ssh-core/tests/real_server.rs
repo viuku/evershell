@@ -222,7 +222,7 @@ async fn sftp_roundtrip_in_tmpdir() {
     let err = sftp.list_dir(&dir).await.err().unwrap();
     assert!(err.to_string().contains("不存在"), "{err}");
     let err = sftp.download(tmp, &mut Vec::new(), |_| {}).await.err().unwrap();
-    assert!(err.to_string().contains("不能下载目录"), "{err}");
+    assert!(err.to_string().contains("无法下载目录"), "{err}");
 
     // 第二次拿到的是同一个会话
     let again = conn.sftp().await.unwrap();

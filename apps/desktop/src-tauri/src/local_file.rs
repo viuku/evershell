@@ -24,7 +24,7 @@ pub fn pick_one() -> Result<Option<PathBuf>, String> {
     use objc2::MainThreadMarker;
     use objc2_app_kit::{NSModalResponseOK, NSOpenPanel};
 
-    let mtm = MainThreadMarker::new().ok_or("选文件框只能在主线程打开")?;
+    let mtm = MainThreadMarker::new().ok_or("文件选择窗口只能在主线程打开")?;
     let panel = NSOpenPanel::openPanel(mtm);
     panel.setCanChooseFiles(true);
     panel.setCanChooseDirectories(false);
@@ -37,7 +37,7 @@ pub fn pick_one() -> Result<Option<PathBuf>, String> {
 
 #[cfg(not(target_os = "macos"))]
 pub fn pick_one() -> Result<Option<PathBuf>, String> {
-    Err("这个系统上还不能选私钥文件，请把私钥内容粘贴进来".into())
+    Err("当前系统暂不支持选择私钥文件，请直接粘贴私钥内容".into())
 }
 
 /// 读选中的私钥文件。文件在云盘里、本机只有占位时，这里会等系统把它下载下来
@@ -50,13 +50,13 @@ pub fn read_key_file(path: &Path) -> Result<PickedFile, String> {
     std::fs::File::open(path)
         .and_then(|f| f.take(MAX_KEY_BYTES + 1).read_to_end(&mut bytes))
         .map_err(|e| {
-            let hint = if in_cloud_folder(path) { "。文件在云盘里的话，联网后再试一次" } else { "" };
-            format!("读不了「{name}」：{e}{hint}")
+            let hint = if in_cloud_folder(path) { "。如文件存放在云盘中，请联网后重试" } else { "" };
+            format!("无法读取「{name}」：{e}{hint}")
         })?;
     if bytes.len() as u64 > MAX_KEY_BYTES {
-        return Err(format!("「{name}」超过 1 MB，不像私钥文件"));
+        return Err(format!("「{name}」超过 1 MB，可能不是私钥文件"));
     }
-    let text = String::from_utf8(bytes).map_err(|_| format!("「{name}」不是文本文件，不像私钥文件"))?;
+    let text = String::from_utf8(bytes).map_err(|_| format!("「{name}」不是文本文件，可能不是私钥文件"))?;
     Ok(PickedFile { name, text })
 }
 
@@ -97,8 +97,8 @@ mod tests {
     #[test]
     fn missing_file_names_the_file() {
         let err = read_key_file(Path::new("/nonexistent/evershell/id_rsa")).err().unwrap();
-        assert!(err.starts_with("读不了「id_rsa」"));
+        assert!(err.starts_with("无法读取「id_rsa」"));
         let err = read_key_file(Path::new("/Users/x/Library/CloudStorage/OneDrive/id_rsa")).err().unwrap();
-        assert!(err.ends_with("联网后再试一次"));
+        assert!(err.ends_with("请联网后重试"));
     }
 }

@@ -6,7 +6,7 @@ describe('scanLocalConfigs', () => {
   const scan = scanLocalConfigs([
     { source: 'openssh', location: '~/.ssh/config', files: [textFile('config', 'Host *\n  User me\n')], error: null },
     { source: 'putty', location: '~/.putty/sessions', files: [], error: null },
-    { source: 'securecrt', location: '~/Library/Application Support/VanDyke/SecureCRT/Config/Sessions', files: [], error: '没有权限读取' },
+    { source: 'securecrt', location: '~/Library/Application Support/VanDyke/SecureCRT/Config/Sessions', files: [], error: '无读取权限' },
     { source: 'finalshell', location: '~/Library/FinalShell/conn', files: loadDir('finalshell/conn'), error: null },
     { source: 'termius', location: '~/x', files: [textFile('a', 'b')], error: null },
   ]);
@@ -23,7 +23,7 @@ describe('scanLocalConfigs', () => {
   it('tells apart empty, missing and unreadable locations', () => {
     expect(scan.get('openssh')).toEqual({ state: 'empty', location: '~/.ssh/config' });
     expect(scan.get('putty')).toEqual({ state: 'missing', location: '~/.putty/sessions' });
-    expect(scan.get('securecrt')).toMatchObject({ state: 'error', message: '没有权限读取' });
+    expect(scan.get('securecrt')).toMatchObject({ state: 'error', message: '无读取权限' });
   });
 
   it('ignores sources the backend did not check or the ui does not know', () => {

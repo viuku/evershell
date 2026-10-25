@@ -485,7 +485,7 @@ async fn keepalive_detects_silent_dead_link() {
 
     assert_eq!(code, None);
     let reason = reason.expect("断线要带原因");
-    assert!(reason.contains("没有收到服务器响应"), "{reason}");
+    assert!(reason.contains("未收到服务器响应"), "{reason}");
     // 静默 200ms 发一次心跳，两次没回应、第三次到点判死：约 600ms
     assert!((Duration::from_millis(400)..Duration::from_secs(2)).contains(&elapsed), "{elapsed:?}");
 }

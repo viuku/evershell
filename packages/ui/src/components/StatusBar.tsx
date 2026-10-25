@@ -2,7 +2,7 @@ import type { MonitorStore, SessionInfo, SessionStatus } from '../core/session-m
 import { useMaybeStore } from '../core/store';
 
 const STATUS_TEXT: Record<SessionStatus, string> = {
-  connecting: '连接中…',
+  connecting: '正在连接…',
   connected: '已连接',
   closed: '连接已断开',
   error: '连接失败',

@@ -189,8 +189,8 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
     const ids = selectedRows.length > 0 ? selectedRows.map(idOf) : null;
     try {
       const where = await exportConnections(data, ids, (name, bytes) => backend.saveFile(name, bytes));
-      if (!where) await dialogs.alert('导出连接', ids ? '所选内容里没有可导出的连接' : '还没有可导出的连接');
-      else await dialogs.alert('导出连接', `已导出：${where}（不含密码和私钥）`);
+      if (!where) await dialogs.alert('导出连接', ids ? '所选内容中没有可导出的连接' : '暂无可导出的连接');
+      else await dialogs.alert('导出连接', `已导出至 ${where}（不含密码和私钥）`);
     } catch (e) {
       await dialogs.alert('导出失败', e instanceof Error ? e.message : String(e));
     }
@@ -262,15 +262,15 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
     : selFolder
       ? `已选中文件夹 ${selFolder.name}`
       : selectedRows.length > 1
-        ? `已选中 ${selectedRows.length} 项${connectable.length > 0 ? ` · 点「连接」打开其中 ${connectable.length} 台服务器` : ''}`
+        ? `已选中 ${selectedRows.length} 项${connectable.length > 0 ? ` · 单击「连接」可连接其中 ${connectable.length} 台服务器` : ''}`
         : `共 ${visibleCount} 台服务器 · 双击连接`;
-  const editTip = selServer || selFolder ? '编辑' : selectedRows.length > 1 ? '编辑（一次只能编辑一项）' : '编辑（先选中一个连接或文件夹）';
+  const editTip = selServer || selFolder ? '编辑' : selectedRows.length > 1 ? '编辑（每次只能编辑一项）' : '编辑（请先选择一个连接或文件夹）';
   const deleteTip =
     selectedRows.length === 0
-      ? '删除（先选中一个连接或文件夹）'
+      ? '删除（请先选择一个连接或文件夹）'
       : allDeleted
         ? selectedRows.length > 1 ? `恢复所选 ${selectedRows.length} 项` : '恢复'
-        : `${selectedRows.length > 1 ? `删除所选 ${selectedRows.length} 项` : '删除'}（可在「显示已删除」里恢复）`;
+        : `${selectedRows.length > 1 ? `删除所选 ${selectedRows.length} 项` : '删除'}（可在「显示已删除」中恢复）`;
 
   return (
     <Frame window={frame === 'window'} onClose={onClose}>
@@ -379,7 +379,7 @@ export function ConnectionManager({ backend, onClose, onConnect, openImport = fa
             <span>备注</span>
           </div>
           {rows.length === 0 ? (
-            <div className="empty">{data.servers.length === 0 && !filtering ? '还没有连接。点左上角「新建连接」添加一台服务器。' : '没有匹配的连接'}</div>
+            <div className="empty">{data.servers.length === 0 && !filtering ? '暂无连接。单击左上角的「新建连接」添加服务器。' : '没有匹配的连接'}</div>
           ) : (
             rows.map((row) => {
               const id = idOf(row);

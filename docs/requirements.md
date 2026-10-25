@@ -62,7 +62,7 @@
 | OpenSSH config | Host 条目（通配符条目跳过，Include 不展开） | 无 |
 | EverShell 导出文件 | 完整的文件夹和连接设置 | 导出时就不含密码 |
 
-- **一键导入（2026-10-23）**：桌面端打开导入窗口时，去 FinalShell、SecureCRT、PuTTY 和 `~/.ssh/config` 的默认位置找配置，找到的来源后面标「找到 N 个连接」并默认选中，点「一键导入」跳过选文件、直接预览；没找到的照旧手动选。网页端读不了本机文件，没有这个功能。规格见 [docs/specs/one-click-import.md](specs/one-click-import.md)。
+- **一键导入（2026-10-23）**：桌面端打开导入窗口时，去 FinalShell、SecureCRT、PuTTY 和 `~/.ssh/config` 的默认位置找配置，找到的来源后面标「已找到 N 个连接」并默认选中，点「一键导入」跳过选文件、直接预览；没找到的照旧手动选。网页端读不了本机文件，没有这个功能。规格见 [docs/specs/one-click-import.md](specs/one-click-import.md)。
 - 不导入密码的来源，第一次连接时再输入。
 - 重名的连接可以选跳过、覆盖或两份都保留。
 - 「导出连接」把连接存成 EverShell 自己的文件，不含密码和私钥；桌面端存进“下载”目录，网页端由浏览器下载。

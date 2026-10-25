@@ -68,9 +68,9 @@ interface DialogsApi {
   askPassword(opts: PasswordOptions): Promise<PasswordResult | null>;
   /** 让用户选私钥文件（或粘贴），连接时没有保存的私钥用 */
   askPrivateKey(opts: KeyOptions): Promise<KeyResult | null>;
-  /** 只是告知，一个“好”按钮 */
+  /** 只是告知，一个“确定”按钮 */
   alert(title: string, message: string): Promise<void>;
-  /** 主机密钥没通过校验时的“安全警告”，照 FinalShell：第一次连接给接受并保存 / 只接受本次，密钥变了只给更新 */
+  /** 主机密钥没通过校验时的“安全警告”，照 FinalShell：第一次连接给接受并保存 / 仅本次接受，密钥变了只给更新 */
   hostKey(problem: AskableHostKeyProblem): Promise<HostKeyDecision>;
 }
 
@@ -258,7 +258,7 @@ function AlertDialog({ pending, done }: { pending: Extract<Pending, { kind: 'ale
         <p className="dialog-message">{pending.message}</p>
         <div className="dialog-actions">
           <button type="button" className="btn btn-primary" data-autofocus onClick={finish}>
-            好
+            确定
           </button>
         </div>
       </div>
@@ -282,9 +282,9 @@ function HostKeyDialog({ pending, done }: { pending: Extract<Pending, { kind: 'h
           <CautionIcon className="hostkey__icon" />
           {changed ? (
             <div className="hostkey__text">
-              <p>主机 {where} 密钥已经改变，该连接可能被劫持！如果无法确定，建议取消连接。</p>
+              <p>主机 {where} 的密钥已改变，该连接可能遭到劫持。如无法确认原因，建议取消连接。</p>
               <p className="muted">
-                原来的密钥指纹：
+                原密钥指纹：
                 {old.map((fp) => (
                   <span key={fp} className="hostkey__fp">
                     {fp}
@@ -292,12 +292,12 @@ function HostKeyDialog({ pending, done }: { pending: Extract<Pending, { kind: 'h
                 ))}
               </p>
               <p>
-                现在的密钥指纹：<span className="hostkey__fp">{problem.key.fingerprint}</span>
+                当前密钥指纹：<span className="hostkey__fp">{problem.key.fingerprint}</span>
               </p>
             </div>
           ) : (
             <div className="hostkey__text">
-              <p>主机 {where} 密钥未注册过。</p>
+              <p>主机 {where} 的密钥尚未记录。</p>
               <p>是否接受该密钥？</p>
               <p>
                 主机密钥指纹：<span className="hostkey__fp">{problem.key.fingerprint}</span>
@@ -312,7 +312,7 @@ function HostKeyDialog({ pending, done }: { pending: Extract<Pending, { kind: 'h
           </button>
           {changed ? (
             <button type="button" className="btn" onClick={() => finish('update')}>
-              我已核实，更新密钥
+              已核实，更新密钥
             </button>
           ) : (
             <>
@@ -320,7 +320,7 @@ function HostKeyDialog({ pending, done }: { pending: Extract<Pending, { kind: 'h
                 接受并保存
               </button>
               <button type="button" className="btn" onClick={() => finish('once')}>
-                只接受本次
+                仅本次接受
               </button>
             </>
           )}
@@ -416,7 +416,7 @@ function KeyDialog({
             setFileName(name);
           }}
         />
-        <label htmlFor="dlg-passphrase">私钥口令（没有则留空）</label>
+        <label htmlFor="dlg-passphrase">私钥口令（如无请留空）</label>
         <input
           id="dlg-passphrase"
           className="field"
@@ -480,7 +480,7 @@ export function KeyPicker({
     try {
       take({ name: file.name, text: await file.text() });
     } catch {
-      setError(`读不了「${file.name}」。文件在云盘里的话，先下载到本机再选`);
+      setError(`无法读取「${file.name}」。如文件存放在云盘中，请先下载到本机再选择`);
     }
   };
   return (
@@ -509,7 +509,7 @@ export function KeyPicker({
         className="field mono keypick__text"
         rows={3}
         value={value}
-        placeholder="或在这里粘贴 PEM 格式私钥"
+        placeholder="或在此处粘贴 PEM 格式的私钥"
         spellCheck={false}
         onChange={(e) => {
           setError(null);

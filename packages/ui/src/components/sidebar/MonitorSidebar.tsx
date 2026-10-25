@@ -45,7 +45,7 @@ export function MonitorSidebar({ session, monitor, onToggleSidebar, onOpenInfo, 
       <div className="sidebar__body">
         <div className="sidebar__row">
           <span>同步状态</span>
-          <span className="sidebar__sync muted" title="云同步在后续版本提供">
+          <span className="sidebar__sync muted" title="云同步将在后续版本中提供">
             <span className="sidebar__dot" />
             本地
           </span>
@@ -69,7 +69,7 @@ export function MonitorSidebar({ session, monitor, onToggleSidebar, onOpenInfo, 
           type="button"
           className="btn sidebar__info"
           disabled={!connected}
-          title="在新标签页打开系统信息"
+          title="在新标签页中打开系统信息"
           onClick={() => onOpenInfo('sysinfo')}
         >
           系统信息
@@ -139,9 +139,9 @@ function Procs({ snap, session, onOpen }: { snap: MonitorSnapshot | null; sessio
   const placeholder = !session
     ? '未连接'
     : session.status === 'connecting'
-      ? '连接中…'
+      ? '正在连接…'
       : session.status === 'connected'
-        ? '采集中…'
+        ? '正在采集…'
         : '会话已断开';
   return (
     <div className="sidebar__table">
@@ -152,7 +152,7 @@ function Procs({ snap, session, onOpen }: { snap: MonitorSnapshot | null; sessio
       </div>
       {snap && snap.procs.length > 0 ? (
         // 表身整块是一个按钮：点了在新标签页看全部进程。表头的排序按钮不在里面
-        <button type="button" className="sidebar__open" title="在新标签页打开进程列表" onClick={onOpen}>
+        <button type="button" className="sidebar__open" title="在新标签页中打开进程列表" onClick={onOpen}>
           {sortProcs(snap.procs, sort).map((p) => (
             <span key={p.pid} className="sidebar__tr sidebar__tr--procs mono">
               <span>{formatBytes(p.memBytes)}</span>
@@ -176,7 +176,7 @@ function SortHeader({ label, by, sort }: { label: string; by: ProcSort; sort: Pr
       type="button"
       className={`sidebar__sort${on ? ' sidebar__sort--on' : ''}`}
       aria-pressed={on}
-      title={`按${label}从高到低排`}
+      title={`按${label}从高到低排序`}
       onClick={() => procSort.set(by)}
     >
       {label}
@@ -240,7 +240,7 @@ function Net({
       </div>
       {snap ? (
         // 图整块是一个按钮：点了在新标签页看网络连接。上面的网卡选择不在里面
-        <button type="button" className="sidebar__netPlot sidebar__open" title="在新标签页打开网络连接" onClick={onOpen}>
+        <button type="button" className="sidebar__netPlot sidebar__open" title="在新标签页中打开网络连接" onClick={onOpen}>
           <span className="sidebar__axis mono">
             <span>{formatBytes(max)}</span>
             <span>{formatBytes(max / 2)}</span>

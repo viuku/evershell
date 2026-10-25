@@ -65,7 +65,7 @@ function matches(block: Block, alias: string): boolean {
 export function parseOpenSsh(files: ImportFile[]): ImportResult {
   const b = new ResultBuilder('openssh');
   if (files.length === 0) {
-    b.issue('', '没有选择文件');
+    b.issue('', '未选择文件');
     return b.result;
   }
 
@@ -91,7 +91,7 @@ export function parseOpenSsh(files: ImportFile[]): ImportResult {
         continue;
       }
       if (key === 'include') {
-        b.warn(`${name}：Include ${args.join(' ')} 没有展开，请把这些文件也单独导入`);
+        b.warn(`${name}：Include ${args.join(' ')} 未展开，请单独导入这些文件`);
         continue;
       }
       if (skipping) continue;
@@ -108,13 +108,13 @@ export function parseOpenSsh(files: ImportFile[]): ImportResult {
     for (const block of blocks) {
       for (const p of block.patterns ?? []) {
         if (p.startsWith('!') || hasWildcard(p)) {
-          if (!p.startsWith('!')) b.warn(`${name}：Host ${p} 带通配符，没有生成连接（它的设置会应用到匹配的主机）`);
+          if (!p.startsWith('!')) b.warn(`${name}：Host ${p} 含通配符，未生成连接（其设置将应用于匹配的主机）`);
           continue;
         }
         if (!aliases.includes(p)) aliases.push(p);
       }
     }
-    if (aliases.length === 0 && blocks.length > 1) b.issue(name, '所有 Host 都带通配符，没有可导入的主机');
+    if (aliases.length === 0 && blocks.length > 1) b.issue(name, '所有 Host 均含通配符，没有可导入的主机');
 
     for (const alias of aliases) {
       // 第一次出现的值生效；IdentityFile 可以有多个，全部收集
@@ -130,7 +130,7 @@ export function parseOpenSsh(files: ImportFile[]): ImportResult {
       const jump = first('proxyjump');
       if (jump && jump.toLowerCase() !== 'none') notes.push(`ProxyJump：${jump}`);
       const proxyCommand = first('proxycommand');
-      if (proxyCommand) notes.push('有 ProxyCommand，未导入');
+      if (proxyCommand) notes.push('包含 ProxyCommand，未导入');
       const useKey = identities.length > 0 && identities[0]!.toLowerCase() !== 'none';
 
       b.addServer({

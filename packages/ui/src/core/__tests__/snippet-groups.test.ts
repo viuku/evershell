@@ -52,13 +52,13 @@ describe('currentGroup', () => {
 describe('groupNameError', () => {
   it('空名字和重名不行', () => {
     expect(groupNameError('  ', ['常用'])).toBe('请输入分类名称');
-    expect(groupNameError(' 常用 ', ['常用'])).toBe('已有分类「常用」');
+    expect(groupNameError(' 常用 ', ['常用'])).toBe('分类「常用」已存在');
     expect(groupNameError('Docker', ['常用'])).toBeNull();
   });
 
   it('改名时保持原名不算重名', () => {
     expect(groupNameError('常用', ['常用', 'Docker'], '常用')).toBeNull();
-    expect(groupNameError('Docker', ['常用', 'Docker'], '常用')).toBe('已有分类「Docker」');
+    expect(groupNameError('Docker', ['常用', 'Docker'], '常用')).toBe('分类「Docker」已存在');
   });
 });
 

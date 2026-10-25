@@ -122,7 +122,7 @@ export function CommandsPanel({ manager, session, backend }: Props) {
     if (n > 0) {
       const ok = await dialogs.confirm({
         title: '删除分类',
-        message: `确定删除分类「${g}」吗？里面的 ${n} 条命令也会一起删掉。`,
+        message: `确定要删除分类「${g}」吗？其中的 ${n} 条命令将一并删除。`,
         okText: '删除',
         danger: true,
       });
@@ -136,7 +136,7 @@ export function CommandsPanel({ manager, session, backend }: Props) {
   const newSnippet = () => setEditing({ mode: 'new', title: '新建命令', group, cmd: '' });
 
   const removeSnippetAsk = async (s: Snippet) => {
-    const ok = await dialogs.confirm({ title: '删除命令', message: `确定删除「${s.name}」吗？`, okText: '删除', danger: true });
+    const ok = await dialogs.confirm({ title: '删除命令', message: `确定要删除「${s.name}」吗？`, okText: '删除', danger: true });
     if (ok) removeSnippet(s.id);
   };
 
@@ -151,7 +151,7 @@ export function CommandsPanel({ manager, session, backend }: Props) {
       { label: '发送', onSelect: () => sendSnippet(s) },
       { label: '编辑…', onSelect: () => setEditing({ mode: 'edit', snippet: s }) },
       {
-        label: '放进命令编辑器',
+        label: '放入命令编辑器',
         onSelect: () => {
           commandEditorText.set(s.cmd);
           editorRef.current?.focus();
@@ -253,7 +253,7 @@ export function CommandsPanel({ manager, session, backend }: Props) {
             type="button"
             className="btn btn-primary cmds__send"
             disabled={!lastSent}
-            title={lastSent ? `再发一次「${lastSent.name}」` : '先点一条命令'}
+            title={lastSent ? `再次发送「${lastSent.name}」` : '请先单击一条命令'}
             onClick={() => lastSent && sendSnippet(lastSent)}
           >
             发送
@@ -270,7 +270,7 @@ export function CommandsPanel({ manager, session, backend }: Props) {
           ref={editorRef}
           className="field mono cmds__text"
           value={text}
-          placeholder={`可以写多行，${modEnterLabel} 发送`}
+          placeholder={`支持多行输入，按 ${modEnterLabel} 发送`}
           spellCheck={false}
           autoComplete="off"
           onChange={(e) => commandEditorText.set(e.target.value)}
@@ -421,7 +421,7 @@ function SnippetDialog({
         <label htmlFor="snp-name" className="lbl">
           名称
         </label>
-        <input id="snp-name" className="field" value={name} placeholder="例如 查看磁盘" autoComplete="off" onChange={(e) => setName(e.target.value)} />
+        <input id="snp-name" className="field" value={name} placeholder="例如：查看磁盘" autoComplete="off" onChange={(e) => setName(e.target.value)} />
         <label htmlFor="snp-cmd" className="lbl">
           命令
         </label>
@@ -443,7 +443,7 @@ function SnippetDialog({
             <input type="checkbox" checked={noEnter} onChange={(e) => setNoEnter(e.target.checked)} />
             不自动回车
           </label>
-          <span className="muted">点这条命令时，只把文字放进终端，不按回车。适合要补参数的命令，比如 kill -9 后面填进程号。</span>
+          <span className="muted">单击该命令时，仅将文字填入终端，不发送回车。适用于需要补充参数的命令，例如在 kill -9 后填写进程号。</span>
         </div>
         <label htmlFor="snp-group" className="lbl">
           分类

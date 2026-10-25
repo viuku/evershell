@@ -35,7 +35,7 @@ export function parseSecureCRT(files: ImportFile[]): ImportResult {
   const b = new ResultBuilder('securecrt');
   const sessions = stripCommonRoot(files.filter((f) => extOf(f.path) === 'ini' && !/^(__FolderData__|Default)\.ini$/i.test(fileName(f.path))));
   if (sessions.length === 0) {
-    b.issue('', '没有找到会话 .ini 文件');
+    b.issue('', '未找到会话 .ini 文件');
     return b.result;
   }
 
@@ -44,7 +44,7 @@ export function parseSecureCRT(files: ImportFile[]): ImportResult {
     const str = (k: string) => v.get(k.toLowerCase())?.text ?? '';
     const proto = str('Protocol Name');
     if (!proto) {
-      b.issue(f.path, '没有 Protocol Name，不是 SecureCRT 会话文件');
+      b.issue(f.path, '缺少 Protocol Name，不是 SecureCRT 会话文件');
       continue;
     }
     if (!/^ssh[12]?$/i.test(proto)) {

@@ -43,7 +43,7 @@ export function parseEverShell(files: ImportFile[]): ImportResult {
   const b = new ResultBuilder('evershell');
   const jsons = files.filter((f) => extOf(f.path) === 'json');
   if (jsons.length === 0) {
-    b.issue('', '没有找到 .json 文件');
+    b.issue('', '未找到 .json 文件');
     return b.result;
   }
 
@@ -60,7 +60,7 @@ export function parseEverShell(files: ImportFile[]): ImportResult {
       b.issue(name, '不是 EverShell 导出文件（缺少 format 标记）');
       continue;
     }
-    if (typeof doc.version === 'number' && doc.version > EXPORT_VERSION) b.warn(`${name} 来自更新版本的 EverShell（格式 v${doc.version}），不认识的字段会被忽略`);
+    if (typeof doc.version === 'number' && doc.version > EXPORT_VERSION) b.warn(`${name} 由更新版本的 EverShell 导出（格式 v${doc.version}），无法识别的字段将被忽略`);
 
     const folderRecs: { id: string; name: string; parentId: string | null }[] = [];
     for (const raw of Array.isArray(doc.folders) ? (doc.folders as unknown[]) : []) {
@@ -84,7 +84,7 @@ export function parseEverShell(files: ImportFile[]): ImportResult {
       }
       const parentRaw = str(r.parentId);
       const parentId = parentRaw ? (folderIds.get(parentRaw) ?? null) : null;
-      if (parentRaw && !parentId) b.warn(`${name}：有连接的上级文件夹不在文件里，已放到根目录`);
+      if (parentRaw && !parentId) b.warn(`${name}：部分连接的上级文件夹不在文件中，已放入根目录`);
       const advanced = pickAdvanced(r.advanced);
       const s = b.addServer({
         parentId,

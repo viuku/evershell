@@ -66,12 +66,12 @@ export function parseSecureCrtCommands(files: ImportFile[]): CommandImportResult
         const parts = line.split(',');
         if (parts[parts.length - 1] === '') parts.pop();
         if (parts.length < 3 + TAIL_FIELDS) {
-          b.issue(file, `「${bar.name}」里有一行看不懂：${line.slice(0, 40)}`);
+          b.issue(file, `「${bar.name}」中有一行无法识别：${line.slice(0, 40)}`);
           continue;
         }
         const label = parts[parts.length - 1 - TAIL_FIELDS]!.trim();
         if (parts[0] !== 'SEND') {
-          b.issue(file, `「${label || parts[0]}」不是发送文字的按钮，没有导入`);
+          b.issue(file, `「${label || parts[0]}」不是发送文字的按钮，未导入`);
           continue;
         }
         const { text, special } = decodeSendString(parts.slice(1, parts.length - 1 - TAIL_FIELDS).join(','));
@@ -83,7 +83,7 @@ export function parseSecureCrtCommands(files: ImportFile[]): CommandImportResult
             name: label,
             cmd: enter ? text.slice(0, -1) : text,
             noEnter: !enter,
-            unsupported: special.length > 0 ? `用了 SecureCRT 专用的写法 ${special.join('、')}` : undefined,
+            unsupported: special.length > 0 ? `使用了 SecureCRT 专有语法：${special.join('、')}` : undefined,
           },
           file,
         );
@@ -91,6 +91,6 @@ export function parseSecureCrtCommands(files: ImportFile[]): CommandImportResult
     }
   }
 
-  if (!found) b.issue('', '没有找到按钮栏，请选择 SecureCRT 配置文件夹里的 ButtonBarV5.ini');
+  if (!found) b.issue('', '未找到按钮栏，请选择 SecureCRT 配置文件夹中的 ButtonBarV5.ini');
   return b.result;
 }

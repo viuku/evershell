@@ -220,14 +220,14 @@ fn read(path: &Path, kind: &Kind) -> Result<Vec<LocalFile>, String> {
     match kind {
         Kind::File if meta.is_file() => {
             if meta.len() > MAX_FILE_BYTES {
-                return Err("文件太大，不像是配置文件".into());
+                return Err("文件过大，可能不是配置文件".into());
             }
             let bytes = fs::read(path).map_err(|e| describe(&e))?;
             Ok(vec![LocalFile { path: name, bytes }])
         }
         Kind::JsonPart(keys) if meta.is_file() => {
             if meta.len() > MAX_JSON_BYTES {
-                return Err("文件太大，不像是配置文件".into());
+                return Err("文件过大，可能不是配置文件".into());
             }
             let bytes = fs::read(path).map_err(|e| describe(&e))?;
             Ok(vec![LocalFile { path: name, bytes: json_part(&bytes, keys)? }])
@@ -313,16 +313,16 @@ fn json_part(bytes: &[u8], keys: &[&str]) -> Result<Vec<u8>, String> {
             }
         }
     }
-    serde_json::to_vec(&part).map_err(|e| format!("整理配置失败：{e}"))
+    serde_json::to_vec(&part).map_err(|e| format!("处理配置失败：{e}"))
 }
 
 fn too_many() -> String {
-    "文件太多，不像是配置文件夹".into()
+    "文件数量过多，可能不是配置文件夹".into()
 }
 
 fn describe(e: &io::Error) -> String {
     if e.kind() == io::ErrorKind::PermissionDenied {
-        "没有权限读取".into()
+        "无读取权限".into()
     } else {
         format!("读取失败：{e}")
     }

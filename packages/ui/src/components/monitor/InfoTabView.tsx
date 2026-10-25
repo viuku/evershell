@@ -28,7 +28,7 @@ export function InfoTabView({ kind, manager, session, monitor, onReconnect }: Pr
   if (kind === 'sysinfo') {
     body = <SystemInfoTab manager={manager} session={session} snap={snap} />;
   } else if (!snap) {
-    body = <div className="empty">{connected ? '采集中…' : '没有数据'}</div>;
+    body = <div className="empty">{connected ? '正在采集…' : '暂无数据'}</div>;
   } else if (!snap.supported) {
     body = <div className="empty">暂不支持该系统的监控</div>;
   } else {
@@ -39,7 +39,7 @@ export function InfoTabView({ kind, manager, session, monitor, onReconnect }: Pr
     <section aria-label={`${TITLE[kind]} · ${session.name}`} className={`info-tab${connected ? '' : ' info-tab--stale'}`}>
       {!connected && (
         <div role="status" className="info-tab__banner">
-          <span>{session.status === 'connecting' ? '正在连接…' : '连接已断开，下面是断开前的数据'}</span>
+          <span>{session.status === 'connecting' ? '正在连接…' : '连接已断开，以下为断开前的数据'}</span>
           {session.status !== 'connecting' && (
             <button type="button" className="btn btn--xs" onClick={onReconnect}>
               重新连接
@@ -73,7 +73,7 @@ export function SortHead<K extends string>({
       type="button"
       className={`info-sort${on ? ' info-sort--on' : ''}${end ? ' info-sort--end' : ''}`}
       aria-pressed={on}
-      title={`按${label}排序，再点一次反过来`}
+      title={`按${label}排序，再次单击可反向排序`}
       onClick={() => onSort(by)}
     >
       {label}

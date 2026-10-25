@@ -28,15 +28,15 @@ const ENTRY_AAD_PREFIX: &str = "evershell-vault/v1/entry/";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("保险箱文件格式不对：{0}")]
+    #[error("保险箱文件格式错误：{0}")]
     Format(String),
-    #[error("保险箱是更新版本的 EverShell 创建的（格式版本 {0}），请升级软件")]
+    #[error("保险箱由更新版本的 EverShell 创建（格式版本 {0}），请升级 EverShell")]
     UnsupportedVersion(u32),
-    #[error("保险箱钥匙不对，或者文件被改过")]
+    #[error("保险箱钥匙不正确，或文件已被修改")]
     WrongKey,
-    #[error("保险箱钥匙格式不对")]
+    #[error("保险箱钥匙格式错误")]
     BadKey,
-    #[error("系统随机数不可用：{0}")]
+    #[error("系统随机数生成器不可用：{0}")]
     Random(String),
 }
 
@@ -111,7 +111,7 @@ impl Vault {
             return Err(Error::UnsupportedVersion(header.version));
         }
         if header.version != VERSION {
-            return Err(Error::Format(format!("不认识的格式版本 {}", header.version)));
+            return Err(Error::Format(format!("无法识别的格式版本 {}", header.version)));
         }
         serde_json::from_slice(bytes).map_err(|e| Error::Format(e.to_string()))
     }
@@ -176,9 +176,9 @@ fn seal(key: &VaultKey, plain: &[u8], aad: &[u8]) -> Result<String> {
 fn open(key: &VaultKey, sealed: &str, aad: &[u8]) -> Result<Vec<u8>> {
     let raw = B64
         .decode(sealed)
-        .map_err(|_| Error::Format("密文不是 base64".into()))?;
+        .map_err(|_| Error::Format("密文不是有效的 Base64".into()))?;
     if raw.len() < NONCE_LEN + TAG_LEN {
-        return Err(Error::Format("密文太短".into()));
+        return Err(Error::Format("密文长度不足".into()));
     }
     let (nonce, sealed) = raw.split_at(NONCE_LEN);
     let nonce: [u8; NONCE_LEN] = nonce.try_into().expect("上面检查过长度");

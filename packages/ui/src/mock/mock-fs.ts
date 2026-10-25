@@ -264,7 +264,7 @@ export class MockFs {
   readBytes(path: string): Uint8Array {
     const node = this.resolve(path);
     if (!node) throw new Error('文件不存在');
-    if (node.kind === 'dir') throw new Error('这是一个目录');
+    if (node.kind === 'dir') throw new Error('该路径是目录');
     if (node.content != null) return new TextEncoder().encode(node.content);
     if (BINARY_EXT.test(path)) return new Uint8Array(Math.min(node.size, 4096)).map((_, i) => i % 7);
     return new TextEncoder().encode(`# ${basename(path)}\n# 预览用的假内容，真服务器上是文件本来的内容\n`);

@@ -18,7 +18,7 @@ interface Props {
   follow: boolean;
 }
 
-/** 进目录时超过这么久还没列出来，就把文件表换成“加载中”；更快的话直接换成新列表，不闪 */
+/** 进目录时超过这么久还没列出来，就把文件表换成“正在载入”；更快的话直接换成新列表，不闪 */
 const LOADING_DELAY_MS = 250;
 
 /** flag 连续为 true 超过 ms 毫秒才返回 true */
@@ -65,7 +65,7 @@ export function FilesPanel({ files, session, follow }: Props) {
   if (session.status !== 'connected' || !files || !state) {
     return (
       <div className="empty bottom__offline">
-        {session.status === 'connecting' ? '连接中…' : '会话已断开，重连后显示远程文件'}
+        {session.status === 'connecting' ? '连接中…' : '会话已断开，重新连接后将显示远程文件'}
       </div>
     );
   }
@@ -78,7 +78,7 @@ export function FilesPanel({ files, session, follow }: Props) {
       title: '新建文件夹',
       label: `在 ${cwd} 下新建`,
       initial: '未命名文件夹',
-      validate: (v) => (isValidName(v.trim()) ? null : '名称不能为空，也不能包含 /'),
+      validate: (v) => (isValidName(v.trim()) ? null : '名称不能为空，且不能包含 /'),
     });
     if (name) await files.mkdir(name.trim());
   };
@@ -89,7 +89,7 @@ export function FilesPanel({ files, session, follow }: Props) {
       label: entry.name,
       initial: entry.name,
       okText: '重命名',
-      validate: (v) => (isValidName(v.trim()) ? null : '名称不能为空，也不能包含 /'),
+      validate: (v) => (isValidName(v.trim()) ? null : '名称不能为空，且不能包含 /'),
     });
     if (name && name.trim() !== entry.name) await files.rename(entry, name.trim());
   };
@@ -97,7 +97,7 @@ export function FilesPanel({ files, session, follow }: Props) {
   const remove = async (entry: FileEntry) => {
     const ok = await dialogs.confirm({
       title: entry.kind === 'dir' ? '删除文件夹' : '删除文件',
-      message: `确定要删除“${entry.name}”吗？远程文件删除后无法恢复。`,
+      message: `确定要删除「${entry.name}」吗？远程文件删除后无法恢复。`,
       okText: '删除',
       danger: true,
     });
@@ -119,12 +119,12 @@ export function FilesPanel({ files, session, follow }: Props) {
         .open(session.id, path, (p) => markOpening(path, p.total > 0 ? p.done / p.total : 1))
         .finally(() => markOpening(path, undefined));
       if (r.kind === 'too-large') {
-        await offer('这个文件不能在编辑器里打开', `${entry.name} 有 ${formatBytesLong(r.size)}，编辑器最多打开 ${EDIT_MAX_BYTES / 2 ** 20} MB。`);
+        await offer('该文件无法在编辑器中打开', `${entry.name} 大小为 ${formatBytesLong(r.size)}，编辑器最多只能打开 ${EDIT_MAX_BYTES / 2 ** 20} MB 的文件。`);
       } else if (r.kind === 'not-text') {
-        await offer('这个文件不能在编辑器里打开', `${entry.name} 不像文本文件，可能是图片、压缩包或程序。`);
+        await offer('该文件无法在编辑器中打开', `${entry.name} 似乎不是文本文件，可能是图片、压缩包或程序。`);
       }
     } catch (err) {
-      await dialogs.alert('打不开这个文件', err instanceof Error ? err.message : String(err));
+      await dialogs.alert('无法打开该文件', err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -249,11 +249,11 @@ export function FilesPanel({ files, session, follow }: Props) {
               <div className="files__loading" role="status">
                 <span className="files__loading-box">
                   <span className="files__spinner" aria-hidden="true" />
-                  加载中…
+                  正在载入…
                 </span>
               </div>
             ) : state.entries.length === 0 ? (
-              <div className="empty">空目录</div>
+              <div className="empty">此目录为空</div>
             ) : (
               state.entries.map((f) => {
                 const on = f.name === state.selected;
@@ -289,7 +289,7 @@ export function FilesPanel({ files, session, follow }: Props) {
                     </span>
                     <span className="files__right muted">
                       {loading
-                        ? `打开中${progress === null ? '…' : ` ${Math.floor(progress * 100)}%`}`
+                        ? `正在打开${progress === null ? '…' : ` ${Math.floor(progress * 100)}%`}`
                         : f.kind === 'dir'
                           ? '--'
                           : f.kind === 'link'
