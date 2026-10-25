@@ -732,7 +732,7 @@ export class SessionManager {
       term.write('\r\n\x1b[90m[连接已取消]\x1b[0m\r\n');
     } else {
       const where = problem.port === 22 ? problem.host : `${problem.host}:${problem.port}`;
-      const what = problem.kind === 'changed' ? '密钥已经改变' : '的密钥已被吊销';
+      const what = problem.kind === 'changed' ? '的密钥已改变' : '的密钥已被吊销';
       this.update(info.id, { status: 'error', error: new HostKeyError(problem).message });
       term.write(`\r\n\x1b[33m[已取消连接：主机 ${where} ${what}]\x1b[0m\r\n`);
     }

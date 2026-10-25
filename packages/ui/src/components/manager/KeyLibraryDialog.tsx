@@ -30,7 +30,7 @@ export function KeyLibraryDialog({ library, selectedId, pickFile, onPick, onClos
   const rename = async () => {
     if (!current) return;
     const name = await dialogs.prompt({
-      title: '私钥改名',
+      title: '重命名私钥',
       label: '新名称',
       initial: current.name,
       validate: (v) => (v.trim() ? null : '名称不能为空'),
@@ -44,8 +44,8 @@ export function KeyLibraryDialog({ library, selectedId, pickFile, onPick, onClos
     const ok = await dialogs.confirm({
       title: '删除私钥',
       message: users
-        ? `删除私钥「${current.name}」？有 ${users} 台服务器在用它，删了以后${users > 1 ? '这几台' : '这台'}连接时会请你重新选私钥。`
-        : `删除私钥「${current.name}」？现在没有服务器在用它。`,
+        ? `确定要删除私钥「${current.name}」吗？有 ${users} 台服务器正在使用该私钥，删除后，${users > 1 ? '这些服务器' : '该服务器'}连接时需要重新选择私钥。`
+        : `确定要删除私钥「${current.name}」吗？目前没有服务器使用该私钥。`,
       okText: '删除',
       danger: true,
     });
@@ -78,10 +78,10 @@ export function KeyLibraryDialog({ library, selectedId, pickFile, onPick, onClos
             <span>名称</span>
             <span>类型</span>
             <span>长度</span>
-            <span>用在</span>
+            <span>用于</span>
           </div>
           {keys.length === 0 ? (
-            <div className="empty">还没有私钥。点右边「导入…」添加。</div>
+            <div className="empty">暂无私钥。单击右侧的「导入…」添加。</div>
           ) : (
             keys.map((k) => {
               const on = k.id === sel;
@@ -109,7 +109,7 @@ export function KeyLibraryDialog({ library, selectedId, pickFile, onPick, onClos
             导入…
           </button>
           <button type="button" className="btn" disabled={!current} onClick={() => void rename()}>
-            改名…
+            重命名…
           </button>
           <button type="button" className="btn" disabled={!current} onClick={() => void remove()}>
             删除…
@@ -117,7 +117,7 @@ export function KeyLibraryDialog({ library, selectedId, pickFile, onPick, onClos
         </div>
       </div>
       <div className="keylib__foot">
-        <span className="muted keylib__hint">双击一行直接选用</span>
+        <span className="muted keylib__hint">双击某一行可直接选用</span>
         <button type="button" className="btn" onClick={onClose}>
           取消
         </button>
@@ -175,8 +175,8 @@ export function ImportKeyDialog({ library, pickFile, onImported, onClose }: Impo
         (info) => {
           if (stale) return;
           const same = liveKeys(keysStore.get()).find((k) => k.fingerprint === info.fingerprint);
-          if (same) setCheck({ kind: 'error', message: `这把私钥已经导入过了，名字是「${same.name}」` });
-          else setCheck({ kind: 'ok', text: `认出来是 ${info.algorithm} 私钥，长度 ${info.bits}` });
+          if (same) setCheck({ kind: 'error', message: `该私钥已导入，名称为「${same.name}」` });
+          else setCheck({ kind: 'ok', text: `已识别为 ${info.algorithm} 私钥，长度 ${info.bits}` });
         },
         (e: unknown) => {
           if (!stale) setCheck({ kind: 'error', message: e instanceof Error ? e.message : String(e) });
@@ -231,7 +231,7 @@ export function ImportKeyDialog({ library, pickFile, onImported, onClose }: Impo
           id="keyimp-name"
           className="field"
           value={name}
-          placeholder="给这把私钥起个名字"
+          placeholder="私钥名称"
           autoComplete="off"
           spellCheck={false}
           onChange={(e) => setName(e.target.value)}
@@ -244,7 +244,7 @@ export function ImportKeyDialog({ library, pickFile, onImported, onClose }: Impo
           className="field"
           type="password"
           value={passphrase}
-          placeholder="私钥没设口令就留空"
+          placeholder="私钥未设置口令时请留空"
           autoComplete="off"
           onChange={(e) => setPassphrase(e.target.value)}
         />
@@ -258,8 +258,8 @@ export function ImportKeyDialog({ library, pickFile, onImported, onClose }: Impo
             {check.kind === 'ok'
               ? check.text
               : check.kind === 'checking'
-                ? '正在认私钥…'
-                : '选好文件后，这里会显示私钥的类型和长度'}
+                ? '正在识别私钥…'
+                : '选择文件后，此处将显示私钥的类型和长度'}
           </span>
         )}
         <div className="form__actions">

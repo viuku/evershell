@@ -177,7 +177,7 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
           const n = manager.connectedCount();
           return await dialogs.confirm({
             title: '关闭窗口',
-            message: n > 0 ? `确定关闭窗口吗？连着的 ${n} 个会话会断开。` : '确定关闭窗口吗？',
+            message: n > 0 ? `确定要关闭窗口吗？当前连接的 ${n} 个会话将断开。` : '确定要关闭窗口吗？',
             okText: '关闭',
           });
         } finally {
@@ -275,7 +275,7 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
       onSelect: () => {
         void exportConnections(hostsStore.get(), null, (name, bytes) => backend.saveFile(name, bytes))
           .then((where) =>
-            dialogs.alert('导出连接', where ? `已导出：${where}（不含密码和私钥）` : '还没有可导出的连接'),
+            dialogs.alert('导出连接', where ? `已导出至 ${where}（不含密码和私钥）` : '暂无可导出的连接'),
           )
           .catch((e: unknown) => dialogs.alert('导出失败', e instanceof Error ? e.message : String(e)));
       },

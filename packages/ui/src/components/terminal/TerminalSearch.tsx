@@ -37,7 +37,7 @@ export function TerminalSearch({ manager, sessionId, focusSeq, onClose }: Props)
 
   let count = '';
   if (query && results) {
-    if (results.count === 0) count = '没找到';
+    if (results.count === 0) count = '无结果';
     else if (results.index > 0) count = `${results.index}/${results.count}`;
     else count = `${results.count} 处`;
   }

@@ -45,7 +45,7 @@ export function parseFinalShell(files: ImportFile[]): ImportResult {
   }
 
   if (!sawJson) {
-    b.issue('', '没有找到 JSON 文件，请选择 FinalShell 的 conn 文件夹');
+    b.issue('', '未找到 JSON 文件，请选择 FinalShell 的 conn 文件夹');
     return b.result;
   }
 
@@ -68,14 +68,14 @@ export function parseFinalShell(files: ImportFile[]): ImportResult {
     if (parentRaw) {
       const mapped = folderIds.get(parentRaw);
       if (mapped) parentId = mapped;
-      else b.warn('有连接的上级文件夹不在所选目录里，已放到根目录');
+      else b.warn('部分连接的上级文件夹不在所选目录中，已放入根目录');
     }
 
     const notes: string[] = [];
     const desc = str(rec.description)?.trim();
     if (desc) notes.push(desc);
     const keyId = str(rec.secret_key_id)?.trim();
-    if (keyId) notes.push(`FinalShell 密钥 ID：${keyId}（私钥请重新选择）`);
+    if (keyId) notes.push(`FinalShell 密钥 ID：${keyId}（请重新选择私钥）`);
     const auth = keyId && (num(rec.authentication_type) === 2 || !rec.password) ? 'key' : 'password';
 
     let password: string | null = null;
@@ -84,7 +84,7 @@ export function parseFinalShell(files: ImportFile[]): ImportResult {
       try {
         password = decryptFinalShellPassword(encrypted);
       } catch {
-        b.warn(`「${name}」的密码解密失败，连接时再输入`);
+        b.warn(`「${name}」的密码解密失败，请在连接时输入`);
       }
     }
 

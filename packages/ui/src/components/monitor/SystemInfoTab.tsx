@@ -12,14 +12,14 @@ interface Props {
 
 /** CPU 占用各项的名字和解释。FinalShell 把最后一项写成「实时」，其实是 top 里的 st */
 const CPU_PARTS: [keyof CpuDetail, string, string][] = [
-  ['user', '用户', '跑普通程序用掉的'],
-  ['system', '系统', '内核用掉的'],
-  ['nice', 'Nice', '调低了优先级的程序用掉的'],
-  ['idle', '空闲', '没在干活'],
-  ['iowait', 'IO 等待', '在等硬盘读写'],
-  ['irq', '硬件中断', '处理硬件中断'],
-  ['softirq', '软件中断', '处理软件中断，网络收发多时会高'],
-  ['steal', '被抢占', '虚拟机的 CPU 被宿主机拿去跑别的机器（top 里的 st）；长期很高说明这台 VPS 超售了'],
+  ['user', '用户', '用户态程序占用的 CPU 时间'],
+  ['system', '系统', '内核占用的 CPU 时间'],
+  ['nice', 'Nice', '低优先级程序占用的 CPU 时间'],
+  ['idle', '空闲', 'CPU 处于空闲状态的时间'],
+  ['iowait', 'IO 等待', '等待磁盘读写的时间'],
+  ['irq', '硬件中断', '处理硬件中断的时间'],
+  ['softirq', '软件中断', '处理软件中断的时间，网络流量大时会升高'],
+  ['steal', '被抢占', '虚拟机的 CPU 被宿主机调度给其他虚拟机的时间（即 top 中的 st）；长期偏高说明该 VPS 存在超售'],
 ];
 
 /**
@@ -35,7 +35,7 @@ export function SystemInfoTab({ manager, session, snap }: Props) {
   }, [manager, session.id, connected, sys?.status]);
 
   const info = sys?.status === 'ok' ? sys.info : null;
-  const pending = sys?.status === 'loading' || (connected && sys?.status === 'idle') ? '读取中…' : '-';
+  const pending = sys?.status === 'loading' || (connected && sys?.status === 'idle') ? '正在读取…' : '-';
   const live = snap?.supported ? snap : null;
 
   return (
@@ -61,20 +61,20 @@ export function SystemInfoTab({ manager, session, snap }: Props) {
       {snap && !snap.supported && (
         <Section>
           <span className="sysinfo__k">监控</span>
-          <span className="muted">暂不支持该系统的监控，下面的 CPU、内存、网卡、磁盘看不了</span>
+          <span className="muted">暂不支持该系统的监控，无法显示以下 CPU、内存、网卡和磁盘信息</span>
         </Section>
       )}
 
       <Section label="CPU">
         <div className="sysinfo__table sysinfo__table--cpu">
           <span className="sysinfo__th">型号</span>
-          <span className="sysinfo__th" title="主板上插了几颗 CPU。虚拟机里是虚拟出来的">
+          <span className="sysinfo__th" title="主板上安装的 CPU 数量；虚拟机中为虚拟 CPU 的数量">
             颗数
           </span>
-          <span className="sysinfo__th" title="每颗 CPU 有几个核心">
+          <span className="sysinfo__th" title="每颗 CPU 的核心数">
             每颗核心
           </span>
-          <span className="sysinfo__th" title="一共能同时跑几个任务，top 里看到的 CPU 个数就是它。VPS 说的「几核」一般指这个">
+          <span className="sysinfo__th" title="可同时运行的任务数，即 top 中显示的 CPU 数量；VPS 所说的「几核」通常指此项">
             线程数
           </span>
           <span className="sysinfo__th">频率</span>
@@ -204,7 +204,7 @@ function Pair({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
 
 function Usage({ label, total, used }: { label: string; total?: number; used?: number }) {
   if (total === undefined || used === undefined) return <Pair k={label} v="-" />;
-  if (total === 0) return <Pair k={label} v={label === '交换' ? '没有交换分区' : '-'} />;
+  if (total === 0) return <Pair k={label} v={label === '交换' ? '无交换分区' : '-'} />;
   return (
     <>
       <span className="sysinfo__k">{label}</span>

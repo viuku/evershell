@@ -38,7 +38,7 @@ describe('toTerminalInput', () => {
 describe('sendTo', () => {
   it('发到当前会话，提示带上快捷命令的名字', () => {
     const { sender, sent } = fakeSender(['s1', 's2']);
-    expect(sendTo(sender, 's1', 'current', 'df -h', { name: '查看磁盘' })).toEqual({ ok: true, text: '已发送「查看磁盘」到当前会话' });
+    expect(sendTo(sender, 's1', 'current', 'df -h', { name: '查看磁盘' })).toEqual({ ok: true, text: '已将「查看磁盘」发送到当前会话' });
     expect(sendTo(sender, 's1', 'current', 'a\nb')).toEqual({ ok: true, text: '已发送到当前会话' });
     expect(sent).toEqual([
       { to: 's1', cmd: 'df -h' },
@@ -46,9 +46,9 @@ describe('sendTo', () => {
     ]);
   });
 
-  it('当前会话没连上', () => {
+  it('当前会话未连接', () => {
     const { sender, sent } = fakeSender(['s2']);
-    expect(sendTo(sender, 's1', 'current', 'ls')).toEqual({ ok: false, text: '当前会话没连上' });
+    expect(sendTo(sender, 's1', 'current', 'ls')).toEqual({ ok: false, text: '当前会话未连接' });
     expect(sent).toEqual([]);
   });
 
@@ -70,9 +70,9 @@ describe('sendTo', () => {
     const { sender, sent } = fakeSender(['s1', 's2']);
     expect(sendTo(sender, 's1', 'current', 'kill -9 ', { name: '杀进程', noEnter: true })).toEqual({
       ok: true,
-      text: '已把「杀进程」放进当前会话，没按回车',
+      text: '已将「杀进程」填入当前会话，未发送回车',
     });
-    expect(sendTo(sender, 's1', 'all', 'docker exec -it ', { noEnter: true })).toEqual({ ok: true, text: '已放进 2 个会话，没按回车' });
+    expect(sendTo(sender, 's1', 'all', 'docker exec -it ', { noEnter: true })).toEqual({ ok: true, text: '已填入 2 个会话，未发送回车' });
     expect(sent).toEqual([
       { to: 's1', cmd: 'kill -9 ', enter: false },
       { to: 's1', cmd: 'docker exec -it ', enter: false },

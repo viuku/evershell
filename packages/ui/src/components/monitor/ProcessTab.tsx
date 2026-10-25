@@ -23,7 +23,7 @@ export function ProcessTab({ procs }: { procs: ProcDetail[] | null }) {
         <SortHead label="位置" by="exe" sort={sort} onSort={onSort} />
       </div>
       {!rows ? (
-        <div className="empty">读取中…</div>
+        <div className="empty">正在读取…</div>
       ) : (
         rows.map((p) => {
           const on = p.pid === selected;

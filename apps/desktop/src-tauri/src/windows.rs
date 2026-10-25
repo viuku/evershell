@@ -85,7 +85,7 @@ fn open_window(app: &AppHandle, spec: &Spec, background: Option<String>, visible
         .title_bar_style(tauri::TitleBarStyle::Overlay)
         .hidden_title(true)
         .traffic_light_position(tauri::LogicalPosition::new(14.0, 21.0));
-    builder.build().map_err(|e| format!("打不开{}窗口：{e}", spec.title))?;
+    builder.build().map_err(|e| format!("无法打开{}窗口：{e}", spec.title))?;
     Ok(())
 }
 

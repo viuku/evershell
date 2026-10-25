@@ -50,6 +50,6 @@ export function parseFinalShellCommands(files: ImportFile[]): CommandImportResul
     }
   }
 
-  if (!found) b.issue('', '没有找到快捷命令，请选择 FinalShell 的 config.json');
+  if (!found) b.issue('', '未找到快捷命令，请选择 FinalShell 的 config.json');
   return b.result;
 }

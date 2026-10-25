@@ -120,7 +120,7 @@ export function linkFolders(b: ResultBuilder, folders: { id: string; name: strin
   }
   for (const f of pending) {
     ids.set(f.id, b.addFolder(f.name, null));
-    b.warn(`文件夹「${f.name}」的上级不在所选文件里，已放到根目录`);
+    b.warn(`文件夹「${f.name}」的上级文件夹不在所选文件中，已放入根目录`);
   }
   return ids;
 }

@@ -335,9 +335,9 @@ async fn open_relay(url: &str) -> Result<DuplexStream, JsError> {
                 let reason = match e.reason() {
                     r if !r.is_empty() => format!("中转连接失败：{r}"),
                     _ if e.code() == 1006 => {
-                        "无法连接中转：地址不对、中转没启动，或令牌错误".to_string()
+                        "无法连接中转服务器：地址有误、中转服务未启动或令牌错误".to_string()
                     }
-                    _ => format!("中转连接失败（代码 {}）", e.code()),
+                    _ => format!("中转连接失败（错误代码 {}）", e.code()),
                 };
                 let _ = tx.send(Err(reason));
             }

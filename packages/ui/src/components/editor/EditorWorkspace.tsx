@@ -60,7 +60,7 @@ function statusOf(tab: EditorTab): { text: string; tone: 'muted' | 'warn' | 'ok'
   if (tab.status === 'error' && tab.error) return { text: tab.error, tone: 'error' };
   if (tab.dirty) return { text: '未保存', tone: 'warn' };
   if (tab.status === 'saved' && tab.savedAt) return { text: `${clock(tab.savedAt)} 已保存到服务器`, tone: 'ok' };
-  return { text: '和服务器上一致', tone: 'muted' };
+  return { text: '与服务器上的版本一致', tone: 'muted' };
 }
 
 /** 等这个文件存完：存好了 true，失败或者服务器上的文件变了 false */
@@ -155,11 +155,11 @@ export function EditorWorkspace({ docs, host, onClosed, inset = 0, stripProps, c
       const { remoteMtime } = tab.conflict;
       void dialogs
         .choose({
-          title: remoteMtime === null ? '服务器上找不到这个文件了' : '服务器上的文件已被改过',
+          title: remoteMtime === null ? '服务器上的文件已不存在' : '服务器上的文件已被修改',
           message:
             remoteMtime === null
-              ? `${tab.name} 可能被删除或改了名。仍然保存会按原来的路径重新建一个。`
-              : `打开 ${tab.name} 之后，服务器上的这个文件在 ${remoteTime(remoteMtime)} 又被改过。现在保存会覆盖那次修改。`,
+              ? `${tab.name} 可能已被删除或重命名。继续保存将在原路径重新创建该文件。`
+              : `打开 ${tab.name} 后，服务器上的该文件于 ${remoteTime(remoteMtime)} 被修改。现在保存将覆盖该修改。`,
           actions: [
             { id: 'reload', label: '重新载入' },
             { id: 'cancel', label: '取消' },
@@ -184,8 +184,8 @@ export function EditorWorkspace({ docs, host, onClosed, inset = 0, stripProps, c
       if (!tab) return;
       if (tab.dirty) {
         const r = await dialogs.choose({
-          title: `${tab.name} 还没保存`,
-          message: '不保存就关闭，这次的修改会丢失。',
+          title: `${tab.name} 尚未保存`,
+          message: '如不保存直接关闭，本次修改将丢失。',
           actions: [
             { id: 'discard', label: '不保存' },
             { id: 'cancel', label: '取消' },
@@ -213,8 +213,8 @@ export function EditorWorkspace({ docs, host, onClosed, inset = 0, stripProps, c
     if (dirty.length === 0) return true;
     const names = dirty.map((t) => t.name).join('、');
     const r = await dialogs.choose({
-      title: dirty.length === 1 ? `${names} 还没保存` : `有 ${dirty.length} 个文件还没保存`,
-      message: dirty.length === 1 ? '不保存就关闭，这次的修改会丢失。' : `${names} 还没保存。不保存就关闭，这些修改会丢失。`,
+      title: dirty.length === 1 ? `${names} 尚未保存` : `${dirty.length} 个文件尚未保存`,
+      message: dirty.length === 1 ? '如不保存直接关闭，本次修改将丢失。' : `${names} 尚未保存。如不保存直接关闭，这些修改将丢失。`,
       actions: [
         { id: 'discard', label: '不保存' },
         { id: 'cancel', label: '取消' },
@@ -268,7 +268,7 @@ export function EditorWorkspace({ docs, host, onClosed, inset = 0, stripProps, c
     if (active.dirty) {
       const ok = await dialogs.confirm({
         title: '重新载入',
-        message: `${active.name} 里还没保存的修改会丢失。`,
+        message: `${active.name} 中未保存的修改将丢失。`,
         okText: '重新载入',
         danger: true,
       });

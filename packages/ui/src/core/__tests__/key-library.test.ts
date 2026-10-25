@@ -20,8 +20,8 @@ async function inspect(text: string, passphrase?: string): Promise<PrivateKeyInf
   const [kind, name] = text.split(':');
   if (kind === 'KEY') return { algorithm: 'ED25519', bits: 256, fingerprint: `fp-${name}`, encrypted: false };
   if (kind === 'LOCKED') {
-    if (!passphrase) throw new Error('这把私钥设了口令，请填上口令');
-    if (passphrase !== 'pw') throw new Error('口令不对');
+    if (!passphrase) throw new Error('该私钥已设置口令，请输入口令');
+    if (passphrase !== 'pw') throw new Error('口令不正确');
     return { algorithm: 'RSA', bits: 2048, fingerprint: `fp-${name}`, encrypted: true };
   }
   if (kind === 'PUB') throw new Error('这是公钥');
@@ -84,7 +84,7 @@ describe('私钥库：导入、删除', () => {
     const locked = await lib.add({ privateKey: 'LOCKED:b', passphrase: 'pw', name: 'b' });
     expect(await lib.load(locked.key.id)).toEqual({ privateKey: 'LOCKED:b', passphrase: 'pw' });
 
-    await expect(lib.add({ privateKey: 'LOCKED:c', passphrase: 'nope', name: 'c' })).rejects.toThrow('口令不对');
+    await expect(lib.add({ privateKey: 'LOCKED:c', passphrase: 'nope', name: 'c' })).rejects.toThrow('口令不正确');
     await expect(lib.add({ privateKey: 'PUB:x', passphrase: '', name: 'x' })).rejects.toThrow('公钥');
     expect(liveKeys(keysStore.get())).toHaveLength(2);
     expect(secrets.map.size).toBe(3);
@@ -214,7 +214,7 @@ describe('连接时用私钥库里的私钥', () => {
     expect(await resolveAuth(s, secrets, p, lib)).toEqual({ type: 'key', privateKey: 'KEY:a', passphrase: undefined });
     expect(p.askPrivateKey).toHaveBeenCalledWith({
       title: '连接 s1',
-      message: 'root@192.0.2.1 使用公钥认证，请选择私钥文件（原来用的是 id_rsa）',
+      message: 'root@192.0.2.1 使用公钥认证，请选择私钥文件（原私钥为 id_rsa）',
       canRemember: true,
     });
     expect(serverById('s1').keyId).toBe(existing.key.id);

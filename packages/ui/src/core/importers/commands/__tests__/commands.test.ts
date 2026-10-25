@@ -23,7 +23,7 @@ describe('FinalShell', () => {
       'Docker|进容器|docker exec -it |不回车',
       `${DEFAULT_GROUP}|没分类名|whoami|回车`,
     ]);
-    expect(r.issues).toEqual([{ file: 'config.json', message: '「空命令」是空命令' }]);
+    expect(r.issues).toEqual([{ file: 'config.json', message: '「空命令」的命令内容为空' }]);
   });
 
   it('只读 quick_commands：假密码、假私钥不出现在结果里', () => {
@@ -39,7 +39,7 @@ describe('FinalShell', () => {
   it('文件里没有快捷命令时给出提示', () => {
     const none = parseFinalShellCommands([textFile('config.json', '{"theme":"default"}')]);
     expect(none.commands).toEqual([]);
-    expect(none.issues).toEqual([{ file: '', message: '没有找到快捷命令，请选择 FinalShell 的 config.json' }]);
+    expect(none.issues).toEqual([{ file: '', message: '未找到快捷命令，请选择 FinalShell 的 config.json' }]);
   });
 });
 
@@ -59,9 +59,9 @@ describe('SecureCRT 按钮栏', () => {
   });
 
   it('做不到的写法原样留着、记下原因；不是发送文字的按钮跳过', () => {
-    expect(r.commands.find((c) => c.name === 'enable')?.unsupported).toBe('用了 SecureCRT 专用的写法 \\p');
+    expect(r.commands.find((c) => c.name === 'enable')?.unsupported).toBe('使用了 SecureCRT 专有语法：\\p');
     expect(r.commands.filter((c) => c.unsupported)).toHaveLength(1);
-    expect(r.issues).toEqual([{ file: 'ButtonBarV5.ini', message: '「Highlight on/off」不是发送文字的按钮，没有导入' }]);
+    expect(r.issues).toEqual([{ file: 'ButtonBarV5.ini', message: '「Highlight on/off」不是发送文字的按钮，未导入' }]);
   });
 
   it('转义：一个或两个反斜杠都认，\\\\ 是反斜杠，八进制算做不到', () => {
@@ -88,14 +88,14 @@ describe('Electerm 导出文件', () => {
       '常用|登录后等提示|su -|回车',
       '常用|贴剪贴板|echo {{clipboard}}|回车',
     ]);
-    expect(r.warnings).toEqual(['有的命令带了好几个标签，放进了第一个标签的分类']);
+    expect(r.warnings).toEqual(['部分命令带有多个标签，已放入第一个标签对应的分类']);
   });
 
   it('等待、输入框步骤和模板做不到，记下原因', () => {
     const odd = Object.fromEntries(r.commands.filter((c) => c.unsupported).map((c) => [c.name, c.unsupported]));
     expect(odd).toEqual({
-      登录后等提示: '用了 Electerm 专用的功能：有等待步骤、有输入框步骤',
-      贴剪贴板: '用了 Electerm 专用的功能：用了 {{clipboard}} 这类模板',
+      登录后等提示: '使用了 Electerm 专有功能：等待步骤、输入框步骤',
+      贴剪贴板: '使用了 Electerm 专有功能：{{clipboard}} 等模板',
     });
   });
 
@@ -158,7 +158,7 @@ describe('一键导入的查找结果', () => {
 
     const empty = scanLocalCommands([{ source: 'finalshell', location: 'l', files: [textFile('config.json', '{"quick_commands":[]}')], error: null }]);
     expect(empty.get('finalshell')).toEqual({ state: 'empty', location: 'l' });
-    expect(scanLocalCommands([{ source: 'finalshell', location: 'l', files: [], error: '没有权限读取' }]).get('finalshell')).toMatchObject({ state: 'error' });
+    expect(scanLocalCommands([{ source: 'finalshell', location: 'l', files: [], error: '无读取权限' }]).get('finalshell')).toMatchObject({ state: 'error' });
     expect(firstFoundCommands(empty)).toBeNull();
   });
 });

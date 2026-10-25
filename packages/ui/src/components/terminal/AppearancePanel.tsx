@@ -31,7 +31,7 @@ export function AppearancePanel({ scheme, onClose }: { scheme: Scheme; onClose()
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      setImageError('图片不能超过 4MB');
+      setImageError('图片不能超过 4 MB');
       return;
     }
     const reader = new FileReader();
@@ -105,7 +105,7 @@ export function AppearancePanel({ scheme, onClose }: { scheme: Scheme; onClose()
         <input ref={fileRef} type="file" accept="image/*" className="sr-only" tabIndex={-1} onChange={pickImage} />
       </div>
       <span className="look__hint">
-        {imageError ?? '对所有会话生效。“跟随系统”在浅色模式下是浅灰底，深色模式下是黑底。'}
+        {imageError ?? '设置对所有会话生效。「跟随系统」在浅色模式下为浅灰色背景，在深色模式下为黑色背景。'}
       </span>
       {isCustom && <CustomPreview scheme={resolveCustom(appearance.custom)} />}
     </div>

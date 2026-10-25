@@ -67,7 +67,7 @@ export const PRESETS: Preset[] = [
   { id: 'black', name: '经典黑', bg: '#000000', fg: '#E5E5E5', palette: DARK_PALETTE },
   { id: 'gray', name: '深灰', bg: '#1E1E1E', fg: '#D4D4D4', palette: DARK_PALETTE },
   { id: 'navy', name: '深海蓝', bg: '#0F1B2B', fg: '#CFD8E3', palette: DARK_PALETTE },
-  { id: 'solar', name: 'Solarized 暗', bg: '#002B36', fg: '#93A1A1', palette: SOLARIZED },
+  { id: 'solar', name: 'Solarized 深色', bg: '#002B36', fg: '#93A1A1', palette: SOLARIZED },
   { id: 'paper', name: '纸张米白', bg: '#FBF7EC', fg: '#3B3A36', palette: LIGHT_PALETTE },
   { id: 'green', name: '护眼绿', bg: '#C7EDCC', fg: '#1E3A24', palette: { ...LIGHT_PALETTE, dim: '#4C6652' } },
   { id: 'white', name: '纯白', bg: '#FFFFFF', fg: '#1D1D1F', palette: LIGHT_PALETTE },

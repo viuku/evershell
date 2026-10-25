@@ -202,7 +202,7 @@ describe('SecureCRT', () => {
 
   it('rejects ini files without Protocol Name', () => {
     expect(parseSecureCRT([textFile('x.ini', '[Bookmarks]\nSubRep=\n')]).issues[0]!.message).toContain('Protocol Name');
-    expect(parseSecureCRT([textFile('Default.ini', 'S:"Protocol Name"=SSH2\n')]).issues[0]!.message).toContain('没有找到');
+    expect(parseSecureCRT([textFile('Default.ini', 'S:"Protocol Name"=SSH2\n')]).issues[0]!.message).toContain('未找到');
   });
 });
 

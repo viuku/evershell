@@ -59,7 +59,7 @@ export async function resolveAuth(
       return { type: 'key', privateKey: key, passphrase: passphrase || undefined };
     }
   }
-  const hint = server.keyLabel ? `（原来用的是 ${server.keyLabel}）` : '';
+  const hint = server.keyLabel ? `（原私钥为 ${server.keyLabel}）` : '';
   const r = await prompts.askPrivateKey({
     title: `连接 ${server.name}`,
     message: `${describe(server)} 使用公钥认证，请选择私钥文件${hint}`,

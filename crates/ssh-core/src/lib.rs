@@ -34,9 +34,9 @@ pub use sftp::{FileEntry, FileKind, Sftp, TransferProgress};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("SSH 错误: {0}")]
+    #[error("SSH 错误：{0}")]
     Ssh(#[from] russh::Error),
-    #[error("私钥无法解析: {0}")]
+    #[error("无法解析私钥：{0}")]
     Key(#[from] russh::keys::Error),
     /// 界面按开头的「认证失败」认出这种错误（packages/ui/src/core/connect.ts 的 isAuthFailure），改文案要一起改
     #[error("认证失败：用户名、密码或私钥不正确")]
@@ -44,7 +44,7 @@ pub enum Error {
     /// 服务器指纹没通过校验，连接在发送密码之前就停下了。界面据此弹确认框或警告
     #[error("{0}")]
     HostKey(Box<HostKeyProblem>),
-    #[error("网络错误: {0}")]
+    #[error("网络错误：{0}")]
     Io(#[from] std::io::Error),
     #[error("{0}")]
     Sftp(String),
@@ -202,19 +202,19 @@ impl client::Handler for Client {
     ) -> std::result::Result<(), Self::Error> {
         let text = match &reason {
             DisconnectReason::ReceivedDisconnect(info) if info.message.is_empty() => {
-                Some("服务器断开了连接".to_string())
+                Some("服务器已断开连接".to_string())
             }
             DisconnectReason::ReceivedDisconnect(info) => {
-                Some(format!("服务器断开了连接：{}", info.message))
+                Some(format!("服务器已断开连接：{}", info.message))
             }
             // 自己调 disconnect() 结束时 russh 也走这里，不算异常
             DisconnectReason::Error(russh::Error::Disconnect) => None,
             DisconnectReason::Error(russh::Error::KeepaliveTimeout) => Some(match self.dead_after {
                 Some(d) => format!(
-                    "{}没有收到服务器响应，可能网络断了或电脑休眠过",
+                    "{}未收到服务器响应，可能是网络中断或电脑曾进入睡眠",
                     describe_secs(d.as_secs())
                 ),
-                None => "服务器没有响应心跳，可能网络断了".to_string(),
+                None => "服务器未响应心跳，可能是网络中断".to_string(),
             }),
             DisconnectReason::Error(russh::Error::IO(e)) => Some(format!("网络连接中断：{e}")),
             DisconnectReason::Error(e) => Some(format!("连接出错：{e}")),

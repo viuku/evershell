@@ -27,7 +27,7 @@ type Step =
   | { kind: 'preview'; source: CommandSourceInfo; result: CommandImportResult; from: string | null }
   | { kind: 'done'; source: CommandSourceInfo; result: CommandImportResult; outcome: CommandMergeOutcome; skipped: number };
 
-const STEP_LABELS = ['选来源', '选文件', '预览', '完成'];
+const STEP_LABELS = ['选择来源', '选择文件', '预览', '完成'];
 const stepIndex = (s: Step) => ({ source: 0, file: 1, preview: 2, done: 3 })[s.kind];
 const oneGroupName = (source: CommandSourceInfo) => `从 ${source.label} 导入`;
 const modeOf = (kind: GroupMode['kind'], source: CommandSourceInfo): GroupMode =>
@@ -93,7 +93,7 @@ export function CommandImportDialog({ backend, onClose, onImported }: Props) {
     try {
       const { files, skipped } = await collectImportFiles(picked, source);
       if (files.length === 0) {
-        setFileError(skipped > 0 ? `选中的 ${skipped} 个文件都不是 ${source.label} 的配置文件（扩展名不符或太大）` : '没有选中任何文件');
+        setFileError(skipped > 0 ? `所选的 ${skipped} 个文件均不是 ${source.label} 的配置文件（扩展名不符或文件过大）` : '未选择任何文件');
         return;
       }
       showPreview(source, source.parse(files), null);
@@ -160,7 +160,7 @@ export function CommandImportDialog({ backend, onClose, onImported }: Props) {
                     }}
                   />
                   <span className="imp__sourceName">{s.label}</span>
-                  {found?.state === 'found' && <span className="imp__found">找到 {found.result.commands.length} 条命令</span>}
+                  {found?.state === 'found' && <span className="imp__found">已找到 {found.result.commands.length} 条命令</span>}
                   <span className="imp__sourceBlurb">{s.blurb}</span>
                 </label>
               );
@@ -175,7 +175,7 @@ export function CommandImportDialog({ backend, onClose, onImported }: Props) {
               <dd>{step.source.mac}</dd>
               <dt>Windows</dt>
               <dd>{step.source.windows}</dd>
-              <dt>选什么</dt>
+              <dt>选择内容</dt>
               <dd>{step.source.pick}</dd>
             </dl>
             <div
@@ -194,7 +194,7 @@ export function CommandImportDialog({ backend, onClose, onImported }: Props) {
                   <button type="button" className="btn btn-primary" onClick={() => fileInput.current?.click()}>
                     选择文件…
                   </button>
-                  <span>或把文件拖到这里</span>
+                  <span>或将文件拖到此处</span>
                   {fileError && (
                     <span role="alert" className="dialog-error">
                       {fileError}
@@ -243,14 +243,14 @@ export function CommandImportDialog({ backend, onClose, onImported }: Props) {
             <div className="imp__big">已导入 {step.outcome.added} 条命令</div>
             {step.outcome.newGroups.length > 0 && (
               <div>
-                新建了 {step.outcome.newGroups.length} 个分类：{step.outcome.newGroups.join('、')}
+                已新建 {step.outcome.newGroups.length} 个分类：{step.outcome.newGroups.join('、')}
               </div>
             )}
             <div className="muted">
-              {step.outcome.noEnter > 0 ? `其中 ${step.outcome.noEnter} 条不自动回车` : '都是自动回车的命令'}
-              {step.skipped > 0 && ` · ${step.skipped} 条没有勾选，没有导入`}
+              {step.outcome.noEnter > 0 ? `其中 ${step.outcome.noEnter} 条不自动回车` : '均为自动回车的命令'}
+              {step.skipped > 0 && ` · ${step.skipped} 条未勾选，未导入`}
             </div>
-            {step.result.issues.length > 0 && <div className="muted">{step.result.issues.length} 条读不出来，没有导入</div>}
+            {step.result.issues.length > 0 && <div className="muted">{step.result.issues.length} 条无法读取，未导入</div>}
           </div>
         )}
       </div>
@@ -270,17 +270,17 @@ export function CommandImportDialog({ backend, onClose, onImported }: Props) {
             )}
             {scan?.state === 'empty' && (
               <>
-                <span className="mono">{scan.location}</span> 里没有快捷命令
+                <span className="mono">{scan.location}</span> 中没有快捷命令
               </>
             )}
-            {scan?.state === 'missing' && `默认位置没有找到 ${chosen.label} 的快捷命令`}
-            {scan?.state === 'error' && `读不了 ${chosen.label} 的配置：${scan.message}`}
+            {scan?.state === 'missing' && `未在默认位置找到 ${chosen.label} 的快捷命令`}
+            {scan?.state === 'error' && `无法读取 ${chosen.label} 的配置：${scan.message}`}
             {!scan && chosen.manualOnly}
           </span>
         )}
         {step.kind === 'preview' && (
           <span className="muted ellipsis">
-            {modeKind === 'keep' ? '放到原来的分类，同名的并进已有分类' : `都放进「${oneGroupName(step.source)}」`}
+            {modeKind === 'keep' ? '放入原分类，同名分类将合并到现有分类' : `全部放入「${oneGroupName(step.source)}」`}
           </span>
         )}
         {(step.kind === 'file' || step.kind === 'preview') && (
@@ -315,7 +315,7 @@ export function CommandImportDialog({ backend, onClose, onImported }: Props) {
             disabled={importing || selected.size === 0}
             onClick={() => runImport(step.source, step.result)}
           >
-            {importing ? '导入中…' : '导入'}
+            {importing ? '正在导入…' : '导入'}
           </button>
         )}
         {step.kind === 'done' && (
@@ -388,9 +388,9 @@ function CommandPreview({
           {noEnter > 0 && ` · ${noEnter} 条不自动回车`}
         </span>
         <label className="imp__inline">
-          放到
-          <select className="field" value={modeKind} onChange={(e) => onModeKind(e.target.value as GroupMode['kind'])} aria-label="放到哪个分类">
-            <option value="keep">原来的分类</option>
+          放入
+          <select className="field" value={modeKind} onChange={(e) => onModeKind(e.target.value as GroupMode['kind'])} aria-label="目标分类">
+            <option value="keep">原分类</option>
             <option value="one">新分类「{oneGroupName(source)}」</option>
           </select>
         </label>
@@ -402,7 +402,7 @@ function CommandPreview({
           <span>回车</span>
         </div>
         {rows.length === 0 ? (
-          <div className="empty">没有读出可导入的命令</div>
+          <div className="empty">未读取到可导入的命令</div>
         ) : (
           rows.map((row) => {
             if (row.kind === 'group') {
@@ -468,10 +468,10 @@ function CommandPreview({
                     onChange={() => toggle([c.id], !selected.has(c.id))}
                   />
                   <span className="ellipsis">{c.name}</span>
-                  {duplicates.has(c.id) && <span className="imp__tag imp__tag--warn">已有</span>}
+                  {duplicates.has(c.id) && <span className="imp__tag imp__tag--warn">已存在</span>}
                   {c.unsupported && (
                     <span className="imp__tag imp__tag--warn" data-tip={c.unsupported}>
-                      有特殊写法
+                      含特殊语法
                     </span>
                   )}
                 </span>
@@ -487,14 +487,14 @@ function CommandPreview({
         )}
       </div>
       {modeKind === 'keep' && duplicates.size > 0 && (
-        <div className="imp__warn">{duplicates.size} 条和 EverShell 里已有的一样（同分类、同内容），没有勾选。想再要一份就勾上。</div>
+        <div className="imp__warn">{duplicates.size} 条与 EverShell 中的现有命令相同（分类和内容均相同），默认未勾选。如需重复导入，请手动勾选。</div>
       )}
       {unsupported > 0 && (
         <div className="imp__warn">
-          {unsupported} 条用了 {source.label} 专用的写法，EverShell 做不到一样的效果，没有勾选。鼠标停在「有特殊写法」上能看到原因。
+          {unsupported} 条使用了 {source.label} 专有语法，EverShell 无法实现相同效果，默认未勾选。将指针悬停在「含特殊语法」上可查看原因。
         </div>
       )}
-      <div className="muted imp__note">命令点一下就会发到服务器上执行，导入前先看一眼。鼠标停在命令上能看到完整内容。</div>
+      <div className="muted imp__note">单击命令即会发送到服务器执行，请在导入前确认内容。将指针悬停在命令上可查看完整内容。</div>
       {result.warnings.map((w) => (
         <div key={w} className="imp__warn">
           {w}
@@ -502,7 +502,7 @@ function CommandPreview({
       ))}
       {result.issues.length > 0 && (
         <details className="imp__issues">
-          <summary>{result.issues.length} 条没有导入</summary>
+          <summary>{result.issues.length} 条未导入</summary>
           <ul>
             {result.issues.map((i, n) => (
               <li key={n}>

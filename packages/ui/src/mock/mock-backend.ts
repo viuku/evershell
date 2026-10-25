@@ -28,7 +28,7 @@ import { encodeUtf8 } from '../core/importers/text';
 // 约定几个特殊输入方便测试：主机含 fail → 连接失败；密码 wrong → 认证失败；主机含 bsd → 监控不支持；
 // 主机含 rekey → 信任过一次指纹后再连，服务器换一把钥匙（看“指纹变了”的警告）；
 // 主机含 flaky → 连上 8 秒后像网络断了一样断开（看断线提示）；
-// 主机含 slow → 网络很慢：列目录、查文件信息多等 1.5 秒，传文件约 20KB/s（看“加载中”和进度）。
+// 主机含 slow → 网络很慢：列目录、查文件信息多等 1.5 秒，传文件约 20KB/s（看“正在载入”和进度）。
 // 私钥库：按文件头给类型（RSA 头是 RSA 2048，其他算 ED25519）；内容里有 ENCRYPTED 的要口令 secret。
 // 服务器指纹和真的一样要先确认：第一次连每台服务器都会弹确认框。
 // 密码留空时只有主机含 nopass 能连上（模拟不要密码的服务器），其他主机和真服务器一样报认证失败，界面再弹框要密码。
@@ -63,14 +63,14 @@ async function mockInspectKey(text: string, passphrase?: string): Promise<Privat
   const t = text.trim();
   const first = t.split('\n')[0] ?? '';
   if (/^(ssh-|ecdsa-|sk-)/.test(first) || first.includes('PUBLIC KEY-----')) {
-    throw new Error('这是公钥（一般是 .pub 文件），请选不带 .pub 的那个私钥文件');
+    throw new Error('所选文件是公钥（通常为 .pub 文件），请选择不带 .pub 扩展名的私钥文件');
   }
   if (!/PRIVATE KEY-----|^PuTTY-User-Key-File-/.test(t)) {
-    throw new Error('认不出这个私钥。支持 OpenSSH、PEM（RSA、EC、PKCS#8）和 PuTTY 格式');
+    throw new Error('无法识别该私钥。支持 OpenSSH、PEM（RSA、EC、PKCS#8）和 PuTTY 格式');
   }
   const encrypted = t.includes('ENCRYPTED');
-  if (encrypted && !passphrase) throw new Error('这把私钥设了口令，请填上口令');
-  if (encrypted && passphrase !== 'secret') throw new Error('口令不对');
+  if (encrypted && !passphrase) throw new Error('该私钥已设置口令，请输入口令');
+  if (encrypted && passphrase !== 'secret') throw new Error('口令不正确');
   const rsa = first.includes('RSA');
   return { algorithm: rsa ? 'RSA' : 'ED25519', bits: rsa ? 2048 : 256, fingerprint: `SHA256:${fakeBase64(t, 43)}`, encrypted };
 }
@@ -333,7 +333,7 @@ class MockSession implements SshSession {
         if (this.closed) return;
         this.closed = true;
         this.shell.close();
-        handlers.onExit(null, '约 1 分钟没有收到服务器响应，可能网络断了或电脑休眠过');
+        handlers.onExit(null, '约 1 分钟未收到服务器响应，可能是网络中断或电脑曾进入睡眠');
       }, 8000);
     }
   }
@@ -424,7 +424,7 @@ class MockSession implements SshSession {
 
   async readFile(path: string, maxBytes: number, onProgress?: (p: TransferProgress) => void): Promise<Uint8Array> {
     const node = this.fs.stat(path);
-    if (node.size > maxBytes) throw new Error(`文件有 ${node.size} 字节，超过了 ${maxBytes} 字节的上限`);
+    if (node.size > maxBytes) throw new Error(`文件大小为 ${node.size} 字节，超过 ${maxBytes} 字节的上限`);
     await simulateTransfer(node.size, onProgress, this.slow);
     return this.fs.readBytes(path);
   }

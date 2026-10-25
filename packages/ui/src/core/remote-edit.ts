@@ -143,7 +143,7 @@ interface DocMeta {
 }
 
 /** 主窗口重新加载过，不认识这个文档了 */
-const FORGOTTEN = '主窗口刚重新加载过，请从文件区重新打开这个文件';
+const FORGOTTEN = '主窗口已重新载入，请从文件面板重新打开该文件';
 
 function errorText(err: unknown): string {
   if (typeof err === 'string') return err;
@@ -190,7 +190,7 @@ export class RemoteEdit {
   /** 读进来再交给编辑器；onProgress 报读文件的进度，文件区据此在那一行显示“打开中” */
   async open(sessionId: string, path: string, onProgress?: (p: TransferProgress) => void): Promise<OpenResult> {
     const target = this.resolve(sessionId);
-    if (!target) throw new Error('会话没连上');
+    if (!target) throw new Error('会话未连接');
     const p = normalizePath(path);
     for (const [id, d] of this.docs) {
       if (d.sessionId === sessionId && d.path === p) {
@@ -204,7 +204,7 @@ export class RemoteEdit {
     this.opening.add(key);
     try {
       const st = await target.session.stat(p);
-      if (st.kind === 'dir') throw new Error('这是一个目录');
+      if (st.kind === 'dir') throw new Error('该路径是目录');
       if (st.size > EDIT_MAX_BYTES) return { kind: 'too-large', size: st.size };
       const name = basename(p);
       const bytes = await trackTransfer('down', name, `${parentPath(p) ?? '/'} → 编辑器`, st.size, (track) =>
@@ -276,7 +276,7 @@ export class RemoteEdit {
     }
     const target = this.target(doc);
     if (!target) {
-      this.send({ type: 'failed', id, error: '会话已断开，重新连上后再保存' });
+      this.send({ type: 'failed', id, error: '会话已断开，请重新连接后再保存' });
       return;
     }
     try {
@@ -314,12 +314,12 @@ export class RemoteEdit {
     }
     const target = this.target(doc);
     if (!target) {
-      this.send({ type: 'failed', id, error: '会话已断开，重新连上后再载入' });
+      this.send({ type: 'failed', id, error: '会话已断开，请重新连接后再载入' });
       return;
     }
     try {
       const st = await target.session.stat(doc.path);
-      if (st.size > EDIT_MAX_BYTES) throw new Error('文件已经超过 5 MB，编辑器打不开了');
+      if (st.size > EDIT_MAX_BYTES) throw new Error('文件已超过 5 MB，编辑器无法打开');
       const dir = parentPath(doc.path) ?? '/';
       this.lastPct.delete(id);
       const bytes = await trackTransfer('down', doc.name, `${dir} → 编辑器`, st.size, (track) =>
@@ -329,7 +329,7 @@ export class RemoteEdit {
         }),
       );
       const decoded = decodeText(bytes);
-      if (!decoded) throw new Error('文件已经不是文本了');
+      if (!decoded) throw new Error('文件已不是文本格式');
       Object.assign(doc, { mtime: st.mtime, size: st.size, eol: decoded.eol, bom: decoded.bom });
       this.send({ type: 'reloaded', id, text: decoded.text, eol: decoded.eol });
     } catch (err) {

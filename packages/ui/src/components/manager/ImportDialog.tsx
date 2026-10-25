@@ -21,7 +21,7 @@ type Step =
   | { kind: 'preview'; source: SourceInfo; result: ImportResult; from: string | null }
   | { kind: 'done'; source: SourceInfo; result: ImportResult; outcome: MergeOutcome; passwordsSaved: number };
 
-const STEP_LABELS = ['选来源', '选文件', '预览', '完成'];
+const STEP_LABELS = ['选择来源', '选择文件', '预览', '完成'];
 
 /** 中文句子里夹软件名时两边留空格；以全角括号结尾的（OpenSSH（~/.ssh/config））后面不留 */
 const spaced = (label: string) => (label.endsWith('）') ? ` ${label}` : ` ${label} `);
@@ -89,7 +89,7 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
     try {
       const { files, skipped } = await collectImportFiles(picked, source);
       if (files.length === 0) {
-        setFileError(skipped > 0 ? `选中的 ${skipped} 个文件都不是${source.label}的配置文件（扩展名不符或太大）` : '没有选中任何文件');
+        setFileError(skipped > 0 ? `所选的 ${skipped} 个文件均不是${spaced(source.label)}的配置文件（扩展名不符或文件过大）` : '未选择任何文件');
         return;
       }
       showPreview(source, source.parse(files), null);
@@ -162,7 +162,7 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
                     }}
                   />
                   <span className="imp__sourceName">{s.label}</span>
-                  {found?.state === 'found' && <span className="imp__found">找到 {found.result.servers.length} 个连接</span>}
+                  {found?.state === 'found' && <span className="imp__found">已找到 {found.result.servers.length} 个连接</span>}
                   <span className="imp__sourceBlurb">{s.blurb}</span>
                 </label>
               );
@@ -177,7 +177,7 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
               <dd>{step.source.mac}</dd>
               <dt>Windows</dt>
               <dd>{step.source.windows}</dd>
-              <dt>选什么</dt>
+              <dt>选择内容</dt>
               <dd>{step.source.pick}</dd>
             </dl>
             <div
@@ -203,7 +203,7 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
                       选择文件…
                     </button>
                   </div>
-                  <span>或把文件{step.source.directory ? '、文件夹' : ''}拖到这里</span>
+                  <span>或将文件{step.source.directory ? '、文件夹' : ''}拖到此处</span>
                   {fileError && (
                     <span role="alert" className="dialog-error">
                       {fileError}
@@ -270,19 +270,19 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
             </div>
             <div>
               {secrets.available
-                ? `保存了 ${step.passwordsSaved} 个密码`
+                ? `已保存 ${step.passwordsSaved} 个密码`
                 : step.outcome.passwords.length > 0
-                  ? `${step.outcome.passwords.length} 个密码没有保存（网页端不保存密码，连接时再输入）`
-                  : '没有密码需要保存'}
+                  ? `${step.outcome.passwords.length} 个密码未保存（网页端不保存密码，请在连接时输入）`
+                  : '无需保存密码'}
             </div>
             {(step.outcome.skipped > 0 || step.outcome.overwritten > 0) && (
               <div className="muted">
-                {step.outcome.skipped > 0 && `跳过 ${step.outcome.skipped} 个重名连接`}
+                {step.outcome.skipped > 0 && `已跳过 ${step.outcome.skipped} 个重名连接`}
                 {step.outcome.skipped > 0 && step.outcome.overwritten > 0 && ' · '}
-                {step.outcome.overwritten > 0 && `覆盖 ${step.outcome.overwritten} 个现有连接`}
+                {step.outcome.overwritten > 0 && `已覆盖 ${step.outcome.overwritten} 个现有连接`}
               </div>
             )}
-            {step.result.issues.length > 0 && <div className="muted">{step.result.issues.length} 条解析失败，没有导入</div>}
+            {step.result.issues.length > 0 && <div className="muted">{step.result.issues.length} 条解析失败，未导入</div>}
           </div>
         )}
       </div>
@@ -296,9 +296,9 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
         {scan && (
           <span className="muted ellipsis" title={scan.location}>
             {scan.state === 'found' && <>从 <span className="mono">{scan.location}</span> 读取</>}
-            {scan.state === 'empty' && <><span className="mono">{scan.location}</span> 里没有可导入的连接</>}
-            {scan.state === 'missing' && `默认位置没有找到${spaced(chosen.label)}的配置`}
-            {scan.state === 'error' && `读不了${spaced(chosen.label)}的配置：${scan.message}`}
+            {scan.state === 'empty' && <><span className="mono">{scan.location}</span> 中没有可导入的连接</>}
+            {scan.state === 'missing' && `未在默认位置找到${spaced(chosen.label)}的配置`}
+            {scan.state === 'error' && `无法读取${spaced(chosen.label)}的配置：${scan.message}`}
           </span>
         )}
         {step.kind === 'preview' && (
@@ -338,7 +338,7 @@ export function ImportDialog({ backend, onClose, onImported }: Props) {
             disabled={importing || selected.size === 0}
             onClick={() => void runImport(step.source, step.result)}
           >
-            {importing ? '导入中…' : '导入'}
+            {importing ? '正在导入…' : '导入'}
           </button>
         )}
         {step.kind === 'done' && (

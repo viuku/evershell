@@ -17,7 +17,7 @@ export function NetworkTab({ sockets }: { sockets: SocketTable | null }) {
   const hidden = rows?.some((r) => r.pid === null) ?? false;
 
   if (sockets && !sockets.available) {
-    return <div className="empty">服务器上没有 ss 命令，看不了网络连接（装上 iproute2 就有）</div>;
+    return <div className="empty">服务器上没有 ss 命令，无法查看网络连接（安装 iproute2 后即可使用）</div>;
   }
 
   return (
@@ -32,11 +32,11 @@ export function NetworkTab({ sockets }: { sockets: SocketTable | null }) {
         <SortHead label="上传" by="up" sort={sort} onSort={onSort} end />
         <SortHead label="下载" by="down" sort={sort} onSort={onSort} end />
       </div>
-      {hidden && <div className="info-table__note">不是用 root 登录，看不到别的用户开的端口属于哪个程序，这些行的 PID 和名称显示「-」</div>}
+      {hidden && <div className="info-table__note">当前未以 root 身份登录，无法查看其他用户的端口所属程序，这些行的 PID 和名称显示为「-」</div>}
       {!rows ? (
-        <div className="empty">读取中…</div>
+        <div className="empty">正在读取…</div>
       ) : rows.length === 0 ? (
-        <div className="empty">没有监听的端口和连接</div>
+        <div className="empty">没有监听端口或网络连接</div>
       ) : (
         rows.map((r) => {
           const key = socketRowKey(r);

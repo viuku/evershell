@@ -11,7 +11,7 @@ type Values = Map<string, string>;
 export function parsePuTTY(files: ImportFile[]): ImportResult {
   const b = new ResultBuilder('putty');
   if (files.length === 0) {
-    b.issue('', '没有选择文件');
+    b.issue('', '未选择文件');
     return b.result;
   }
   for (const f of files) {
@@ -23,7 +23,7 @@ export function parsePuTTY(files: ImportFile[]): ImportResult {
         addSession(b, `${name} › ${session}`, session, values);
         count++;
       }
-      if (count === 0) b.issue(name, '文件里没有 PuTTY\\Sessions 下的会话');
+      if (count === 0) b.issue(name, '文件中没有 PuTTY\\Sessions 下的会话');
     } else if (/^HostName=/m.test(text) || /^Protocol=/m.test(text)) {
       // Unix 版的单个会话文件，文件名就是会话名
       const values: Values = new Map();

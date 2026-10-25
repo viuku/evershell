@@ -116,13 +116,13 @@ export function ImportPreview({ source, result, existing, selected, onSelected, 
         <span className="muted">
           已选 {selectedServers.length} / {result.servers.length} 个连接
           {result.folders.length > 0 && ` · ${result.folders.length} 个文件夹`}
-          {withPassword > 0 && ` · ${withPassword} 个带密码`}
+          {withPassword > 0 && ` · ${withPassword} 个含密码`}
         </span>
         <label className="imp__inline">
           导入位置
           <select className="field" value={target} onChange={(e) => onTarget(e.target.value as TargetKind)} aria-label="导入位置">
             <option value="folder">新建文件夹「{source.folderName}」</option>
-            <option value="root">直接放到根目录</option>
+            <option value="root">直接导入到根目录</option>
           </select>
         </label>
       </div>
@@ -136,7 +136,7 @@ export function ImportPreview({ source, result, existing, selected, onSelected, 
           <span>密码</span>
         </div>
         {rows.length === 0 ? (
-          <div className="empty">没有解析出可导入的连接</div>
+          <div className="empty">未解析到可导入的连接</div>
         ) : (
           rows.map((row) => {
             const id = row.kind === 'folder' ? row.folder.id : row.server.id;
@@ -180,7 +180,7 @@ export function ImportPreview({ source, result, existing, selected, onSelected, 
                   <span className="ellipsis">{row.kind === 'folder' ? row.folder.name : row.server.name}</span>
                   {row.kind === 'folder' && <span className="muted mgr__count">{row.count} 台</span>}
                   {dup && (
-                    <span className="imp__tag imp__tag--warn" title={`已有：${dup.name}（${dup.user}@${dup.host}:${dup.port}）`}>
+                    <span className="imp__tag imp__tag--warn" title={`已存在：${dup.name}（${dup.user}@${dup.host}:${dup.port}）`}>
                       重名
                     </span>
                   )}
@@ -208,7 +208,7 @@ export function ImportPreview({ source, result, existing, selected, onSelected, 
 
       {dupSelected > 0 && (
         <div className="imp__options">
-          <span className="imp__tag--warn">{dupSelected} 个与现有连接重名（同文件夹同名，或同主机、端口、用户名）</span>
+          <span className="imp__tag--warn">{dupSelected} 个与现有连接重名（同一文件夹下名称相同，或主机、端口、用户名均相同）</span>
           <Segmented<DuplicatePolicy>
             ariaLabel="重名处理"
             size="small"
@@ -224,7 +224,7 @@ export function ImportPreview({ source, result, existing, selected, onSelected, 
         </div>
       )}
 
-      {!secretsAvailable && withPassword > 0 && <div className="imp__warn">网页端不保存密码，连接时再输入。</div>}
+      {!secretsAvailable && withPassword > 0 && <div className="imp__warn">网页端不保存密码，请在连接时输入。</div>}
       {result.warnings.map((w) => (
         <div key={w} className="imp__warn">
           {w}
@@ -232,7 +232,7 @@ export function ImportPreview({ source, result, existing, selected, onSelected, 
       ))}
       {result.issues.length > 0 && (
         <details className="imp__issues">
-          <summary>{result.issues.length} 条没有导入（解析失败或不是 SSH）</summary>
+          <summary>{result.issues.length} 条未导入（解析失败或不是 SSH 连接）</summary>
           <ul>
             {result.issues.map((i, n) => (
               <li key={n}>

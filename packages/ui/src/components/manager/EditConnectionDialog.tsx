@@ -136,7 +136,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
 
   const validate = (): string | null => {
     if (!form.host.trim()) return '请填写主机';
-    if (!portValid) return '端口必须是 1–65535 的整数';
+    if (!portValid) return '端口必须为 1–65535 之间的整数';
     if (!form.user.trim()) return '请填写用户名';
     return null;
   };
@@ -202,11 +202,11 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
             trustOnce = outcome.trustOnce;
             continue;
           }
-          setTest({ kind: 'fail', message: e.problem.kind === 'unknown' ? '已取消：没有接受主机密钥' : e.message });
+          setTest({ kind: 'fail', message: e.problem.kind === 'unknown' ? '已取消：未接受主机密钥' : e.message });
           return;
         }
         const message = e instanceof Error ? e.message : String(e);
-        setTest({ kind: 'fail', message: isBlankPassword(auth) && isAuthFailure(message) ? '服务器要密码，请填上密码再测' : message });
+        setTest({ kind: 'fail', message: isBlankPassword(auth) && isAuthFailure(message) ? '服务器要求密码验证，请填写密码后再测试' : message });
         return;
       }
     }
@@ -288,7 +288,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
             <label htmlFor="e-name" className="lbl">
               名称
             </label>
-            <input id="e-name" className="field" value={form.name} placeholder="例如 prod-web-03" autoComplete="off" onChange={(e) => patch({ name: e.target.value })} />
+            <input id="e-name" className="field" value={form.name} placeholder="例如：prod-web-03" autoComplete="off" onChange={(e) => patch({ name: e.target.value })} />
             <label htmlFor="e-group" className="lbl">
               位置
             </label>
@@ -319,7 +319,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
             <label htmlFor="e-note" className="lbl">
               备注
             </label>
-            <textarea id="e-note" className="field" rows={3} value={form.note} placeholder="可选，可换行" onChange={(e) => patch({ note: e.target.value })} />
+            <textarea id="e-note" className="field" rows={3} value={form.note} placeholder="选填，可多行" onChange={(e) => patch({ note: e.target.value })} />
             <span className="edit__rule" />
             <label htmlFor="e-auth" className="lbl">
               认证方式
@@ -370,7 +370,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
                     </button>
                   </div>
                   <span className="muted">
-                    {!chosenKey && form.keyLabel ? `原来用的私钥文件是 ${form.keyLabel}，导入后选上就行` : '私钥和口令加密存在本机，别的服务器也能选同一把'}
+                    {!chosenKey && form.keyLabel ? `原私钥文件为 ${form.keyLabel}，请将其导入后选择` : '私钥和口令加密保存在本机，其他服务器也可选用同一私钥'}
                   </span>
                 </div>
               </>
@@ -385,7 +385,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
                     pickFile={backend.pickPrivateKeyFile}
                     onChange={(key, name) => patch({ privateKey: key, keyLabel: name ?? (key ? '已粘贴私钥' : null) })}
                   />
-                  {savedKey && !form.privateKey && <span className="muted">已保存私钥，不修改请留空</span>}
+                  {savedKey && !form.privateKey && <span className="muted">已保存私钥，如无需修改请留空</span>}
                   <label htmlFor="e-passphrase" className="muted edit__inlineLabel">
                     口令
                     <input
@@ -393,7 +393,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
                       className="field"
                       type="password"
                       value={form.passphrase}
-                      placeholder="没有则留空"
+                      placeholder="如无请留空"
                       autoComplete="off"
                       onChange={(e) => patch({ passphrase: e.target.value })}
                     />
@@ -407,7 +407,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
 
         {page === 'advanced' && (
           <div className="form form--plain form--wide">
-            <span className="edit__pending">这一页的设置会保存，但暂未生效</span>
+            <span className="edit__pending">本页设置会保存，但暂未生效</span>
             <label htmlFor="e-jump" className="lbl">
               跳板机
             </label>
@@ -494,7 +494,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
 
       <div className="edit__foot">
         <button type="button" className="btn" disabled={test.kind === 'running'} onClick={() => void runTest()}>
-          {test.kind === 'running' ? '连接中…' : '测试连接'}
+          {test.kind === 'running' ? '正在连接…' : '测试连接'}
         </button>
         {test.kind === 'ok' && (
           <span role="status" className="edit__ok ellipsis" title={test.fingerprint ?? undefined}>
@@ -557,7 +557,7 @@ function ForwardPage({ rules, onChange }: { rules: ForwardRule[]; onChange(rules
           <span>本地</span>
           <span>远程</span>
         </div>
-        {rules.length === 0 && !adding && <div className="empty fwd__empty">还没有转发规则</div>}
+        {rules.length === 0 && !adding && <div className="empty fwd__empty">暂无转发规则</div>}
         {rules.map((r) => (
           <button key={r.id} type="button" className={`fwd__row mono${sel === r.id ? ' fwd__row--on' : ''}`} onClick={() => setSel(r.id)}>
             <span className="fwd__type">{TYPE_LABEL[r.type]}</span>

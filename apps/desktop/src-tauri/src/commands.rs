@@ -297,7 +297,7 @@ pub async fn sftp_download(
     let dir = app
         .path()
         .download_dir()
-        .map_err(|_| "找不到本机的下载目录".to_string())?;
+        .map_err(|_| "未找到本机的下载目录".to_string())?;
     let name = path
         .rsplit('/')
         .next()
@@ -346,7 +346,7 @@ pub async fn save_download(app: AppHandle, request: Request<'_>) -> Result<Strin
     let dir = app
         .path()
         .download_dir()
-        .map_err(|_| "找不到本机的下载目录".to_string())?;
+        .map_err(|_| "未找到本机的下载目录".to_string())?;
     let (local, mut file) = create_unique(&dir, &name).await?;
     if let Err(e) = file.write_all(data).await {
         drop(file);
@@ -362,7 +362,7 @@ pub async fn import_find_local(app: AppHandle) -> Result<Vec<LocalConfig>, Strin
     let dirs = local_dirs(&app)?;
     tauri::async_runtime::spawn_blocking(move || local_import::find(Platform::current(), &dirs))
         .await
-        .map_err(|e| format!("查找配置文件中断：{e}"))
+        .map_err(|e| format!("查找配置文件时出错：{e}"))
 }
 
 /// 一键导入快捷命令：同 import_find_local，读的是另一张位置表；大配置文件只交出命令那一块
@@ -371,15 +371,15 @@ pub async fn import_find_local_commands(app: AppHandle) -> Result<Vec<LocalConfi
     let dirs = local_dirs(&app)?;
     tauri::async_runtime::spawn_blocking(move || local_import::find_commands(Platform::current(), &dirs))
         .await
-        .map_err(|e| format!("查找配置文件中断：{e}"))
+        .map_err(|e| format!("查找配置文件时出错：{e}"))
 }
 
 fn local_dirs(app: &AppHandle) -> Result<Dirs, String> {
     let path = app.path();
     Ok(Dirs {
-        home: path.home_dir().map_err(|_| "找不到本机的用户目录")?,
-        data: path.data_dir().map_err(|_| "找不到本机的应用数据目录")?,
-        local_data: path.local_data_dir().map_err(|_| "找不到本机的应用数据目录")?,
+        home: path.home_dir().map_err(|_| "未找到本机的用户目录")?,
+        data: path.data_dir().map_err(|_| "未找到本机的应用数据目录")?,
+        local_data: path.local_data_dir().map_err(|_| "未找到本机的应用数据目录")?,
     })
 }
 
@@ -390,13 +390,13 @@ pub async fn local_pick_key_file(app: AppHandle) -> Result<Option<PickedFile>, S
     app.run_on_main_thread(move || {
         let _ = tx.send(local_file::pick_one());
     })
-    .map_err(|e| format!("打不开选文件框：{e}"))?;
-    let Some(path) = rx.await.map_err(|_| "选文件框中断".to_string())?? else {
+    .map_err(|e| format!("无法打开文件选择窗口：{e}"))?;
+    let Some(path) = rx.await.map_err(|_| "文件选择窗口异常关闭".to_string())?? else {
         return Ok(None);
     };
     tauri::async_runtime::spawn_blocking(move || local_file::read_key_file(&path))
         .await
-        .map_err(|e| format!("读文件中断：{e}"))?
+        .map_err(|e| format!("读取文件时出错：{e}"))?
         .map(Some)
 }
 
@@ -407,7 +407,7 @@ pub async fn key_inspect(private_key: String, passphrase: Option<String>) -> Res
         ssh_core::keys::inspect_private_key(&private_key, passphrase.as_deref()).map_err(|e| e.to_string())
     })
     .await
-    .map_err(|e| format!("认私钥中断：{e}"))?
+    .map_err(|e| format!("识别私钥时出错：{e}"))?
 }
 
 #[tauri::command]
@@ -434,7 +434,7 @@ async fn blocking<T: Send + 'static>(
 ) -> Result<T, String> {
     tokio::task::spawn_blocking(f)
         .await
-        .map_err(|e| format!("保险箱任务中断：{e}"))?
+        .map_err(|e| format!("保险箱操作出错：{e}"))?
 }
 
 async fn sftp(state: &SessionManager, id: &str) -> Result<ssh_core::Sftp, String> {

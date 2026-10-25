@@ -70,7 +70,7 @@ export function currentGroup(groups: string[], selected: string | null): string 
 export function groupNameError(name: string, groups: string[], except?: string): string | null {
   const n = name.trim();
   if (!n) return '请输入分类名称';
-  if (n !== except && groups.includes(n)) return `已有分类「${n}」`;
+  if (n !== except && groups.includes(n)) return `分类「${n}」已存在`;
   return null;
 }
 

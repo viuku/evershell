@@ -90,7 +90,7 @@ describe('applyHostKeyDecision', () => {
     expect(await store.load()).toBe('[h]:2222 ssh-ed25519 AAAAkeyA\n');
   });
 
-  it('只接受本次：不保存，只给这一次的临时记录', async () => {
+  it('仅本次接受：不保存，只给这一次的临时记录', async () => {
     const store = new KnownHostsStore(memorySecrets());
     const outcome = await applyHostKeyDecision(store, unknown, 'once');
     expect(outcome).toEqual({ retry: true, trustOnce: '[h]:2222 ssh-ed25519 AAAAkeyA' });
@@ -98,7 +98,7 @@ describe('applyHostKeyDecision', () => {
     expect(withTrustOnce('a b c', '[h]:2222 ssh-ed25519 AAAAkeyA')).toBe('a b c\n[h]:2222 ssh-ed25519 AAAAkeyA\n');
   });
 
-  it('密钥变了只有“更新”能连，“只接受本次”不算数', async () => {
+  it('密钥变了只有“更新”能连，“仅本次接受”不算数', async () => {
     const secrets = memorySecrets();
     secrets.data.set('known_hosts', 'h ssh-ed25519 AAAAkeyA\n');
     const store = new KnownHostsStore(secrets);

@@ -38,7 +38,7 @@
 - `packages/ui/src/core/connect.ts`：`resolveAuth` 没存密码时不再弹框，返回空密码（“不带密码”）；弹框挪到 `askServerPassword`，勾了“记住密码”就存进保险箱。`isAuthFailure` 按内核报错开头的「认证失败」认出认证没通过：Tauri 只传得过来字符串，内核改 `Error::AuthFailed` 的文案要一起改。
 - `packages/ui/src/core/session-manager.ts`：不带密码连、认证没通过时，调 `setPasswordPrompt` 挂上的回调要密码，拿到后重连；问的时候标签保持“连接中”，取消就停在「连接已取消」。做法和指纹分支的 `setHostKeyPrompt` 一样。填了密码还认证失败的，照旧报错，不再问。
 - `packages/ui/src/App.tsx`：挂上回调。
-- 连接编辑框的「测试连接」：密码留空也能测，服务器要密码时提示「服务器要密码，请填上密码再测」。
+- 连接编辑框的「测试连接」：密码留空也能测，服务器要密码时提示「服务器要求密码验证，请填写密码后再测试」。
 - 假后端：密码留空时只有主机含 `nopass` 能连上，其他主机报认证失败、界面再弹框。
 - 单元测试 `packages/ui/src/core/__tests__/connect.test.ts`。会话层的重连靠网页版 `?mock` 验过：不要密码的直接连上；要密码的先“连接中”再弹框，记住密码生效；取消显示「连接已取消」，点重连会再问。
 - 网页端没有保险箱，每次连要密码的服务器都会先试一次，弹框前多等一次握手。
