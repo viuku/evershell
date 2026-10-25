@@ -94,7 +94,7 @@ export function parseEverShell(files: ImportFile[]): ImportResult {
         user: str(r.user) ?? '',
         note: str(r.note) ?? '',
         proto: r.proto === 'rdp' ? 'rdp' : 'ssh',
-        auth: r.auth === 'key' || r.auth === 'keychain' ? r.auth : 'password',
+        auth: r.auth === 'key' || r.auth === 'keychain' ? 'key' : 'password',
         keyLabel: str(r.keyLabel) ?? null,
         password: null,
         advanced: advanced ? { ...DEFAULT_ADVANCED, ...advanced, jumpServerId: null } : undefined,

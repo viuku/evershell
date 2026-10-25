@@ -9,6 +9,7 @@ import {
   type LocalConfigFiles,
   type MonitorDetail,
   type MonitorSnapshot,
+  type PrivateKeyInfo,
   type ProcDetail,
   type SecretStore,
   type ShellHandlers,
@@ -28,6 +29,7 @@ import { encodeUtf8 } from '../core/importers/text';
 // 主机含 rekey → 信任过一次指纹后再连，服务器换一把钥匙（看“指纹变了”的警告）；
 // 主机含 flaky → 连上 8 秒后像网络断了一样断开（看断线提示）；
 // 主机含 slow → 网络很慢：列目录、查文件信息多等 1.5 秒，传文件约 20KB/s（看“加载中”和进度）。
+// 私钥库：按文件头给类型（RSA 头是 RSA 2048，其他算 ED25519）；内容里有 ENCRYPTED 的要口令 secret。
 // 服务器指纹和真的一样要先确认：第一次连每台服务器都会弹确认框。
 // 密码留空时只有主机含 nopass 能连上（模拟不要密码的服务器），其他主机和真服务器一样报认证失败，界面再弹框要密码。
 // 导入窗口的一键导入：假装找到了 FinalShell 和 ~/.ssh/config，SecureCRT、PuTTY 没找到。
@@ -53,6 +55,24 @@ function fakeBase64(seed: string, length: number): string {
 
 function mockKey(openssh: string): HostKeyInfo {
   return { algorithm: openssh.split(' ')[0] ?? 'ssh-ed25519', fingerprint: `SHA256:${fakeBase64(openssh, 43)}`, openssh };
+}
+
+/** 假的“认私钥”：照真后端的几种报错，指纹按内容算 */
+async function mockInspectKey(text: string, passphrase?: string): Promise<PrivateKeyInfo> {
+  await delay(120);
+  const t = text.trim();
+  const first = t.split('\n')[0] ?? '';
+  if (/^(ssh-|ecdsa-|sk-)/.test(first) || first.includes('PUBLIC KEY-----')) {
+    throw new Error('这是公钥（一般是 .pub 文件），请选不带 .pub 的那个私钥文件');
+  }
+  if (!/PRIVATE KEY-----|^PuTTY-User-Key-File-/.test(t)) {
+    throw new Error('认不出这个私钥。支持 OpenSSH、PEM（RSA、EC、PKCS#8）和 PuTTY 格式');
+  }
+  const encrypted = t.includes('ENCRYPTED');
+  if (encrypted && !passphrase) throw new Error('这把私钥设了口令，请填上口令');
+  if (encrypted && passphrase !== 'secret') throw new Error('口令不对');
+  const rsa = first.includes('RSA');
+  return { algorithm: rsa ? 'RSA' : 'ED25519', bits: rsa ? 2048 : 256, fingerprint: `SHA256:${fakeBase64(t, 43)}`, encrypted };
 }
 
 /** 主机名含 rekey、已经换过钥匙的服务器 */
@@ -490,6 +510,7 @@ export function createMockBackend(): SshBackend {
       await delay(120);
       return mockLocalConfigs();
     },
+    inspectPrivateKey: mockInspectKey,
     async connect(opts: ConnectOptions, handlers: ShellHandlers): Promise<SshSession> {
       await delay(400 + Math.random() * 500);
       if (/fail/i.test(opts.host)) throw new Error('连接超时：服务器无响应');

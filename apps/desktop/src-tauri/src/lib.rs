@@ -2,6 +2,7 @@
 //! 会话管理（`session`）和保险箱（`secrets`）不依赖 Tauri，可以单独测试。
 
 mod commands;
+mod local_file;
 mod local_import;
 pub mod secrets;
 pub mod session;
@@ -55,6 +56,8 @@ pub fn run() {
             commands::sftp_download,
             commands::save_download,
             commands::import_find_local,
+            commands::local_pick_key_file,
+            commands::key_inspect,
             commands::secret_get,
             commands::secret_set,
             commands::secret_remove,

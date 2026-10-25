@@ -343,6 +343,71 @@
   font-size: 11px;
 }
 
+/* 私钥库：「选择私钥」列表（KeyLibraryDialog.tsx） */
+.keylib {
+  display: flex;
+  gap: 12px;
+  padding: 4px 16px 12px;
+}
+
+.keylib__table {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 220px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  outline: none;
+}
+
+.keylib__table:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.keylib__cols {
+  grid-template-columns: minmax(0, 1fr) 84px 52px 56px;
+}
+
+.keylib__row {
+  height: 22px;
+}
+
+.keylib__side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 76px;
+  flex: 0 0 auto;
+}
+
+.keylib__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 14px;
+}
+
+.keylib__hint {
+  margin-right: auto;
+}
+
+/* 编辑连接里选中的私钥 */
+.keychoice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.keychoice__name {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* 端口转发 */
 .fwd {
   display: flex;

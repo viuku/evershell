@@ -28,6 +28,7 @@ const server: ServerRecord = {
   note: '',
   proto: 'ssh',
   auth: 'password',
+  keyId: null,
   keyLabel: null,
   advanced: { ...DEFAULT_ADVANCED },
   forwards: [],

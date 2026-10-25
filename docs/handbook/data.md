@@ -12,7 +12,8 @@
 
 | 数据 | 存储键或位置 | 格式版本 | 同步用的字段 |
 |---|---|---|---|
-| 连接和文件夹 | `evershell.hosts.v1` | 数据里 `version: 1` | 有 id、updatedAt、deletedAt（墓碑） |
+| 连接和文件夹 | `evershell.hosts.v1`；服务器的 `keyId` 指向私钥库里的私钥。搬私钥进私钥库之前的原样备份在 `evershell.hosts.v1.before-key-library` | 数据里 `version: 1` | 有 id、updatedAt、deletedAt（墓碑） |
+| 私钥库清单 | `evershell.keys.v1`：名称、类型、长度、公钥指纹，不含机密（`packages/ui/src/core/key-library.ts`，规格 [key-library.md](../specs/key-library.md)） | 数据里 `version: 1` | 有 id、updatedAt、deletedAt（墓碑） |
 | 快捷命令 | `evershell.snippets.v1`（`group` 是分类名） | 键名里的 v1 | 有 id、updatedAt，**没有墓碑** |
 | 快捷命令的分类 | `evershell.snippet-groups.v1`：分类名的数组，顺序即显示顺序（规格 [command-groups.md](../specs/command-groups.md)） | 键名里的 v1 | 没有，M2 定 |
 | 历史命令 | `evershell.history.v1` | 键名里的 v1 | 没有 |
@@ -22,7 +23,7 @@
 | 主机密钥记录 | 桌面端：保险箱条目 `known_hosts`；网页端：`evershell.knownHosts`（`packages/ui/src/core/known-hosts.ts`） | OpenSSH known_hosts 文本格式 | M2 设计 |
 | 网页端的中转设置 | `evershell.relay`（`apps/web/src/relay-bar.tsx`） | 无 | 不同步 |
 | 网页版 `?mock` 的假保险箱 | `evershell.mock-secrets` | 无 | 只用于预览 |
-| 保险箱（桌面端） | 应用数据目录下的 `vault.json`（Mac 上是 `~/Library/Application Support/dev.evershell.desktop/`）；打不开时旧文件改名为 `vault-unreadable-<时间>.json` | 文件头 `version: 1` | M2 设计 |
+| 保险箱（桌面端） | 条目：服务器密码 `<服务器 id>.password`；私钥库的私钥 `<私钥 id>.privateKey`、口令 `<私钥 id>.passphrase`；`known_hosts`。文件在应用数据目录下的 `vault.json`（Mac 上是 `~/Library/Application Support/dev.evershell.desktop/`）；打不开时旧文件改名为 `vault-unreadable-<时间>.json` | 文件头 `version: 1` | M2 设计 |
 | 保险箱钥匙 | 系统钥匙串：服务名 `dev.evershell.desktop`，账户 `vault-key` | | 不同步（同步时用主密码另锁一份） |
 
 桌面端的主窗口、编辑窗口、连接管理器各有一份内存里的数据，共用上面这些存储：一个窗口写了，`core/storage.ts` 会通知其他窗口换成新内容（Tauri 事件 `store-sync`；浏览器多开页签靠自带的 storage 事件），不然另一个窗口下次写会拿旧数据盖掉。两个窗口几乎同时改同一个键时后写的赢（[docs/specs/manager-window.md](../specs/manager-window.md)）。

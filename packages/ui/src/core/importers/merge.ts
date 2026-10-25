@@ -103,6 +103,7 @@ function toRecord(s: ImportedServer, parentId: string | null, now: number): Serv
     note: s.note,
     proto: s.proto,
     auth: s.auth,
+    keyId: null,
     keyLabel: s.keyLabel,
     advanced: { ...DEFAULT_ADVANCED, ...(s.advanced ?? {}) },
     forwards: s.forwards ?? [],

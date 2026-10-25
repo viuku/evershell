@@ -1,9 +1,11 @@
 import type { PasswordResult, KeyResult } from '../components/common/Dialogs';
 import type { AuthConfig, SecretStore } from '../types';
-import type { ServerRecord } from './hosts-store';
+import { updateServer, type ServerRecord } from './hosts-store';
+import { KeyLibrary } from './key-library';
 
 // 连接一台服务器前先把认证信息凑齐：保存过就直接用。没存密码就先不带密码连，
-// 服务器要密码时再用 askServerPassword 弹框问（和 FinalShell 一样）；私钥没存就弹窗让用户选。
+// 服务器要密码时再用 askServerPassword 弹框问（和 FinalShell 一样）；
+// 公钥认证用私钥库里选的那把（core/key-library.ts），没选就弹窗让用户选，勾“记住”放进私钥库。
 
 export const secretKeys = {
   password: (id: string) => `${id}.password`,
@@ -29,8 +31,13 @@ function describe(t: { user: string; host: string; port: number }): string {
   return `${t.user}@${t.host}${t.port === 22 ? '' : `:${t.port}`}`;
 }
 
-/** 返回 null 表示用户取消 */
-export async function resolveAuth(server: ServerRecord, secrets: SecretStore, prompts: AuthPrompts): Promise<AuthConfig | null> {
+/** 返回 null 表示用户取消。library 不给时当作没有私钥库（网页端） */
+export async function resolveAuth(
+  server: ServerRecord,
+  secrets: SecretStore,
+  prompts: AuthPrompts,
+  library: KeyLibrary = new KeyLibrary(secrets),
+): Promise<AuthConfig | null> {
   if (server.auth === 'password') {
     if (secrets.available) {
       const saved = await secrets.get(secretKeys.password(server.id)).catch(() => null);
@@ -40,7 +47,11 @@ export async function resolveAuth(server: ServerRecord, secrets: SecretStore, pr
     return { type: 'password', password: '' };
   }
 
-  // 公钥和密钥库现在走同一条路：有保存的私钥就用，没有就让用户选
+  if (library.available && server.keyId) {
+    const saved = await library.load(server.keyId).catch(() => null);
+    if (saved) return { type: 'key', ...saved };
+  }
+  // 还没搬进私钥库的旧数据（搬家没成功时），照旧按服务器取
   if (secrets.available) {
     const key = await secrets.get(secretKeys.privateKey(server.id)).catch(() => null);
     if (key) {
@@ -48,15 +59,19 @@ export async function resolveAuth(server: ServerRecord, secrets: SecretStore, pr
       return { type: 'key', privateKey: key, passphrase: passphrase || undefined };
     }
   }
+  const hint = server.keyLabel ? `（原来用的是 ${server.keyLabel}）` : '';
   const r = await prompts.askPrivateKey({
     title: `连接 ${server.name}`,
-    message: `${describe(server)} 使用公钥认证，请选择私钥文件`,
-    canRemember: secrets.available,
+    message: `${describe(server)} 使用公钥认证，请选择私钥文件${hint}`,
+    canRemember: library.available,
   });
   if (!r) return null;
-  if (r.remember && secrets.available) {
-    await secrets.set(secretKeys.privateKey(server.id), r.privateKey).catch(() => {});
-    if (r.passphrase) await secrets.set(secretKeys.passphrase(server.id), r.passphrase).catch(() => {});
+  if (r.remember && library.available) {
+    // 放进私钥库，库里已经有同一把就用那条；认不出来也不耽误这次连接
+    try {
+      const { key } = await library.add({ privateKey: r.privateKey, passphrase: r.passphrase, name: r.fileName ?? server.keyLabel ?? server.name });
+      updateServer(server.id, { keyId: key.id });
+    } catch {}
   }
   return { type: 'key', privateKey: r.privateKey, passphrase: r.passphrase || undefined };
 }

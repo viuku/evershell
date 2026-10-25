@@ -74,6 +74,13 @@ russh 要求字节流能跨线程（`Send`），浏览器的 WebSocket 不行。
 - **原因**：网页还没画出来时，WKWebView 自己铺一层白底。wry 只有在建窗口时设了 `background_color` 才关掉这层白底（私有属性 `drawsBackground`），露出窗口的底色。
 - **处理**：`apps/desktop/src-tauri/src/windows.rs` 建窗口时把界面当前的底色（前端读 `--content` 传过来）设成 `background_color`。没用“先藏起来、画好再显示”：窗口藏着时 WebKit 可能暂停绘制和定时器，反而更慢。
 
+### 网页里选的云盘文件读不出来，选了没反应（2026-10-25）
+
+- **症状**：所有者在编辑连接里点私钥的「选择…」，选了 OneDrive 里的私钥，界面上什么都没变。私钥文件没有隐藏。
+- **原因（按 WebKit 的已知问题推断，没在所有者的文件上确认）**：`<input type="file">` 选中的文件由 WKWebView 的网页进程去读。OneDrive、iCloud 里“仅在线”的文件本机只有占位，网页进程读不出内容（WebKit bug 191069、226090 是同一类问题），`file.text()` 失败。原来的代码没接住这个失败，所以看起来没反应。
+- **现在的处理**：桌面端选私钥改走 Rust：`apps/desktop/src-tauri/src/local_file.rs` 自己弹系统的选文件框（NSOpenPanel），再由应用进程读文件，系统会先把文件下载下来；前端接口是 `SshBackend.pickPrivateKeyFile`。网页端照旧用网页的选文件框，读失败时提示先把文件下载到本机。
+- **还没处理的**：上传文件、导入别的软件的配置、终端背景图还走网页的选文件框，云盘里“仅在线”的文件一样会读不出来，要改时照这个办法。
+
 ### 同步的 Tauri 命令没有 tokio 运行时，一 spawn 就整个应用闪退（2026-10-18）
 
 - **症状**：连上服务器后应用直接消失。日志：`there is no reactor running, must be called from the context of a Tokio 1.x runtime`，接着 `fatal runtime error: failed to initiate panic`。

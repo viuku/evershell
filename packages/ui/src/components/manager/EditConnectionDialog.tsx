@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { isAuthFailure, isBlankPassword, secretKeys } from '../../core/connect';
+import { describeKey, findKey, KeyLibrary, keysStore } from '../../core/key-library';
 import { applyHostKeyDecision, KnownHostsStore, withTrustOnce } from '../../core/known-hosts';
 import {
   addServer,
@@ -19,6 +20,7 @@ import { HostKeyError, type AuthConfig, type SshBackend } from '../../types';
 import { KeyPicker, useDialogs } from '../common/Dialogs';
 import { Modal } from '../common/Modal';
 import { Segmented } from '../common/Segmented';
+import { KeyLibraryDialog } from './KeyLibraryDialog';
 
 export type EditTarget = { mode: 'new'; parentId: string | null } | { mode: 'edit'; server: ServerRecord };
 
@@ -34,6 +36,9 @@ interface Form {
   user: string;
   password: string;
   remember: boolean;
+  /** 私钥库里选的那把（桌面端） */
+  keyId: string | null;
+  /** 网页端没有私钥库：选的私钥只在这次弹窗里用（测试连接） */
   privateKey: string;
   keyLabel: string | null;
   passphrase: string;
@@ -54,6 +59,7 @@ function formFor(target: EditTarget): Form {
       user: s.user,
       password: '',
       remember: true,
+      keyId: s.keyId,
       privateKey: '',
       keyLabel: s.keyLabel,
       passphrase: '',
@@ -71,6 +77,7 @@ function formFor(target: EditTarget): Form {
     user: 'root',
     password: '',
     remember: true,
+    keyId: null,
     privateKey: '',
     keyLabel: null,
     passphrase: '',
@@ -97,6 +104,10 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
   const [error, setError] = useState<string | null>(null);
   const [hasSavedSecret, setHasSavedSecret] = useState(false);
   const secrets = backend.secrets;
+  const library = useMemo(() => KeyLibrary.of(backend), [backend]);
+  const keysData = useStore(keysStore);
+  const chosenKey = findKey(keysData, form.keyId);
+  const [pickingKey, setPickingKey] = useState(false);
   const dialogs = useDialogs();
   const editing = target.mode === 'edit' ? target.server : null;
 
@@ -140,6 +151,10 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
       }
       return { type: 'password', password: '' };
     }
+    if (library.available && form.keyId) {
+      const saved = await library.load(form.keyId).catch(() => null);
+      if (saved) return { type: 'key', ...saved };
+    }
     if (form.privateKey.trim()) return { type: 'key', privateKey: form.privateKey, passphrase: form.passphrase || undefined };
     if (serverId && secrets.available) {
       const saved = await secrets.get(secretKeys.privateKey(serverId)).catch(() => null);
@@ -159,7 +174,7 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
     }
     const auth = await buildAuth(editing?.id ?? null);
     if (!auth) {
-      setError('请选择私钥后再测试');
+      setError(library.available ? '请先选择私钥' : '请选择私钥后再测试');
       return;
     }
     setTest({ kind: 'running' });
@@ -212,6 +227,8 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
       note: form.note.trim(),
       proto: 'ssh',
       auth: form.auth,
+      // 选的私钥可能刚在「选择私钥」里删掉了
+      keyId: form.auth === 'key' ? (findKey(keysStore.get(), form.keyId)?.id ?? null) : null,
       keyLabel: form.auth === 'password' ? null : form.keyLabel,
       advanced: form.advanced,
       forwards: form.forwards,
@@ -231,8 +248,11 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
           await secrets.remove(secretKeys.privateKey(id));
           await secrets.remove(secretKeys.passphrase(id));
         } else {
-          if (form.privateKey.trim()) await secrets.set(secretKeys.privateKey(id), form.privateKey);
-          if (form.passphrase) await secrets.set(secretKeys.passphrase(id), form.passphrase);
+          // 选了私钥库里的私钥，这台服务器自己以前存的那份（还没搬家的）就不要了
+          if (input.keyId) {
+            await secrets.remove(secretKeys.privateKey(id));
+            await secrets.remove(secretKeys.passphrase(id));
+          }
           await secrets.remove(secretKeys.password(id));
         }
       } catch {
@@ -307,7 +327,6 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
             <select id="e-auth" className="field edit__select edit__select--auth" value={form.auth} onChange={(e) => patch({ auth: e.target.value as AuthMethod })}>
               <option value="password">密码</option>
               <option value="key">公钥</option>
-              <option value="keychain">密钥库</option>
             </select>
             <label htmlFor="e-user" className="lbl">
               用户名
@@ -340,13 +359,30 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
                 </div>
               </>
             )}
-            {form.auth === 'key' && (
+            {form.auth === 'key' && library.available && (
+              <>
+                <span className="lbl">私钥</span>
+                <div className="edit__stack">
+                  <div className="keychoice">
+                    <span className={`field keychoice__name${chosenKey ? '' : ' muted'}`}>{chosenKey ? describeKey(chosenKey) : '未选择'}</span>
+                    <button type="button" className="btn" onClick={() => setPickingKey(true)}>
+                      选择…
+                    </button>
+                  </div>
+                  <span className="muted">
+                    {!chosenKey && form.keyLabel ? `原来用的私钥文件是 ${form.keyLabel}，导入后选上就行` : '私钥和口令加密存在本机，别的服务器也能选同一把'}
+                  </span>
+                </div>
+              </>
+            )}
+            {form.auth === 'key' && !library.available && (
               <>
                 <span className="lbl">私钥</span>
                 <div className="edit__stack">
                   <KeyPicker
                     value={form.privateKey}
                     fileName={form.keyLabel}
+                    pickFile={backend.pickPrivateKeyFile}
                     onChange={(key, name) => patch({ privateKey: key, keyLabel: name ?? (key ? '已粘贴私钥' : null) })}
                   />
                   {savedKey && !form.privateKey && <span className="muted">已保存私钥，不修改请留空</span>}
@@ -363,19 +399,6 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
                     />
                   </label>
                   {!secrets.available && <span className="muted">网页端不保存私钥，每次连接时选择</span>}
-                </div>
-              </>
-            )}
-            {form.auth === 'keychain' && (
-              <>
-                <label htmlFor="e-ring" className="lbl">
-                  密钥
-                </label>
-                <div className="edit__stack">
-                  <select id="e-ring" className="field edit__select" disabled>
-                    <option>（密钥库暂未提供）</option>
-                  </select>
-                  <span className="muted">密钥管理在后续版本提供；现在连接时会让你选择私钥文件</span>
                 </div>
               </>
             )}
@@ -495,6 +518,18 @@ export function EditConnectionDialog({ backend, target, onClose, onSaved }: Prop
           确定
         </button>
       </div>
+      {pickingKey && (
+        <KeyLibraryDialog
+          library={library}
+          selectedId={form.keyId}
+          pickFile={backend.pickPrivateKeyFile}
+          onPick={(id) => {
+            patch({ keyId: id });
+            setPickingKey(false);
+          }}
+          onClose={() => setPickingKey(false)}
+        />
+      )}
     </Modal>
   );
 }

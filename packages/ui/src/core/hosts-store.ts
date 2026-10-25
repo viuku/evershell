@@ -3,7 +3,7 @@ import { PersistentStore, newId } from './storage';
 // 连接管理器的数据：文件夹 + 服务器，存在 localStorage。
 // 每条记录带 id / updatedAt / deletedAt（软删除墓碑），方便以后按记录做云同步。
 
-export type AuthMethod = 'password' | 'key' | 'keychain';
+export type AuthMethod = 'password' | 'key';
 export type Protocol = 'ssh' | 'rdp';
 
 export interface FolderRecord {
@@ -45,7 +45,9 @@ export interface ServerRecord {
   note: string;
   proto: Protocol;
   auth: AuthMethod;
-  /** 私钥文件名，只用于显示；内容在 SecretStore 里 */
+  /** 认证方式是公钥时，用私钥库里的哪把（core/key-library.ts）；还没选为 null，连接时再问 */
+  keyId: string | null;
+  /** 原来用的私钥文件名，只用于提示（从别的软件导入、还没选私钥时）；搬进私钥库时用来起名 */
   keyLabel: string | null;
   advanced: AdvancedOptions;
   forwards: ForwardRule[];
@@ -87,7 +89,9 @@ function normalize(raw: unknown, fallback: HostsData): HostsData {
         port: Number(s.port) || 22,
         note: s.note ?? '',
         proto: s.proto === 'rdp' ? 'rdp' : 'ssh',
-        auth: s.auth === 'key' || s.auth === 'keychain' ? s.auth : 'password',
+        // 以前有个没做完的「密钥库」(keychain)，现在公钥都从私钥库选，当成 key
+        auth: (s.auth as string) === 'key' || (s.auth as string) === 'keychain' ? 'key' : 'password',
+        keyId: typeof s.keyId === 'string' ? s.keyId : null,
         keyLabel: s.keyLabel ?? null,
         advanced: { ...DEFAULT_ADVANCED, ...(s.advanced ?? {}) },
         forwards: Array.isArray(s.forwards) ? s.forwards : [],
@@ -102,7 +106,7 @@ export const hostsStore = new PersistentStore<HostsData>('evershell.hosts.v1', E
 /** 新建 / 编辑弹窗提交的字段 */
 export type ServerInput = Pick<
   ServerRecord,
-  'name' | 'parentId' | 'host' | 'port' | 'user' | 'note' | 'proto' | 'auth' | 'keyLabel' | 'advanced' | 'forwards'
+  'name' | 'parentId' | 'host' | 'port' | 'user' | 'note' | 'proto' | 'auth' | 'keyId' | 'keyLabel' | 'advanced' | 'forwards'
 >;
 
 export function addServer(input: ServerInput): ServerRecord {

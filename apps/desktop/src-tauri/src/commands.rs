@@ -10,6 +10,7 @@ use ssh_core::{Auth, FileEntry, HostKeyProblem, MonitorDetail, MonitorSnapshot, 
 use tauri::ipc::{Channel, InvokeBody, InvokeResponseBody, JavaScriptChannelId, Request};
 use tauri::{AppHandle, Manager, State, Webview};
 
+use crate::local_file::{self, PickedFile};
 use crate::local_import::{self, Dirs, LocalConfig, Platform};
 use crate::secrets::Secrets;
 use crate::session::{self, ConnectParams, SessionManager};
@@ -367,6 +368,33 @@ pub async fn import_find_local(app: AppHandle) -> Result<Vec<LocalConfig>, Strin
     tauri::async_runtime::spawn_blocking(move || local_import::find(Platform::current(), &dirs))
         .await
         .map_err(|e| format!("查找配置文件中断：{e}"))
+}
+
+/// 选私钥文件并读出内容，取消返回 None。不用网页的选文件框，原因见 local_file.rs
+#[tauri::command]
+pub async fn local_pick_key_file(app: AppHandle) -> Result<Option<PickedFile>, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.run_on_main_thread(move || {
+        let _ = tx.send(local_file::pick_one());
+    })
+    .map_err(|e| format!("打不开选文件框：{e}"))?;
+    let Some(path) = rx.await.map_err(|_| "选文件框中断".to_string())?? else {
+        return Ok(None);
+    };
+    tauri::async_runtime::spawn_blocking(move || local_file::read_key_file(&path))
+        .await
+        .map_err(|e| format!("读文件中断：{e}"))?
+        .map(Some)
+}
+
+/// 认私钥的类型、长度和指纹（私钥库用，docs/specs/key-library.md）。带口令的私钥解开要一会儿，放到阻塞线程里
+#[tauri::command]
+pub async fn key_inspect(private_key: String, passphrase: Option<String>) -> Result<ssh_core::keys::KeyInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        ssh_core::keys::inspect_private_key(&private_key, passphrase.as_deref()).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("认私钥中断：{e}"))?
 }
 
 #[tauri::command]
