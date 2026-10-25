@@ -246,7 +246,7 @@ function Net({
             <span>{formatBytes(max / 2)}</span>
             <span>0</span>
           </span>
-          <ScrollingBars samples={samples} total={state?.netTotal ?? 0} slots={NET_SAMPLES}>
+          <ScrollingBars samples={samples} total={state?.netTotal ?? 0} slots={NET_SAMPLES} className="sidebar__bars--net">
             {(s) => (
               <>
                 <span className="sidebar__bar up" style={{ height: barHeight(s.tx, max, 2) }} />
