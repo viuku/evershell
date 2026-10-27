@@ -11,7 +11,6 @@ import {
   type MonitorSnapshot,
   type PrivateKeyInfo,
   type ProcDetail,
-  type SecretStore,
   type ShellHandlers,
   type SshBackend,
   type SshSession,
@@ -21,6 +20,7 @@ import {
 } from '../types';
 import { FakeShell } from './fake-shell';
 import { MockFs } from './mock-fs';
+import { createMockSyncPlatform, createPreviewSyncFetch, type MockVault } from './mock-sync';
 import { browserDownload } from '../core/browser-download';
 import { encodeUtf8 } from '../core/importers/text';
 
@@ -33,6 +33,8 @@ import { encodeUtf8 } from '../core/importers/text';
 // 服务器指纹和真的一样要先确认：第一次连每台服务器都会弹确认框。
 // 密码留空时只有主机含 nopass 能连上（模拟不要密码的服务器），其他主机和真服务器一样报认证失败，界面再弹框要密码。
 // 导入窗口的一键导入：假装找到了 FinalShell 和 ~/.ssh/config，SecureCRT、PuTTY 没找到。
+// 云同步：内存里的假同步服务器，任何 https 地址都能注册；地址含 invite 要邀请码 evershell、含 closed 关闭注册、
+// 含 offline 连不上；预置账号 demo（同步密码 demo1234）里有数据，用来看登录时的合并。刷新页面后假服务器清空（mock-sync.ts）。
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -508,9 +510,14 @@ function mockLocalCommands(): LocalConfigFiles[] {
 const SECRETS_KEY = 'evershell.mock-secrets';
 
 /** 假保险箱：存在 localStorage，只为了让“记住密码”流程能走通 */
-class MockSecrets implements SecretStore {
+class MockSecrets implements MockVault {
   readonly available = true;
   private readonly map = new Map<string, string>(Object.entries(readJson<Record<string, string>>(SECRETS_KEY, {})));
+
+  /** 假同步平台要列出全部条目 */
+  ids(): string[] {
+    return [...this.map.keys()];
+  }
 
   async get(id: string): Promise<string | null> {
     return this.map.get(id) ?? null;
@@ -529,8 +536,10 @@ class MockSecrets implements SecretStore {
 
 export function createMockBackend(): SshBackend {
   const fs = new MockFs();
+  const secrets = new MockSecrets();
   return {
-    secrets: new MockSecrets(),
+    secrets,
+    sync: createMockSyncPlatform(secrets, { fetch: createPreviewSyncFetch(), deriveDelayMs: 300 }),
     async saveFile(name: string, data: Uint8Array): Promise<string> {
       return browserDownload(name, data);
     },

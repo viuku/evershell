@@ -14,7 +14,8 @@ export default defineConfig({
     hmr: host ? { protocol: 'ws', host, port: 1421 } : undefined,
     watch: { ignored: ['**/src-tauri/**'] },
   },
-  envPrefix: ['VITE_', 'TAURI_ENV_*'],
+  // vite 按字面前缀匹配，不认通配符；写成 TAURI_ENV_* 时一个都传不进来（2026-10-28 发现）
+  envPrefix: ['VITE_', 'TAURI_ENV_'],
   build: {
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },

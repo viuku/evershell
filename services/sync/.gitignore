@@ -1,0 +1,2 @@
+# npm run dev 的本机数据库（dev.env 里的 DB_PATH）
+.data/

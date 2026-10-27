@@ -20,6 +20,7 @@ packages/ui  ── 界面和业务逻辑（React + TS），桌面端、网页�
 |---|---|---|
 | `packages/ui/src/components` | 组件，按界面区域分子目录（`ls` 看） | TSX |
 | `packages/ui/src/core` | 状态和逻辑，手机版要直接复用，不放界面代码 | TS |
+| `packages/ui/src/core/sync` | 云同步引擎：账本、合并、调度、接口调用；界面只用 `index.ts` 导出的 | TS |
 | `packages/ui/src/styles` | 样式，一个区域一个文件；颜色变量在 `base.css` | CSS |
 | `packages/ui/src/mock` | 假后端：假终端、假文件系统、假监控 | TS |
 | `apps/desktop/src` | 桌面端入口和 Tauri 后端实现 | TS |
@@ -29,6 +30,7 @@ packages/ui  ── 界面和业务逻辑（React + TS），桌面端、网页�
 | `crates/vault` | 保险箱的加密 | Rust |
 | `crates/ssh-wasm` | 把内核包装成浏览器能调的类 | Rust |
 | `services/relay-node`、`services/relay-worker` | 网页端的中转，只搬字节 | JS / TS |
+| `services/sync` | 云同步服务（Hono，一套代码跑在 Workers + D1 或 Node + SQLite 上），只存密文；部署见 [sync-service.md](sync-service.md) | TS |
 | `vendor/russh` | 打了补丁的 russh（见 [pitfalls.md](pitfalls.md#russh-的定时器在浏览器里-panicm0vendor-补丁)） | Rust |
 
 ## 跨平台守则
@@ -36,7 +38,7 @@ packages/ui  ── 界面和业务逻辑（React + TS），桌面端、网页�
 现在只做 Mac 版，但写 Mac 版时不能把网页、Windows、手机堵死。第 1、3、5 条和两条内核规矩已经写成自动检查（`scripts/check-guards.sh`，`scripts/check.sh ui` / `core` 会跑），违反会直接报错。
 
 1. **平台差异只走接口。** 界面和业务逻辑放 `packages/ui`，SSH、文件传输、钥匙串、保存文件都通过 `packages/ui/src/types.ts` 里的 `SshBackend` / `SecretStore` 注入。桌面端实现在 `apps/desktop/src/tauri-backend.ts`，网页端在 `apps/web/src/wasm-backend.ts`，预览用的假后端在 `packages/ui/src/mock`。`packages/ui` 里不要 import `@tauri-apps/*`。加新的平台能力时先在接口上加方法，三个实现都补上，暂时做不了的返回明确的“不支持”。
-2. **协议和数据逻辑写进 Rust 内核，内核要能编成 WASM。** SSH、SFTP、监控采集、加密、同步放 `crates/ssh-core`（或新的内核 crate），Tauri 命令只做薄包装。只能在本机跑的东西（本地文件、系统钥匙串、子进程）放 `apps/desktop/src-tauri`，或用 `cfg` 隔开。改完内核跑 `scripts/check.sh core`，它包含 WASM 编译检查。新的内核 crate 要加进 `scripts/check.sh` 的 core 一档。
+2. **协议和数据逻辑写进 Rust 内核，内核要能编成 WASM。** SSH、SFTP、监控采集、加密、同步放 `crates/ssh-core`（或新的内核 crate），Tauri 命令只做薄包装。只能在本机跑的东西（本地文件、系统钥匙串、子进程）放 `apps/desktop/src-tauri`，或用 `cfg` 隔开。改完内核跑 `scripts/check.sh core`，它包含 WASM 编译检查。新的内核 crate 要加进 `scripts/check.sh` 的 core 一档。**例外：云同步的合并和调度在 `packages/ui/src/core/sync`**，因为要合并的数据全在前端的存储里，放进 Rust 就得把每份数据来回搬；加解密仍在 Rust（`crates/vault/src/sync.rs`），机密原文不经过前端（[sync.md](../specs/sync.md#同步引擎packagesuisrccoresync)）。
 3. **Mac 专属的东西单独放。** 窗口外观、菜单、打包格式写进 `apps/desktop/src-tauri/tauri.macos.conf.json` 或 `#[cfg(target_os = "macos")]`，不改各平台共用的配置。界面里不写死 ⌘，快捷键和按键文字走 `packages/ui/src/core/platform.ts`。
 4. **逻辑放 `core/`，组件只管显示。** 手机版会换一套布局，`packages/ui/src/core` 里的状态和逻辑要能直接拿去用。重要操作要有能点的入口，不能只靠鼠标悬停或右键，手机上没有这两样。
 5. **本地数据只经过 `core/storage.ts`。** 组件里不直接读写 localStorage，以后换存储、接同步只改一处。（`apps/web/src/relay-bar.tsx` 的中转设置是网页端自己的东西，直接用了 localStorage，不在检查范围内。）
@@ -94,6 +96,7 @@ packages/ui  ── 界面和业务逻辑（React + TS），桌面端、网页�
 | 快捷键、按键文字、拖动区域 | `packages/ui/src/core/platform.ts` | |
 | 本地保存的设置和数据 | `packages/ui/src/core/storage.ts` 的 `PersistentStore`；全部清单见 [data.md](data.md) | `grep -rn "new PersistentStore" packages/ui/src` |
 | 连接列表、最近连接、快捷命令、历史 | `packages/ui/src/core/*-store.ts` | `ls packages/ui/src/core` |
+| 云同步 | 引擎 `packages/ui/src/core/sync/`，界面 `components/sync/`，加密 `crates/vault/src/sync.rs`，桌面端命令 `apps/desktop/src-tauri/src/sync.rs`，服务 `services/sync/`；规格 [docs/specs/sync.md](../specs/sync.md) | 新加一种要同步的数据：在引擎里加集合适配器 |
 | 会话、标签、监控数据怎么流动 | `packages/ui/src/core/session-manager.ts` | |
 | 主机密钥校验 | 校验在 `crates/ssh-core/src/known_hosts.rs`；记录存取在 `packages/ui/src/core/known-hosts.ts`；确认框是 `components/common/Dialogs.tsx` 的 `HostKeyDialog` | `grep -rn --exclude-dir={node_modules,dist,target} "HostKeyProblem" crates apps packages` |
 | 心跳、断线原因 | `crates/ssh-core/src/lib.rs` 的 `ConnectConfig` 和 `Client::disconnected` | |

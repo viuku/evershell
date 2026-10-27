@@ -53,10 +53,10 @@ export function withTrustOnce(knownHosts: string, trustOnce: string): string {
   return trustOnce ? `${knownHosts}\n${trustOnce}\n` : knownHosts;
 }
 
-export class KnownHostsStore {
-  // 两个标签同时确认指纹时，读改写要排队，免得后写的覆盖先写的
-  private chain: Promise<unknown> = Promise.resolve();
+/** 读改写的队列按保险箱算：会话、编辑连接、云同步各建了一个 KnownHostsStore，共用同一个队列才不会互相覆盖 */
+const chains = new WeakMap<SecretStore, Promise<unknown>>();
 
+export class KnownHostsStore {
   constructor(private readonly secrets: SecretStore) {}
 
   /** 读不出来（比如钥匙串拒绝访问）时当作空记录：每台服务器都会再问一次，但不会放过对不上的指纹 */
@@ -90,9 +90,24 @@ export class KnownHostsStore {
     );
   }
 
+  /** 云同步用：全部非空行，原样（只去掉行尾的 \r） */
+  async lines(): Promise<string[]> {
+    return splitLines(await this.load());
+  }
+
+  /** 云同步用：整份改写所有行；和 trust / replace 排同一个队，不会互相覆盖 */
+  editLines(edit: (lines: string[]) => string[]): Promise<void> {
+    return this.modify((text) => {
+      const lines = edit(splitLines(text));
+      return lines.length ? `${lines.join('\n')}\n` : '';
+    });
+  }
+
+  // 两个标签同时确认指纹时，读改写要排队，免得后写的覆盖先写的
   private modify(edit: (text: string) => string): Promise<void> {
-    const next = this.chain.then(async () => this.save(edit(await this.load())));
-    this.chain = next.catch(() => {});
+    const prev = chains.get(this.secrets) ?? Promise.resolve();
+    const next = prev.then(async () => this.save(edit(await this.load())));
+    chains.set(this.secrets, next.catch(() => {}));
     return next;
   }
 
@@ -100,6 +115,13 @@ export class KnownHostsStore {
     if (this.secrets.available) await this.secrets.set(SECRET_ID, text);
     else writeText(LOCAL_KEY, text);
   }
+}
+
+function splitLines(text: string): string[] {
+  return text
+    .split('\n')
+    .map((l) => l.replace(/\r$/, ''))
+    .filter((l) => l.trim() !== '');
 }
 
 function appendLine(text: string, line: string): string {

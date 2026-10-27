@@ -6,6 +6,7 @@
 #   scripts/check.sh desktop   桌面端 Rust（Tauri 命令、会话、保险箱）：测试和 clippy（增量约 30 秒）
 #   scripts/check.sh web       网页端链路：重编 WASM 包；test-sshd 在跑的话再跑一遍无界面端到端测试（约 20 秒）
 #                              注意它会重写 crates/ssh-wasm/pkg，本文件夹开着的网页版会跟着刷新
+#   scripts/check.sh sync      同步服务 services/sync：类型检查 + 单元测试（内存数据库，约 5 秒）
 #   scripts/check.sh docs      规范体系（CLAUDE.md、docs/handbook）里的路径、链接、锚点是否都对得上
 #   scripts/check.sh all       以上全部
 # 可以一次给多个：scripts/check.sh ui core
@@ -66,7 +67,7 @@ run_e2e() {
 }
 
 for scope in "$@"; do
-  [ "$scope" = all ] && set -- ui core desktop web docs && break
+  [ "$scope" = all ] && set -- ui core desktop web sync docs && break
 done
 
 for scope in "$@"; do
@@ -98,11 +99,16 @@ for scope in "$@"; do
       real_server
       if [ -n "$SSH_E2E_ADDR" ]; then step "网页端到端测试" run_e2e; fi
       ;;
+    sync)
+      [ -d services/sync/node_modules ] || step "装同步服务的依赖" npm ci --prefix services/sync
+      step "同步服务类型检查" npm run typecheck --prefix services/sync
+      step "同步服务测试" npm test --prefix services/sync
+      ;;
     docs)
       step "规范体系检查" scripts/check-docs.sh
       ;;
     *)
-      echo "不认识的范围：$scope（ui / core / desktop / web / docs / all）"
+      echo "不认识的范围：$scope（ui / core / desktop / web / sync / docs / all）"
       exit 2
       ;;
   esac

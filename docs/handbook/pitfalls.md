@@ -122,6 +122,7 @@ russh 要求字节流能跨线程（`Send`），浏览器的 WebSocket 不行。
 同类项目（GitButler、Yaak）给开发构建单独一个应用标识来避免这个问题（调研附录 A 3.3）。要做的话会改应用配置，并且开发版要重新存一遍测试用的连接，做之前问所有者。
 
 - 自己开的调试版只看不动：不连接、不保存、不删除连接。
+- 云同步在调试版里不启动（`SyncPlatform.disabledReason`，[sync.md](../specs/sync.md#桌面端-rustappsdesktopsrc-taurisrcsyncrs)），不然调试版和正式版会用同一份同步状态各自同步、互相覆盖。
 - 保险箱的异常情况（钥匙对不上、文件损坏）用 `apps/desktop/src-tauri/src/secrets.rs` 里的单元测试测，它们用临时目录和假钥匙串。别在真实数据上试，打不开的保险箱会被改名备份、换成新的，所有者要重新输密码。
 
 ### `tauri dev` 会自动重编重启

@@ -243,3 +243,38 @@ export function CautionIcon({ size = 32, ...rest }: P) {
     </svg>
   );
 }
+
+/** 转圈的进度，转动在样式里（.spin） */
+export const SpinnerIcon = (p: P) => (
+  <Svg strokeWidth={2.6} className="spin" {...p}>
+    <path d="M12 3a9 9 0 1 1-9 9" />
+  </Svg>
+);
+
+/** 线性的三角感叹号，跟随文字颜色（行内警告用） */
+export const WarnIcon = (p: P) => (
+  <Svg strokeWidth={2} {...p}>
+    <path d="M12 3l9.5 17h-19z" />
+    <path d="M12 10v4M12 17.5v.5" />
+  </Svg>
+);
+
+export const SuccessIcon = (p: P) => (
+  <Svg strokeWidth={1.8} {...p}>
+    <circle cx="12" cy="12" r="9.5" />
+    <path d="M7.5 12.5l3 3 6-6.5" />
+  </Svg>
+);
+
+export const ComputerIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M5 5h14v10H5zM3 19h18" />
+  </Svg>
+);
+
+export const GlobeIcon = (p: P) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9s1.3-6.4 3.8-9" />
+  </Svg>
+);

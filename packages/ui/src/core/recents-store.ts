@@ -7,6 +7,8 @@ export interface RecentEntry {
 }
 
 const MAX = 20;
+/** 本机最多留几条；云同步合并远端记录时照这个数裁剪 */
+export const RECENTS_MAX = MAX;
 
 export const recentsStore = new PersistentStore<RecentEntry[]>('evershell.recents.v1', [], (raw, fb) =>
   Array.isArray(raw) ? raw.filter((r) => r && typeof r.serverId === 'string' && typeof r.at === 'number') : fb,

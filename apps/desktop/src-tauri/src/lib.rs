@@ -1,11 +1,13 @@
 //! 桌面端 Rust 侧：把 ssh-core 包成 Tauri 命令。
 //! 会话管理（`session`）和保险箱（`secrets`）不依赖 Tauri，可以单独测试。
+//! 云同步的加解密命令在 `sync`。
 
 mod commands;
 mod local_file;
 mod local_import;
 pub mod secrets;
 pub mod session;
+mod sync;
 mod windows;
 
 use tauri::{Manager, WindowEvent};
@@ -16,6 +18,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(session::SessionManager::new())
         .manage(windows::EditorState::default())
+        .manage(sync::SyncState::default())
         .on_window_event(|window, event| match (window.label(), event) {
             (windows::MAIN, WindowEvent::CloseRequested { api, .. }) => {
                 windows::on_main_close_requested(window.app_handle(), api);
@@ -62,6 +65,17 @@ pub fn run() {
             commands::secret_get,
             commands::secret_set,
             commands::secret_remove,
+            sync::sync_device_name,
+            sync::sync_derive,
+            sync::sync_wrap_key,
+            sync::sync_adopt_key,
+            sync::sync_seal,
+            sync::sync_open,
+            sync::sync_secret_digests,
+            sync::sync_seal_secret,
+            sync::sync_open_secret,
+            sync::sync_move_secret,
+            sync::sync_key_check,
             windows::editor_window_open,
             windows::editor_set_dirty,
             windows::editor_quit,

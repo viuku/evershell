@@ -40,19 +40,6 @@
   min-height: 18px;
 }
 
-.sidebar__sync {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.sidebar__dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-
 .sidebar__ip {
   display: flex;
   align-items: center;

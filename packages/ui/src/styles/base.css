@@ -498,3 +498,14 @@ select.field {
 .grid-bg {
   background: repeating-linear-gradient(to bottom, transparent 0, transparent 13px, var(--line2) 13px, var(--line2) 14px);
 }
+
+/* 转圈的进度图标（SpinnerIcon） */
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

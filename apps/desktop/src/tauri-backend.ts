@@ -4,6 +4,7 @@ import type {
   EditorWindowHost,
   FileEntry,
   HostKeyProblem,
+  KdfParams,
   LocalTextFile,
   ManagerWindowHost,
   MonitorDetail,
@@ -13,6 +14,7 @@ import type {
   SshBackend,
   SshSession,
   StorageSync,
+  SyncPlatform,
   SystemInfo,
   TransferProgress,
 } from '@evershell/ui';
@@ -180,6 +182,38 @@ const secrets: SecretStore = {
   remove: (id) => call('secret_remove', { id }),
 };
 
+/**
+ * 调试版和所有者的正式版共用本机数据（应用标识相同），两边同时同步会互相覆盖，所以调试版不开同步。
+ * `tauri dev` 走 vite 开发服务器，DEV 一定为 true；scripts/mac-preview.sh 用的 `tauri build --debug`
+ * 由 Tauri CLI 设 TAURI_ENV_DEBUG=true（正式的 `tauri build` 不设），要经 vite.config.ts 的 envPrefix 才进得来
+ */
+const DEBUG_BUILD = import.meta.env.DEV || import.meta.env.TAURI_ENV_DEBUG === 'true';
+
+/**
+ * 云同步的加解密，见 src-tauri/src/sync.rs。保险箱钥匙、同步密码派生出的包裹钥匙、机密原文都留在 Rust 里，
+ * 这边只拿到登录凭据和密文。没给的盐和参数显式传 null，和 key_inspect 的写法一致
+ */
+const sync: SyncPlatform = {
+  deviceName: () => call<string>('sync_device_name'),
+  derive: (password, account, salt, kdf) =>
+    call<{ salt: string; kdf: KdfParams; authKey: string }>('sync_derive', {
+      password,
+      account,
+      salt: salt ?? null,
+      kdf: kdf ?? null,
+    }),
+  wrapKey: () => call<string>('sync_wrap_key'),
+  adoptKey: (wrapped) => call('sync_adopt_key', { wrapped }),
+  seal: (items) => call<string[]>('sync_seal', { items }),
+  open: (items) => call<(string | null)[]>('sync_open', { items }),
+  secretDigests: () => call<Record<string, string>>('sync_secret_digests'),
+  sealSecret: (id, aad) => call<string | null>('sync_seal_secret', { id, aad }),
+  openSecret: (id, aad, data) => call<boolean>('sync_open_secret', { id, aad, data }),
+  moveSecret: (from, to) => call('sync_move_secret', { from, to }),
+  keyCheck: () => call<string | null>('sync_key_check'),
+  disabledReason: DEBUG_BUILD ? '调试版不启动云同步：调试版和正式版共用本机数据，同时同步会互相覆盖。' : undefined,
+};
+
 export const tauriBackend: SshBackend = {
   async connect(opts: ConnectOptions, handlers) {
     const onEvent = new Channel<ShellEvent>();
@@ -192,6 +226,7 @@ export const tauriBackend: SshBackend = {
     return new TauriSession(reply.id, reply.fingerprint);
   },
   secrets,
+  sync,
   // WKWebView 不处理 <a download>，交给 Rust 写进"下载"目录
   saveFile: (name, data) =>
     invoke<string>('save_download', data, { headers: { 'x-name': encodeURIComponent(name) } }).catch(rethrow),

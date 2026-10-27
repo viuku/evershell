@@ -10,6 +10,8 @@ export interface HistoryEntry {
 }
 
 const MAX = 300;
+/** 本机最多留几条；云同步合并远端历史时照这个数裁剪 */
+export const HISTORY_MAX = MAX;
 
 export const historyStore = new PersistentStore<HistoryEntry[]>('evershell.history.v1', [], (raw, fb) =>
   Array.isArray(raw) ? raw.filter((h) => h && typeof h.cmd === 'string' && typeof h.at === 'number') : fb,

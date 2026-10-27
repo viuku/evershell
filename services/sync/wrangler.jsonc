@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "evershell-sync",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-01",
+  "observability": {
+    "enabled": true,
+    // 调用日志会记下每个请求的元数据，可能带上 Authorization 头里的令牌，所以关掉，
+    // 只保留代码里自己写的 console 日志（那里不记令牌、凭据、记录内容）
+    "logs": { "invocation_logs": false }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "evershell-sync",
+      // 所有者 Cloudflare 账号上的库（2026-10-28 用 `npx wrangler d1 create evershell-sync` 建的）。
+      // 自己部署一份时换成自己 `d1 create` 打印出来的 id；本机 `npm run dev:worker` 用模拟的 D1，不看这个值
+      "database_id": "fec0c9ac-91fd-40c0-ad5d-b62be1beb765",
+      "migrations_dir": "migrations"
+    }
+  ]
+  // PEPPER、INVITE_CODE 用 `npx wrangler secret put <名字>` 设置；QUOTA_MB 不设时每个账号 50 MB。
+  // 本机开发的配置在 dev.env
+}
