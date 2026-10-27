@@ -59,6 +59,45 @@ export function isDeleteSelectedKey(e: Mods & { key: string }): boolean {
   return isMac ? e.metaKey && e.key === 'Backspace' : !e.metaKey && !e.ctrlKey && e.key === 'Delete';
 }
 
+// 文件区的快捷键：只在文件列表有焦点时生效，不和终端抢键。Mac 照访达，其他系统照资源管理器；
+// 列表见 docs/design/README.md。上下移动、全选、Esc、Home / End 这类各系统一样的键由列表自己处理
+
+export type FileKeyAction = 'open' | 'up' | 'rename' | 'delete' | 'newFolder' | 'refresh' | 'copyPath' | 'focusPath';
+
+/** 文件列表里按下的是哪个快捷键；不是快捷键时返回 null */
+export function fileKeyAction(e: Mods & { key: string; code?: string }): FileKeyAction | null {
+  const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+  const bare = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (bare && k === 'Enter') return 'open';
+  if (isMac && mod && !e.altKey && !e.shiftKey && k === 'ArrowDown') return 'open';
+  if (bare && k === 'Backspace') return 'up';
+  if (isMac ? mod && !e.altKey && !e.shiftKey && k === 'ArrowUp' : e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && k === 'ArrowUp') return 'up';
+  if (bare && k === 'F2') return 'rename';
+  // Mac 上单独的 Delete 是 fn+⌫（向后删除）
+  if (isDeleteSelectedKey(e) || (bare && k === 'Delete')) return 'delete';
+  if (mod && e.shiftKey && !e.altKey && k === 'n') return 'newFolder';
+  if ((mod && !e.shiftKey && !e.altKey && k === 'r') || (!isMac && bare && k === 'F5')) return 'refresh';
+  // ⌥⌘C 时 key 是 ç，按物理键位认
+  if (isMac ? mod && e.altKey && !e.shiftKey && e.code === 'KeyC' : mod && e.shiftKey && !e.altKey && k === 'c') return 'copyPath';
+  if (mod && !e.shiftKey && !e.altKey && k === 'l') return 'focusPath';
+  return null;
+}
+
+/** 文件区快捷键在右键菜单上的写法 */
+export const fileKeyLabels: Record<FileKeyAction, string> = isMac
+  ? { open: '⏎', up: '⌘↑', rename: 'F2', delete: '⌘⌫', newFolder: '⇧⌘N', refresh: '⌘R', copyPath: '⌥⌘C', focusPath: '⌘L' }
+  : {
+      open: 'Enter',
+      up: 'Alt+↑',
+      rename: 'F2',
+      delete: 'Delete',
+      newFolder: 'Ctrl+Shift+N',
+      refresh: 'F5',
+      copyPath: 'Ctrl+Shift+C',
+      focusPath: 'Ctrl+L',
+    };
+
 /**
  * 标记“按住能拖动窗口”的空白处。桌面端 Mac 隐藏了系统标题栏，窗口靠标签栏、状态栏顶部的空白拖动；
  * 只对元素本身生效，里面的按钮照常点击。网页端没有这回事，属性留着也无影响。

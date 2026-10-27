@@ -3,6 +3,9 @@ import {
   clickSelect,
   contextSelect,
   emptySelection,
+  extendTo,
+  findByPrefix,
+  jumpSelect,
   moveSelect,
   pruneSelection,
   selectAll,
@@ -103,5 +106,46 @@ describe('selectAll / pruneSelection', () => {
   it('都还在时原样返回，不触发重画', () => {
     const s = selectOnly('b');
     expect(pruneSelection(s, order)).toBe(s);
+  });
+});
+
+describe('按住拖动', () => {
+  it('按下时照单击算，拖到哪一行就从起点选到哪一行，往回拖跟着缩', () => {
+    const down = clickSelect(selectAll(emptySelection, order), order, 'b', plain);
+    let s = extendTo(down, order, 'e');
+    expect(ids(s)).toEqual(['b', 'c', 'd', 'e']);
+    expect(s.focus).toBe('e');
+    s = extendTo(down, order, 'a');
+    expect(ids(s)).toEqual(['a', 'b']);
+  });
+
+  it('按住 ⌘ 拖动，加在原来选中的后面', () => {
+    const down = clickSelect(selectOnly('a'), order, 'd', cmd);
+    expect(ids(extendTo(down, order, 'f'))).toEqual(['a', 'd', 'e', 'f']);
+  });
+});
+
+describe('jumpSelect', () => {
+  it('Home / End 跳到第一项、最后一项', () => {
+    expect(ids(jumpSelect(selectOnly('c'), order, 'first', false))).toEqual(['a']);
+    expect(ids(jumpSelect(selectOnly('c'), order, 'last', false))).toEqual(['f']);
+  });
+
+  it('按住 Shift 从起点选到头', () => {
+    expect(ids(jumpSelect(selectOnly('d'), order, 'last', true))).toEqual(['d', 'e', 'f']);
+    expect(ids(jumpSelect(selectOnly('c'), order, 'first', true))).toEqual(['a', 'b', 'c']);
+  });
+
+  it('列表为空时不变', () => {
+    expect(jumpSelect(emptySelection, [], 'first', false)).toBe(emptySelection);
+  });
+});
+
+describe('findByPrefix', () => {
+  it('第一个以输入开头的，不分大小写', () => {
+    const names = ['apt', 'auth.log', 'Kern.log', 'kern.log.1'];
+    expect(findByPrefix(names, 'au')).toBe(1);
+    expect(findByPrefix(names, 'ke')).toBe(2);
+    expect(findByPrefix(names, 'zz')).toBeNull();
   });
 });

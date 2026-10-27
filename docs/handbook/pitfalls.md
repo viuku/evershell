@@ -74,12 +74,19 @@ russh 要求字节流能跨线程（`Send`），浏览器的 WebSocket 不行。
 - **原因**：网页还没画出来时，WKWebView 自己铺一层白底。wry 只有在建窗口时设了 `background_color` 才关掉这层白底（私有属性 `drawsBackground`），露出窗口的底色。
 - **处理**：`apps/desktop/src-tauri/src/windows.rs` 建窗口时把界面当前的底色（前端读 `--content` 传过来）设成 `background_color`。没用“先藏起来、画好再显示”：窗口藏着时 WebKit 可能暂停绘制和定时器，反而更慢。
 
+### 拖进窗口的文件，网页里收不到（2026-10-26）
+
+- **症状**：从访达把文件拖进桌面端窗口，网页里的 `drop` 事件不来。
+- **原因**：Tauri 默认开着自己的拖放处理（窗口配置 `dragDropEnabled`）。wry 在 macOS 上接管了 WKWebView 的拖放，Tauri 的处理函数总是回“已处理”（tauri-runtime-wry 2.12 的 `with_drag_drop_handler`），网页这一层就收不到。导入连接窗口里的「或将文件拖到此处」按代码推断也是同样原因，没在改之前的桌面端上实际试过。
+- **处理**：主窗口在 `tauri.conf.json` 和 `tauri.macos.conf.json` 里都写 `"dragDropEnabled": false`（平台配置里的 `windows` 是整个数组替换，不是逐项合并，两处都要写）；代码里建的窗口（`apps/desktop/src-tauri/src/windows.rs`）调 `disable_drag_drop_handler()`。关掉以后网页拿到的是文件内容（`File`），拿不到本机路径。
+- **关掉以后要注意**：文件拖到没人接的地方（终端、状态栏），网页内核会把整个窗口换成那个文件，界面就没了。每个窗口启动时调 `guardStrayFileDrops()`（`packages/ui/src/core/upload-items.ts`）拦住；以后新加接拖放的地方，要在 `dragover` 和 `drop` 里自己 `preventDefault`。
+
 ### 网页里选的云盘文件读不出来，选了没反应（2026-10-25）
 
 - **症状**：所有者在编辑连接里点私钥的「选择…」，选了 OneDrive 里的私钥，界面上什么都没变。私钥文件没有隐藏。
 - **原因（按 WebKit 的已知问题推断，没在所有者的文件上确认）**：`<input type="file">` 选中的文件由 WKWebView 的网页进程去读。OneDrive、iCloud 里“仅在线”的文件本机只有占位，网页进程读不出内容（WebKit bug 191069、226090 是同一类问题），`file.text()` 失败。原来的代码没接住这个失败，所以看起来没反应。
 - **现在的处理**：桌面端选私钥改走 Rust：`apps/desktop/src-tauri/src/local_file.rs` 自己弹系统的选文件框（NSOpenPanel），再由应用进程读文件，系统会先把文件下载下来；前端接口是 `SshBackend.pickPrivateKeyFile`。网页端照旧用网页的选文件框，读失败时提示先把文件下载到本机。
-- **还没处理的**：上传文件、导入别的软件的配置、终端背景图还走网页的选文件框，云盘里“仅在线”的文件一样会读不出来，要改时照这个办法。
+- **还没处理的**：上传文件（选文件框和拖进文件区都是）、导入别的软件的配置、终端背景图还走网页读文件，云盘里“仅在线”的文件一样会读不出来，要改时照这个办法。拖进文件区上传的读不出来时，文件区会提示「无法读取…，已跳过」，不会没反应。
 
 ### 同步的 Tauri 命令没有 tokio 运行时，一 spawn 就整个应用闪退（2026-10-18）
 

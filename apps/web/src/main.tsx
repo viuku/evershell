@@ -1,4 +1,4 @@
-import { App, createMockBackend, type MenuItem, type SshBackend } from '@evershell/ui';
+import { App, createMockBackend, guardStrayFileDrops, type MenuItem, type SshBackend } from '@evershell/ui';
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RelaySettingsDialog, loadRelay } from './relay-bar';
@@ -32,6 +32,9 @@ function WebApp() {
     </>
   );
 }
+
+// 文件拖到没人接的地方时不让浏览器把页面换成那个文件
+guardStrayFileDrops();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

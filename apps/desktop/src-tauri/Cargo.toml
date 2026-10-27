@@ -29,6 +29,9 @@ env_logger = "0.11"
 keyring = "4"
 # 上传的远端路径走 HTTP 头，要 percent 编码
 percent-encoding = "2"
+# 打包传输：解开从服务器下载的 .tar.gz（src/unpack.rs）。都是 MIT / Apache-2.0；flate2 本来就在依赖树里
+tar = { version = "0.4", default-features = false }
+flate2 = "1"
 
 # 选私钥文件时自己弹系统的选文件框（src/local_file.rs）。Tauri 本来就带着这几个包，版本跟着它走
 [target.'cfg(target_os = "macos")'.dependencies]

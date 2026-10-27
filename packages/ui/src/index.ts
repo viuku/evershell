@@ -12,6 +12,7 @@ export type {
   ManagerWindowHost,
   MonitorDetail,
   MonitorSnapshot,
+  PermScope,
   PrivateKeyInfo,
   SecretStore,
   ShellHandlers,
@@ -30,6 +31,7 @@ export type { ManagerAppProps } from './components/manager/ManagerApp';
 /** 桌面端独立连接管理器窗口的界面，按需加载 */
 export const ManagerApp = lazy(() => import('./components/manager/ManagerApp'));
 export { connectStorageSync } from './core/storage';
+export { guardStrayFileDrops } from './core/upload-items';
 export { createMockBackend } from './mock/mock-backend';
 export { browserDownload } from './core/browser-download';
 export { isMac } from './core/platform';

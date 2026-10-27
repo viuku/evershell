@@ -9,6 +9,7 @@ import {
   type LocalConfigFiles,
   type MonitorDetail,
   type MonitorSnapshot,
+  type PermScope,
   type PrivateKeyInfo,
   type ProcDetail,
   type SecretStore,
@@ -21,6 +22,7 @@ import {
 } from '../types';
 import { FakeShell } from './fake-shell';
 import { MockFs } from './mock-fs';
+import { basename, joinPath } from '../core/paths';
 import { browserDownload } from '../core/browser-download';
 import { encodeUtf8 } from '../core/importers/text';
 
@@ -434,6 +436,32 @@ class MockSession implements SshSession {
     // 小文件按文本存下来，编辑器保存后再打开能看到改过的内容
     const content = data.size <= 1024 * 1024 ? await data.text() : null;
     this.fs.writeFile(remotePath, data.size, this.opts.user, content);
+  }
+
+  async chmod(path: string, mode: number, scope: PermScope): Promise<void> {
+    await delay(120);
+    this.fs.chmod(path, mode, scope);
+  }
+
+  async removeFast(paths: string[]): Promise<void> {
+    await delay(150);
+    for (const p of paths) this.fs.remove(p);
+  }
+
+  async downloadDir(remotePath: string, onProgress?: (p: TransferProgress) => void): Promise<string> {
+    onProgress?.({ done: 0, total: 0 });
+    await this.roundTrip(300);
+    await simulateTransfer(this.fs.treeSize(remotePath), onProgress, this.slow);
+    return `~/Downloads/${basename(remotePath)}`;
+  }
+
+  async packDownload(dir: string, names: string[], onProgress?: (p: TransferProgress) => void): Promise<string[]> {
+    onProgress?.({ done: 0, total: 0 });
+    await this.roundTrip(600);
+    // 压缩后大约是原来的三分之一
+    const total = Math.max(1024, Math.round(names.reduce((n, name) => n + this.fs.treeSize(joinPath(dir, name)), 0) / 3));
+    await simulateTransfer(total, onProgress, this.slow);
+    return names.map((n) => `~/Downloads/${n}`);
   }
 
   async download(remotePath: string, onProgress?: (p: TransferProgress) => void): Promise<string> {

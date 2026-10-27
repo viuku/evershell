@@ -6,6 +6,7 @@ mod local_file;
 mod local_import;
 pub mod secrets;
 pub mod session;
+mod unpack;
 mod windows;
 
 use tauri::{Manager, WindowEvent};
@@ -54,6 +55,10 @@ pub fn run() {
             commands::sftp_read,
             commands::sftp_upload,
             commands::sftp_download,
+            commands::sftp_download_dir,
+            commands::sftp_pack_download,
+            commands::sftp_chmod,
+            commands::ssh_remove_fast,
             commands::save_download,
             commands::import_find_local,
             commands::import_find_local_commands,

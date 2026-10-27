@@ -8,6 +8,7 @@ import type {
   ManagerWindowHost,
   MonitorDetail,
   MonitorSnapshot,
+  PermScope,
   PrivateKeyInfo,
   SecretStore,
   SshBackend,
@@ -163,6 +164,26 @@ class TauriSession implements SshSession {
     const progress = new Channel<TransferProgress>();
     progress.onmessage = (p) => onProgress?.(p);
     return call('sftp_download', { id: this.id, path: remotePath, onProgress: progress });
+  }
+
+  downloadDir(remotePath: string, onProgress?: (p: TransferProgress) => void): Promise<string> {
+    const progress = new Channel<TransferProgress>();
+    progress.onmessage = (p) => onProgress?.(p);
+    return call('sftp_download_dir', { id: this.id, path: remotePath, onProgress: progress });
+  }
+
+  packDownload(dir: string, names: string[], onProgress?: (p: TransferProgress) => void): Promise<string[]> {
+    const progress = new Channel<TransferProgress>();
+    progress.onmessage = (p) => onProgress?.(p);
+    return call('sftp_pack_download', { id: this.id, dir, names, onProgress: progress });
+  }
+
+  chmod(path: string, mode: number, scope: PermScope): Promise<void> {
+    return call('sftp_chmod', { id: this.id, path, mode, scope });
+  }
+
+  removeFast(paths: string[]): Promise<void> {
+    return call('ssh_remove_fast', { id: this.id, paths });
   }
 
   private enqueue(op: () => Promise<unknown>): void {

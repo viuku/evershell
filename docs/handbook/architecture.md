@@ -91,7 +91,9 @@ packages/ui  ── 界面和业务逻辑（React + TS），桌面端、网页�
 | 颜色 | `packages/ui/src/styles/base.css` 的变量，含义见下表；**改一个颜色常常要改好几处**（[pitfalls.md](pitfalls.md#颜色要一起改的几处)） | `grep -rn "var(--muted)" packages/ui/src/styles` 看谁在用 |
 | 终端配色、背景预设 | `packages/ui/src/core/terminal-appearance.ts` | |
 | 某个区域的样式 | `packages/ui/src/styles/` 下同名文件（sidebar、terminal、panels、commands、editor、newtab、manager） | 组件里的 `className` 搜到 CSS |
-| 快捷键、按键文字、拖动区域 | `packages/ui/src/core/platform.ts` | |
+| 快捷键、按键文字、拖动区域 | `packages/ui/src/core/platform.ts`；文件区的快捷键是其中的 `fileKeyAction` | |
+| 列表多选（连接管理器、文件区） | `packages/ui/src/core/selection.ts`；文件区按住拖动连选是 `components/panels/use-drag-select.ts` | |
+| 文件区上传（选文件、拖进来、同名判断） | `packages/ui/src/core/upload-items.ts` + `core/file-browser.ts` 的 `upload` | |
 | 本地保存的设置和数据 | `packages/ui/src/core/storage.ts` 的 `PersistentStore`；全部清单见 [data.md](data.md) | `grep -rn "new PersistentStore" packages/ui/src` |
 | 连接列表、最近连接、快捷命令、历史 | `packages/ui/src/core/*-store.ts` | `ls packages/ui/src/core` |
 | 会话、标签、监控数据怎么流动 | `packages/ui/src/core/session-manager.ts` | |

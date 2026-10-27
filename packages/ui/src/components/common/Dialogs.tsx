@@ -19,6 +19,8 @@ export interface PromptOptions {
 export interface ConfirmOptions {
   title: string;
   message: string;
+  /** 正文下面等宽显示的一段，比如将要在服务器上执行的命令 */
+  detail?: string;
   okText?: string;
   danger?: boolean;
 }
@@ -199,6 +201,7 @@ function ConfirmDialog({ pending, done }: { pending: Extract<Pending, { kind: 'c
     <Modal title={opts.title} onClose={() => finish(false)} width={380} tone="sheet">
       <div className="dialog-body">
         <p className="dialog-message">{opts.message}</p>
+        {opts.detail && <pre className="dialog-detail mono">{opts.detail}</pre>}
         <div className="dialog-actions">
           <button type="button" className="btn" onClick={() => finish(false)}>
             取消

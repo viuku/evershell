@@ -6,6 +6,7 @@ import { clearFinishedTransfers, transfersStore, type TransferItem } from '../..
 function statusText(t: TransferItem): string {
   if (t.status === 'done') return `已完成 · ${formatBytesLong(t.total)}`;
   if (t.status === 'error') return `失败 · ${t.error ?? ''}`;
+  if (t.total === 0 && t.waiting) return t.waiting;
   const pct = t.total > 0 ? Math.floor((t.done / t.total) * 100) : 0;
   const eta = t.speed > 0 ? formatEta((t.total - t.done) / t.speed) : '';
   return [`${pct}%`, t.speed > 0 ? formatRate(t.speed) : '', eta].filter(Boolean).join(' · ');

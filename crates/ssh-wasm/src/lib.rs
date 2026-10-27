@@ -10,8 +10,8 @@ use std::time::Duration;
 use js_sys::{Function, Uint8Array};
 use serde::Serialize;
 use ssh_core::{
-    Auth, ConnectConfig, Connection, HostKeyCheck, MonitorDetail, MonitorHandle, OutputAck, Sftp, ShellEvent,
-    TransferProgress,
+    Auth, ConnectConfig, Connection, HostKeyCheck, MonitorDetail, MonitorHandle, OutputAck, PermScope, Sftp,
+    ShellEvent, TransferProgress,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 use tokio::sync::{mpsc, oneshot};
@@ -218,6 +218,24 @@ impl WebSession {
 
     pub async fn rename(&self, from: String, to: String) -> Result<(), JsError> {
         self.sftp().await?.rename(&from, &to).await.map_err(js_err)
+    }
+
+    /// 改权限；scope 是 "self" / "all" / "dirs" / "files"（见 types.ts 的 PermScope）
+    pub async fn chmod(&self, path: String, mode: u32, scope: String) -> Result<(), JsError> {
+        let scope = match scope.as_str() {
+            "self" => PermScope::Target,
+            "all" => PermScope::All,
+            "dirs" => PermScope::Dirs,
+            "files" => PermScope::Files,
+            _ => return Err(JsError::new("权限的应用范围不正确")),
+        };
+        self.sftp().await?.chmod(&path, mode, scope).await.map_err(js_err)
+    }
+
+    /// 快速删除：服务器上执行一条 rm -rf（命令在内核里拼，路径加引号）
+    #[wasm_bindgen(js_name = removeFast)]
+    pub async fn remove_fast(&self, paths: Vec<String>) -> Result<(), JsError> {
+        self.conn.remove_fast(&paths).await.map_err(js_err)
     }
 
     /// 返回 FileEntry（见 types.ts），跟着符号链接走
