@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2023"],
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noEmit": true,
+    // Node 直接跑 .ts 要求相对导入写全扩展名，并且只用能直接擦掉的类型语法
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "skipLibCheck": true
+  },
+  "include": ["src", "test"],
+  // 端到端测试引用了界面包的代码，那边有自己的类型检查
+  "exclude": ["test/client-e2e.test.ts"]
+}

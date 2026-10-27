@@ -1,0 +1,25 @@
+{
+  "name": "@evershell/sync",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "dev": "node --env-file=dev.env --watch src/node.ts",
+    "dev:worker": "wrangler d1 migrations apply evershell-sync --local && wrangler dev --local --port 8791 --env-file=dev.env",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "hono": "4.13.13"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261013.1",
+    "typescript": "7.0.2",
+    "vitest": "5.0.4",
+    "wrangler": "4.150.0"
+  }
+}

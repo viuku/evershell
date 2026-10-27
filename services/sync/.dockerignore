@@ -1,0 +1,6 @@
+node_modules
+.wrangler
+.data
+.dev.vars
+dev.env
+test

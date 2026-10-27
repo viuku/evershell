@@ -19,6 +19,10 @@ log = "0.4"
 # russh 的定时器在浏览器里会 panic，打了补丁，见 vendor/README.md
 russh = { path = "vendor/russh" }
 
+# 云同步派生同步密码用 Argon2id（64 MiB）。调试版不开优化派生一次约 1 秒，开了约 70 毫秒（2026-10-28 在所有者的 Mac 上量的）
+[profile.dev.package.argon2]
+opt-level = 3
+
 # 网页端 WASM 包：优先体积
 [profile.wasm-release]
 inherits = "release"

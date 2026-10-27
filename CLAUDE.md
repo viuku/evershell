@@ -56,6 +56,7 @@ FinalShell 风格的 SSH 客户端：终端、文件管理、服务器监控在�
 | 桌面端 Rust `apps/desktop/src-tauri/src` | `scripts/test-sshd.sh start`，再 `scripts/check.sh desktop` | 增量 30 秒 |
 | 窗口外观、`tauri*.conf.json`、`capabilities/` | `scripts/mac-preview.sh` 截图看（[quality.md B](docs/handbook/quality.md#b-原生窗口只截图不操作)）；交互请所有者试 | 20 秒 |
 | 网页端 `apps/web`、`crates/ssh-wasm`、`services/relay-*` | `scripts/test-sshd.sh start`，再 `scripts/check.sh web` | 20 秒 |
+| 同步服务 `services/sync` | `scripts/check.sh sync`；部署前再用 `wrangler dev --local` 跑一遍（[sync-service.md](docs/handbook/sync-service.md#本机开发和测试)） | 5 秒 |
 | 规范体系的文档 | `scripts/check.sh docs` | 1 秒 |
 | 所有者要用新版 | `scripts/mac-reopen.sh`，并在 `CHANGELOG.md` 记一行（[release.md](docs/handbook/release.md#给所有者用新版)） | 几分钟 |
 
@@ -85,13 +86,13 @@ FinalShell 风格的 SSH 客户端：终端、文件管理、服务器监控在�
 | [兼容性](docs/handbook/compatibility.md) | SSH 算法和服务器、监控在各系统上、终端手测清单 |
 | [数据与迁移](docs/handbook/data.md) | 本机存了什么、格式版本和迁移规则、导入导出 |
 | [发布与版本](docs/handbook/release.md) | 交付新版给所有者、版本号、更新日志、签名和密钥 |
+| [同步服务](docs/handbook/sync-service.md) | 同步服务端的部署（Cloudflare、Docker）、配置、备份恢复、接口版本、额度 |
 | [开源与合规](docs/handbook/licensing.md) | GPL 义务、依赖的协议、外部贡献前要定的事 |
 | [环境速查](docs/handbook/environment.md) | 工具链、全部脚本、端口、Claude 环境里的怪癖 |
 | [已知坑](docs/handbook/pitfalls.md) | 第三方和平台的坑、还没解决的问题 |
 
 **还没写的分册**，到时候再写，不提前定规矩：
 
-- 同步服务（部署、备份恢复、接口版本、配额）：M2 开工前
 - 网页版与中转（鉴权、禁止访问内网、浏览器兼容）：M3 开工前
 - Windows（签名路线、WebView2）：M6 开工前
 - 手机（切后台断网、出口合规、App Store 和 GPL）：手机版开工前

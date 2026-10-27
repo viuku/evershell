@@ -9,6 +9,7 @@ import './styles/commands.css';
 import './styles/newtab.css';
 import './styles/manager.css';
 import './styles/monitor.css';
+import './styles/sync.css';
 import { DialogsProvider, useDialogs } from './components/common/Dialogs';
 import { TooltipLayer } from './components/common/Tooltip';
 import type { MenuItem } from './components/common/Menu';
@@ -21,6 +22,7 @@ import type { BottomTab } from './components/panels/BottomPanels';
 import { SessionView } from './components/SessionView';
 import { MonitorSidebar } from './components/sidebar/MonitorSidebar';
 import { StatusBar } from './components/StatusBar';
+import { SyncDialog } from './components/sync/SyncDialog';
 import { TabBar } from './components/TabBar';
 import { askServerPassword, resolveAuth } from './core/connect';
 import { KeyLibrary, migrateServerKeys } from './core/key-library';
@@ -34,6 +36,7 @@ import { SessionManager, type SessionInfo, type TerminalLook } from './core/sess
 import { isAppShortcut, shortcutLabel } from './core/platform';
 import { appearanceClass, appearanceMode, sidebarOpen, useEffectiveScheme } from './core/settings';
 import { useStore } from './core/store';
+import { startSync, syncUnavailableReason } from './core/sync';
 import { resolveScheme, tabNeedsEdge, terminalAppearance, terminalBgImage, toXtermTheme } from './core/terminal-appearance';
 import type { SshBackend } from './types';
 
@@ -91,6 +94,14 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
   useEffect(() => manager.applyLook(look), [manager, look]);
   useEffect(() => manager.setHostKeyPrompt((problem) => dialogs.hostKey(problem)), [manager, dialogs]);
   useEffect(() => manager.setPasswordPrompt((target) => askServerPassword(target, backend.secrets, dialogs)), [manager, backend, dialogs]);
+  // 云同步只在主窗口跑（docs/specs/sync.md），其他窗口改的数据经 store-sync 传过来
+  useEffect(() => startSync(backend), [backend]);
+  const [syncOpen, setSyncOpen] = useState(false);
+  const openSync = () => {
+    const reason = syncUnavailableReason();
+    if (reason) void dialogs.alert('云同步', reason);
+    else setSyncOpen(true);
+  };
 
   // 远程文件编辑：桌面端开独立的编辑窗口，网页端浮在主窗口里（两头用一对内存里的消息口）
   const editorPorts = useMemo(() => (backend.editorWindow ? null : localChannelPair()), [backend]);
@@ -280,6 +291,7 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
           .catch((e: unknown) => dialogs.alert('导出失败', e instanceof Error ? e.message : String(e)));
       },
     },
+    { label: '云同步…', onSelect: openSync },
     { type: 'separator' },
     { type: 'label', label: '外观' },
     { label: '跟随系统', checked: mode === 'system', onSelect: () => appearanceMode.set('system') },
@@ -307,6 +319,7 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
             monitor={monitor}
             onToggleSidebar={() => sidebarOpen.set(false)}
             onOpenInfo={(kind) => session && manager.openInfo(session.id, kind)}
+            onOpenSync={openSync}
             leadingInset={windowButtonsInset}
           />
         )}
@@ -367,6 +380,7 @@ function AppInner({ backend, menuExtras, windowButtonsInset }: AppProps) {
         {editing && (
           <EditConnectionDialog backend={backend} target={{ mode: 'edit', server: editing }} onClose={() => setEditing(null)} onSaved={() => {}} />
         )}
+        {syncOpen && <SyncDialog onClose={() => setSyncOpen(false)} />}
         {floatingEditor && editorPorts && (
           <Suspense fallback={null}>
             <FloatingEditor port={editorPorts[1]} onClosed={() => setFloatingEditor(false)} />

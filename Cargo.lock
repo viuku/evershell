@@ -155,6 +155,7 @@ dependencies = [
  "blake2",
  "cpufeatures 0.3.1",
  "password-hash",
+ "zeroize",
 ]
 
 [[package]]
@@ -1143,6 +1144,7 @@ dependencies = [
  "const-oid",
  "crypto-common 0.2.2",
  "ctutils",
+ "zeroize",
 ]
 
 [[package]]
@@ -1476,6 +1478,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "vault",
+ "zeroize",
 ]
 
 [[package]]
@@ -5533,11 +5536,15 @@ dependencies = [
 name = "vault"
 version = "0.1.0"
 dependencies = [
+ "argon2",
  "base64 0.22.1",
  "chacha20poly1305",
  "getrandom 0.3.4",
+ "hkdf",
+ "hmac",
  "serde",
  "serde_json",
+ "sha2 0.11.1",
  "thiserror 2.0.21",
  "zeroize",
 ]

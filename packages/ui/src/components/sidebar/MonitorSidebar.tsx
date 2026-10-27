@@ -5,6 +5,7 @@ import { procSort, sortProcs, type ProcSort } from '../../core/procs';
 import { NET_SAMPLES, PING_SAMPLES, type InfoKind, type MonitorState, type MonitorStore, type SessionInfo } from '../../core/session-manager';
 import { useMaybeStore, useStore } from '../../core/store';
 import type { MonitorSnapshot } from '../../types';
+import { SyncStatusButton } from '../sync/SyncStatusButton';
 import { SidebarToggle } from './SidebarToggle';
 
 interface Props {
@@ -13,6 +14,8 @@ interface Props {
   onToggleSidebar(): void;
   /** 打开当前会话的系统信息 / 进程 / 网络标签页，已经开着就切过去 */
   onOpenInfo(kind: InfoKind): void;
+  /** 单击「同步状态」：打开同步窗口 */
+  onOpenSync(): void;
   /** 顶部左边让出的宽度，给叠在窗口左上角的系统按钮 */
   leadingInset?: number;
 }
@@ -22,7 +25,7 @@ interface Props {
  * 三种状态：没有会话 / 会话断开 / 已连接；已连接但服务器不支持采集时显示提示。
  * 「系统信息」按钮、进程表、网速图点了各打开一个标签页
  */
-export function MonitorSidebar({ session, monitor, onToggleSidebar, onOpenInfo, leadingInset }: Props) {
+export function MonitorSidebar({ session, monitor, onToggleSidebar, onOpenInfo, onOpenSync, leadingInset }: Props) {
   const state = useMaybeStore(monitor);
   const connected = session?.status === 'connected';
   const snap = connected ? (state?.snapshot ?? null) : null;
@@ -45,10 +48,7 @@ export function MonitorSidebar({ session, monitor, onToggleSidebar, onOpenInfo, 
       <div className="sidebar__body">
         <div className="sidebar__row">
           <span>同步状态</span>
-          <span className="sidebar__sync muted" title="云同步将在后续版本中提供">
-            <span className="sidebar__dot" />
-            本地
-          </span>
+          <SyncStatusButton onOpen={onOpenSync} />
         </div>
         <div className="sidebar__row">
           <span>IP</span>

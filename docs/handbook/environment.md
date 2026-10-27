@@ -26,7 +26,7 @@ Claude App 起的 shell 读 `~/.zshrc` 不读 `~/.zprofile`，而 rustup 把 PAT
 | 脚本 | 干什么 |
 |---|---|
 | `scripts/setup.sh` | 新文件夹初始化：查工具链、装依赖（含中转服务的）、编 WASM 包 |
-| `scripts/check.sh ui\|core\|desktop\|web\|docs\|all` | 按改动范围跑检查，选哪档见 [quality.md](quality.md#验证分级) |
+| `scripts/check.sh ui\|core\|desktop\|web\|sync\|docs\|all` | 按改动范围跑检查，选哪档见 [quality.md](quality.md#验证分级) |
 | `scripts/check-guards.sh` | 守则的自动检查（check.sh 会调用） |
 | `scripts/check-docs.sh` | 规范体系里写的路径、链接、锚点是否对得上（check.sh docs 会调用） |
 | `scripts/test-sshd.sh start\|stop\|env\|status [--noisy]` | 本机临时 sshd，给连真服务器的测试用 |
@@ -54,6 +54,8 @@ Claude App 起的 shell 读 `~/.zshrc` 不读 `~/.zprofile`，而 rustup 把 PAT
 | 2222 / 2223 | test-sshd 普通版 / `--noisy` 版 | `PORT=xxxx scripts/test-sshd.sh start` |
 | 8787 | Node 中转默认端口（`PORT` 可改） | `check.sh web` 自己用随机的 18xxx |
 | 8788 | Workers 中转本地调试（wrangler dev） | |
+| 8790 | 同步服务 Node 版本机调试（`PORT` 可改） | 单元测试不占端口 |
+| 8791 | 同步服务 Workers 版本机调试（`npm run dev:worker`） | |
 
 查谁占着、是不是本文件夹开的：`lsof -nP -iTCP:5173 -sTCP:LISTEN` 拿进程号，再 `lsof -a -p <进程号> -d cwd` 看它在哪个文件夹。
 

@@ -1,0 +1,354 @@
+/* 云同步：左上角状态和同步窗口（设计稿方案 A，docs/specs/sync.md） */
+
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  margin-right: -6px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.sync-status:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.sync-status--warn,
+.sync-status--warn:hover {
+  color: var(--warn);
+}
+
+.sync-status__spin,
+.sync-card__spin,
+.sync-steps__spin {
+  color: var(--accent);
+}
+
+/* 状态圆点：未开启是空心圈，离线是实心灰点，两者要分得开 */
+.sync-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.sync-dot--big {
+  width: 9px;
+  height: 9px;
+  margin: 0 3px;
+}
+
+.sync-dot--off {
+  border: 1px solid var(--muted);
+  background: transparent;
+}
+
+.sync-dot--ok {
+  background: var(--ok);
+}
+
+.sync-dot--error,
+.sync-dot--relogin {
+  background: var(--warn);
+}
+
+.sync-muted {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ---------- 开启 ---------- */
+
+.sync-mode {
+  display: flex;
+  justify-content: center;
+  padding: 6px 20px 10px;
+}
+
+.sync-form {
+  align-items: center;
+  padding-bottom: 0;
+}
+
+/* 右边是“输入框 + 一行说明”时，标签对齐输入框，不对齐整块的中间 */
+.sync-form__top {
+  align-self: start;
+  padding-top: 4px;
+}
+
+.sync-form__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sync-form__stack > .field {
+  width: 100%;
+}
+
+.sync-form__value {
+  padding: 3px 0;
+}
+
+.sync-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.sync-note {
+  margin: 12px 20px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--hover);
+  color: var(--muted);
+  line-height: 1.6;
+  user-select: text;
+}
+
+.sync-warn {
+  display: flex;
+  gap: 6px;
+  margin: 8px 20px 0;
+  color: var(--warn);
+  line-height: 1.6;
+}
+
+.sync-warn__icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.sync-paragraph {
+  margin: 4px 20px 10px;
+  line-height: 1.6;
+}
+
+.sync-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px 16px;
+}
+
+.sync-actions__error {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--danger);
+}
+
+.sync-actions__flash {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ok);
+  text-align: right;
+}
+
+.sync-actions__main {
+  min-width: 64px;
+  margin-left: auto;
+}
+
+.sync-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 20px 24px;
+  list-style: none;
+}
+
+.sync-steps__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.sync-steps__item--on {
+  color: var(--text);
+}
+
+.sync-steps__ok {
+  color: var(--ok);
+}
+
+.sync-steps__dot {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+}
+
+.sync-steps__dot::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.sync-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 28px 0;
+  text-align: center;
+}
+
+.sync-done strong {
+  font-size: 14px;
+}
+
+.sync-done p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+  user-select: text;
+}
+
+.sync-done__icon {
+  color: var(--ok);
+}
+
+/* ---------- 开了以后 ---------- */
+
+.sync-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 10px 20px 0;
+}
+
+.sync-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--content);
+}
+
+.sync-card__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sync-info {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 8px 10px;
+  align-items: center;
+}
+
+.sync-info__label {
+  color: var(--muted);
+  text-align: right;
+}
+
+.sync-info__label--top {
+  align-self: start;
+  padding-top: 6px;
+}
+
+.sync-info__url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+
+.field.sync-info__name {
+  width: 220px;
+}
+
+.sync-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.sync-counts__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--hover);
+}
+
+.sync-counts__cell .sync-muted {
+  font-size: 11px;
+}
+
+.sync-devices__title {
+  margin-bottom: 6px;
+}
+
+.sync-devices__list {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--content);
+}
+
+.sync-devices__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+}
+
+.sync-devices__row + .sync-devices__row {
+  border-top: 1px solid var(--line2);
+}
+
+.sync-devices__icon {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.sync-devices__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-devices__when {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.sync-devices__empty {
+  padding: 9px 10px;
+}
+
+.sync-badge {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 17px;
+}

@@ -283,6 +283,66 @@ export interface SecretStore {
   remove(id: string): Promise<void>;
 }
 
+/** 同步密码派生用的参数，随账号存在同步服务器上 */
+export interface KdfParams {
+  alg: 'argon2id';
+  /** 内存，KiB */
+  mKib: number;
+  /** 轮数 */
+  t: number;
+  /** 线程数 */
+  p: number;
+}
+
+/** 一条同步记录的身份，整个绑进加密的附加数据：挪到别的账号、别的 id、改时间戳、改删除标记都解不开 */
+export interface RecordAad {
+  /** 规范化后的账号名（去掉首尾空白、转小写） */
+  account: string;
+  collection: string;
+  id: string;
+  hlc: string;
+  deleted: boolean;
+}
+
+/**
+ * 云同步要的平台能力（docs/specs/sync.md）。数据钥匙就是保险箱钥匙，在平台那一头（桌面端在 Rust 里），
+ * 所以加解密都走这里；同步密码派生出的包裹钥匙也只留在平台那一头，前端只拿到登录凭据和密文。
+ */
+export interface SyncPlatform {
+  /** 本机默认名称，如“MacBook Pro” */
+  deviceName(): Promise<string>;
+  /** 用同步密码派生登录凭据；不给盐时新生成盐、用默认参数（注册、改密码）。包裹钥匙留在平台内存里给 wrapKey / adoptKey 用 */
+  derive(password: string, account: string, salt?: string, kdf?: KdfParams): Promise<{ salt: string; kdf: KdfParams; authKey: string }>;
+  /** 用刚派生的包裹钥匙锁本机的保险箱钥匙（没有就先生成），返回 base64 */
+  wrapKey(): Promise<string>;
+  /** 解开云端的保险箱钥匙并换成它；本机条目用新钥匙重新加密。和本机是同一把时什么都不做 */
+  adoptKey(wrapped: string): Promise<void>;
+  /** 加密普通记录，返回 base64(nonce ‖ 密文 ‖ 标签) */
+  seal(items: { aad: RecordAad; plain: string }[]): Promise<string[]>;
+  /** 解密普通记录；认证失败的那条返回 null */
+  open(items: { aad: RecordAad; data: string }[]): Promise<(string | null)[]>;
+  /** 保险箱每条的摘要，不含 known_hosts 和 sync. 开头的条目 */
+  secretDigests(): Promise<Record<string, string>>;
+  /** 加密保险箱里的这条；不存在返回 null。机密原文不经过前端 */
+  sealSecret(id: string, aad: RecordAad): Promise<string | null>;
+  /** 解密后写进保险箱（aad.deleted 为 true 时删掉这条）；认证失败返回 false */
+  openSecret(id: string, aad: RecordAad, data: string): Promise<boolean>;
+  /**
+   * 第一次登录去重时把本机的一条机密挪到云端那条记录的 id 下：to 已经有了就不覆盖，只删掉 from；
+   * from 不存在时什么都不做。在平台那一头一次做完，原文不经过前端
+   */
+  moveSecret(from: string, to: string): Promise<void>;
+  /**
+   * 本机保险箱钥匙的校验值（由钥匙派生，不是钥匙本身）；还没有钥匙时为 null。
+   * 引擎记下登录时的值，对不上说明保险箱被重建过，要停下来重新登录，免得把“机密都没了”当成删除发出去
+   */
+  keyCheck(): Promise<string | null>;
+  /** 有值时这个平台暂时不同步，值是给用户看的原因（桌面端调试版：和正式版共用本机数据） */
+  readonly disabledReason?: string;
+  /** 预览用的假同步服务器；正式平台不给，用全局 fetch */
+  fetch?: typeof fetch;
+}
+
 /** 别的 SSH 软件默认存配置的位置，以及在那里读到的文件。一键导入用，见 core/importers/local.ts */
 export interface LocalConfigFiles {
   /** 来源，取值同 core/importers/types.ts 的 ImportSource；不认识的界面会忽略 */
@@ -315,6 +375,8 @@ export interface PrivateKeyInfo {
 export interface SshBackend {
   connect(opts: ConnectOptions, handlers: ShellHandlers): Promise<SshSession>;
   readonly secrets: SecretStore;
+  /** 云同步要的平台能力（docs/specs/sync.md）。网页端没有：M2 不支持同步 */
+  readonly sync?: SyncPlatform;
   /** 把本地生成的文件（如导出的连接）存给用户：桌面端存进“下载”目录并返回完整路径；网页端交给浏览器下载并返回文件名 */
   saveFile(name: string, data: Uint8Array): Promise<string>;
   /**

@@ -6,6 +6,9 @@
 //! - 钥匙放在哪由调用方决定：桌面端放系统钥匙串，以后开同步时再用主密码另锁一份（见需求文档 3.5）。
 //!
 //! 这里只做内存里的加解密和序列化，不碰文件系统，所以能编成 WASM 给网页端用。
+//! 云同步的加密（同步密码派生、包裹保险箱钥匙、同步记录）在 [`sync`]。
+
+pub mod sync;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -42,7 +45,9 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// 保险箱钥匙：32 字节随机数，丢弃时内存清零
+/// 保险箱钥匙：32 字节随机数，丢弃时内存清零（副本也一样）。
+/// 能拷贝是因为桌面端开同步时要拿一份出来，在保险箱的锁外面包裹它。
+#[derive(Clone)]
 pub struct VaultKey(Zeroizing<[u8; KEY_LEN]>);
 
 impl VaultKey {
@@ -68,7 +73,7 @@ impl VaultKey {
     }
 
     fn cipher(&self) -> XChaCha20Poly1305 {
-        XChaCha20Poly1305::new_from_slice(&self.0[..]).expect("钥匙固定 32 字节")
+        cipher(&self.0)
     }
 }
 
@@ -79,6 +84,9 @@ impl fmt::Debug for VaultKey {
 }
 
 /// 保险箱文件的内容。条目只在 [`Vault::get`] 时单条解密，平时内存里也是密文。
+/// 不要加 `deny_unknown_fields`：加字段不升格式版本，旧版本软件要能忽略新字段照常打开。
+/// 但旧版本写回文件时会丢掉它不认识的顶层字段，要在新旧版本之间保住的东西放成条目
+/// （比如同步用的保险箱编号 `sync.vault-id`，见 [`sync::VAULT_ID_ENTRY`]）。
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Vault {
     version: u32,
@@ -94,7 +102,7 @@ impl Vault {
     pub fn new(key: &VaultKey) -> Result<Self> {
         Ok(Self {
             version: VERSION,
-            check: seal(key, b"", CHECK_AAD)?,
+            check: seal(&key.cipher(), b"", CHECK_AAD)?,
             entries: BTreeMap::new(),
         })
     }
@@ -122,7 +130,7 @@ impl Vault {
 
     /// 这把钥匙能不能打开这个保险箱
     pub fn unlocks_with(&self, key: &VaultKey) -> bool {
-        open(key, &self.check, CHECK_AAD).is_ok_and(|plain| plain.is_empty())
+        open(&key.cipher(), &self.check, CHECK_AAD).is_ok_and(|plain| plain.is_empty())
     }
 
     pub fn contains(&self, id: &str) -> bool {
@@ -138,14 +146,14 @@ impl Vault {
         let Some(sealed) = self.entries.get(id) else {
             return Ok(None);
         };
-        let plain = open(key, sealed, entry_aad(id).as_bytes())?;
+        let plain = open(&key.cipher(), sealed, entry_aad(id).as_bytes())?;
         String::from_utf8(plain)
             .map(Some)
             .map_err(|_| Error::Format("条目内容不是 UTF-8 文本".into()))
     }
 
     pub fn set(&mut self, key: &VaultKey, id: &str, secret: &str) -> Result<()> {
-        let sealed = seal(key, secret.as_bytes(), entry_aad(id).as_bytes())?;
+        let sealed = seal(&key.cipher(), secret.as_bytes(), entry_aad(id).as_bytes())?;
         self.entries.insert(id.to_owned(), sealed);
         Ok(())
     }
@@ -154,17 +162,32 @@ impl Vault {
     pub fn remove(&mut self, id: &str) -> bool {
         self.entries.remove(id).is_some()
     }
+
+    /// 换钥匙：每条用旧钥匙解开、新钥匙重新加密，返回新的保险箱，自己不变。
+    /// 有一条解不开就整个失败，调用方可以什么都不改
+    pub fn rekey(&self, old: &VaultKey, new: &VaultKey) -> Result<Self> {
+        let mut next = Self::new(new)?;
+        for id in self.entries.keys() {
+            let secret = Zeroizing::new(self.get(old, id)?.unwrap_or_default());
+            next.set(new, id, &secret)?;
+        }
+        Ok(next)
+    }
 }
 
 fn entry_aad(id: &str) -> String {
     format!("{ENTRY_AAD_PREFIX}{id}")
 }
 
-fn seal(key: &VaultKey, plain: &[u8], aad: &[u8]) -> Result<String> {
+fn cipher(key: &[u8; KEY_LEN]) -> XChaCha20Poly1305 {
+    XChaCha20Poly1305::new_from_slice(key).expect("钥匙固定 32 字节")
+}
+
+/// 输出 base64(nonce ‖ 密文 ‖ 认证标签)
+fn seal(cipher: &XChaCha20Poly1305, plain: &[u8], aad: &[u8]) -> Result<String> {
     let mut nonce = [0u8; NONCE_LEN];
     random(&mut nonce)?;
-    let sealed = key
-        .cipher()
+    let sealed = cipher
         .encrypt(&XNonce::from(nonce), Payload { msg: plain, aad })
         .expect("明文长度远小于算法上限");
     let mut out = Vec::with_capacity(NONCE_LEN + sealed.len());
@@ -173,7 +196,7 @@ fn seal(key: &VaultKey, plain: &[u8], aad: &[u8]) -> Result<String> {
     Ok(B64.encode(out))
 }
 
-fn open(key: &VaultKey, sealed: &str, aad: &[u8]) -> Result<Vec<u8>> {
+fn open(cipher: &XChaCha20Poly1305, sealed: &str, aad: &[u8]) -> Result<Vec<u8>> {
     let raw = B64
         .decode(sealed)
         .map_err(|_| Error::Format("密文不是有效的 Base64".into()))?;
@@ -182,7 +205,7 @@ fn open(key: &VaultKey, sealed: &str, aad: &[u8]) -> Result<Vec<u8>> {
     }
     let (nonce, sealed) = raw.split_at(NONCE_LEN);
     let nonce: [u8; NONCE_LEN] = nonce.try_into().expect("上面检查过长度");
-    key.cipher()
+    cipher
         .decrypt(&XNonce::from(nonce), Payload { msg: sealed, aad })
         .map_err(|_| Error::WrongKey)
 }
@@ -266,6 +289,36 @@ mod tests {
         assert!(vault.remove("a"));
         assert!(!vault.remove("a"));
         assert!(vault.is_empty());
+    }
+
+    #[test]
+    fn rekey_moves_every_entry_to_the_new_key() {
+        let old = VaultKey::generate().unwrap();
+        let new = VaultKey::generate().unwrap();
+        let mut vault = Vault::new(&old).unwrap();
+        vault.set(&old, "a", "secret-a").unwrap();
+        vault.set(&old, "known_hosts", "host ssh-ed25519 AAAA").unwrap();
+
+        let next = vault.rekey(&old, &new).unwrap();
+        assert!(next.unlocks_with(&new) && !next.unlocks_with(&old));
+        assert_eq!(next.get(&new, "a").unwrap().as_deref(), Some("secret-a"));
+        assert_eq!(next.get(&new, "known_hosts").unwrap().as_deref(), Some("host ssh-ed25519 AAAA"));
+        // 原来的不变
+        assert_eq!(vault.get(&old, "a").unwrap().as_deref(), Some("secret-a"));
+
+        // 有一条解不开就整个失败
+        let mut broken = vault.clone();
+        broken.entries.insert("b".into(), vault.entries["a"].clone());
+        assert!(matches!(broken.rekey(&old, &new), Err(Error::WrongKey)));
+    }
+
+    #[test]
+    fn unknown_fields_are_ignored() {
+        // 以后加的字段，这个版本照样能打开
+        let key = VaultKey::generate().unwrap();
+        let mut json: serde_json::Value = serde_json::from_slice(&Vault::new(&key).unwrap().to_bytes()).unwrap();
+        json.as_object_mut().unwrap().insert("future".into(), serde_json::json!({"x": 1}));
+        assert!(Vault::parse(&serde_json::to_vec(&json).unwrap()).unwrap().unlocks_with(&key));
     }
 
     #[test]
