@@ -74,7 +74,9 @@ fn open_window(app: &AppHandle, spec: &Spec, background: Option<String>, visible
         .title(spec.title)
         .inner_size(spec.size.0, spec.size.1)
         .min_inner_size(spec.min.0, spec.min.1)
-        .visible(visible);
+        .visible(visible)
+        // 拖进窗口的文件交给网页处理（导入连接的拖放区），见 docs/handbook/pitfalls.md
+        .disable_drag_drop_handler();
     let builder = match background.as_deref().and_then(parse_color) {
         Some(color) => builder.background_color(color),
         None => builder,

@@ -194,12 +194,11 @@ assert(downProgress.at(-1)?.done === data.length, `下载进度不对：${JSON.s
 
 await session.rename(file, `${dir}/renamed.bin`);
 assert((await session.listDir(dir)).map((e) => e.name).join() === 'renamed.bin', '改名后列表不对');
-let err;
-await session.remove(dir, true).catch((e) => (err = e));
-assert(err instanceof Error && /目录不为空/.test(err.message), `删非空目录应报中文错误：${err}`);
-await session.remove(`${dir}/renamed.bin`, false);
+// 删目录连同里面的子目录和文件一起删
+await session.mkdir(`${dir}/sub`);
+await session.upload(`${dir}/sub/a.txt`, new Blob(['a']));
 await session.remove(dir, true);
-err = undefined;
+let err;
 await session.listDir(dir).catch((e) => (err = e));
 assert(err instanceof Error && /不存在/.test(err.message), `列已删目录应报不存在：${err}`);
 console.log(`SFTP：家目录 ${home}，上传/下载 ${(data.length / 1024).toFixed(0)}KB 一致，列目录、改名、删除正常`);

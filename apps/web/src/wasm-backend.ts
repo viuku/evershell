@@ -6,6 +6,7 @@ import type {
   HostKeyProblem,
   MonitorDetail,
   MonitorSnapshot,
+  PermScope,
   SecretStore,
   SshBackend,
   SshSession,
@@ -93,6 +94,14 @@ class WasmSession implements SshSession {
 
   rename(from: string, to: string): Promise<void> {
     return this.inner.rename(from, to).catch(rethrow);
+  }
+
+  chmod(path: string, mode: number, scope: PermScope): Promise<void> {
+    return this.inner.chmod(path, mode, scope).catch(rethrow);
+  }
+
+  removeFast(paths: string[]): Promise<void> {
+    return this.inner.removeFast(paths).catch(rethrow);
   }
 
   stat(path: string): Promise<FileEntry> {

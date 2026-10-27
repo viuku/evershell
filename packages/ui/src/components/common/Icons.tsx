@@ -101,6 +101,19 @@ export const ChevronDownIcon = (p: P) => (
   </Svg>
 );
 
+export const ChevronRightIcon = (p: P) => (
+  <Svg strokeWidth={2} {...p}>
+    <path d="M9 6l6 6-6 6" />
+  </Svg>
+);
+
+/** 往上的箭头落在一条横线上：上传 */
+export const UploadIcon = (p: P) => (
+  <Svg strokeWidth={2} {...p}>
+    <path d="M12 16V4M7 9l5-5 5 5M5 20h14" />
+  </Svg>
+);
+
 /** 实心闪电，颜色表示连接状态 */
 export const BoltIcon = (p: P) => (
   <Svg {...p}>

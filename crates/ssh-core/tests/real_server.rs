@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use ssh_core::{Auth, ConnectConfig, Connection, FileKind, HostKeyCheck, MonitorDetail, TransferProgress, connect_tcp};
+use ssh_core::{Auth, ConnectConfig, Connection, FileKind, HostKeyCheck, MonitorDetail, PermScope, TransferProgress, connect_tcp};
 
 async fn connect() -> Option<(Connection, String)> {
     let (Ok(addr), Ok(user), Ok(key)) = (
@@ -210,14 +210,21 @@ async fn sftp_roundtrip_in_tmpdir() {
     let names: Vec<String> = sftp.list_dir(&dir).await.unwrap().into_iter().map(|e| e.name).collect();
     assert_eq!(names, vec!["renamed.bin"]);
 
-    // 非空目录不能删，错误是中文
-    let err = sftp.remove(&dir, true).await.err().unwrap();
-    assert!(err.to_string().contains("目录不为空"), "{err}");
-
     sftp.remove(&renamed, false).await.unwrap();
     assert!(sftp.list_dir(&dir).await.unwrap().is_empty());
+
+    // 删目录连同里面的子目录、空目录、文件一起删；里面指向外面的符号链接只删链接，它指向的目录还在
+    let outside = format!("{dir}-outside");
+    let _ = std::fs::remove_dir_all(&outside);
+    std::fs::create_dir_all(format!("{outside}/kept")).unwrap();
+    std::fs::create_dir_all(format!("{dir}/sub/deeper/empty")).unwrap();
+    std::fs::write(format!("{dir}/sub/a.txt"), b"a").unwrap();
+    std::fs::write(format!("{dir}/sub/deeper/b.txt"), b"b").unwrap();
+    std::os::unix::fs::symlink(&outside, format!("{dir}/sub/link")).unwrap();
     sftp.remove(&dir, true).await.unwrap();
     assert!(!std::path::Path::new(&dir).exists());
+    assert!(std::path::Path::new(&format!("{outside}/kept")).exists(), "符号链接指向的目录不能跟着被删");
+    std::fs::remove_dir_all(&outside).unwrap();
 
     let err = sftp.list_dir(&dir).await.err().unwrap();
     assert!(err.to_string().contains("不存在"), "{err}");
@@ -482,4 +489,83 @@ mod upload {
         std::fs::remove_dir_all(&dir).unwrap();
         conn.disconnect().await.unwrap();
     }
+}
+
+#[tokio::test]
+async fn chmod_remove_fast_and_pack() {
+    use std::os::unix::fs::PermissionsExt;
+    let Some((conn, _user)) = connect().await else { return };
+    let sftp = conn.sftp().await.unwrap();
+
+    let tmp = std::env::temp_dir();
+    let tmp = tmp.to_str().unwrap().trim_end_matches('/');
+    let dir = format!("{tmp}/ssh-core-fileops-{}", std::process::id());
+    let _ = std::fs::remove_dir_all(&dir);
+    let tree = format!("{dir}/tree");
+    std::fs::create_dir_all(format!("{tree}/sub")).unwrap();
+    std::fs::write(format!("{tree}/a.txt"), b"a").unwrap();
+    std::fs::write(format!("{tree}/sub/b.txt"), b"b").unwrap();
+    // 树里有一个指向外面的符号链接，递归改权限时不能顺着它改到外面
+    let outside = format!("{dir}/outside.txt");
+    std::fs::write(&outside, b"o").unwrap();
+    std::fs::set_permissions(&outside, std::fs::Permissions::from_mode(0o600)).unwrap();
+    std::os::unix::fs::symlink(&outside, format!("{tree}/link")).unwrap();
+    for d in [&tree, &format!("{tree}/sub")] {
+        std::fs::set_permissions(d, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let mode = |p: &str| std::fs::symlink_metadata(p).unwrap().permissions().mode() & 0o7777;
+
+    // 文件夹排在它里面的内容前面，链接是链接
+    let walked = sftp.walk(&tree).await.unwrap();
+    let names: Vec<&str> = walked.iter().map(|(r, _)| r.as_str()).collect();
+    let at = |n: &str| names.iter().position(|x| *x == n).unwrap_or_else(|| panic!("缺 {n}：{names:?}"));
+    assert!(at("sub") < at("sub/b.txt"), "{names:?}");
+    assert_eq!(walked[at("link")].1.kind, FileKind::Link);
+    assert!(!walked[at("a.txt")].1.group.is_empty(), "用户组应有值");
+
+    // 只改文件：文件夹不动
+    sftp.chmod(&tree, 0o640, PermScope::Files).await.unwrap();
+    assert_eq!(mode(&format!("{tree}/a.txt")), 0o640);
+    assert_eq!(mode(&format!("{tree}/sub/b.txt")), 0o640);
+    assert_eq!(mode(&tree), 0o755);
+    assert_eq!(mode(&format!("{tree}/sub")), 0o755);
+    // 只改文件夹（含它自己）：文件不动
+    sftp.chmod(&tree, 0o750, PermScope::Dirs).await.unwrap();
+    assert_eq!(mode(&tree), 0o750);
+    assert_eq!(mode(&format!("{tree}/sub")), 0o750);
+    assert_eq!(mode(&format!("{tree}/a.txt")), 0o640);
+    // 全部
+    sftp.chmod(&tree, 0o755, PermScope::All).await.unwrap();
+    assert_eq!(mode(&format!("{tree}/sub/b.txt")), 0o755);
+    // 只改它自己
+    sftp.chmod(&format!("{tree}/a.txt"), 0o600, PermScope::Target).await.unwrap();
+    assert_eq!(mode(&format!("{tree}/a.txt")), 0o600);
+    assert_eq!(mode(&format!("{tree}/sub/b.txt")), 0o755);
+    assert_eq!(mode(&outside), 0o600, "符号链接指向的文件不能被改");
+
+    // 打包：打出来是 gzip，服务器上的临时包只有自己能读
+    let archive = conn.pack(&dir, &["tree".to_string()]).await.unwrap();
+    let mut bytes = Vec::new();
+    sftp.download(&archive, &mut bytes, |_| {}).await.unwrap();
+    assert_eq!(&bytes[..2], &[0x1f, 0x8b], "应是 gzip");
+    assert_eq!(mode(&archive), 0o600, "临时包只有自己能读");
+    sftp.remove(&archive, false).await.unwrap();
+    let err = conn.pack(&dir, &["没有这个".to_string()]).await.err().unwrap();
+    assert!(err.to_string().contains("无法打包"), "{err}");
+
+    // 快速删除：名字里有空格、引号和 $(…) 也只删它
+    let odd = format!("{dir}/it's a $(touch {dir}/pwned)");
+    std::fs::create_dir_all(format!("{odd}/x")).unwrap();
+    std::fs::write(format!("{odd}/x/y"), b"y").unwrap();
+    conn.remove_fast(&[odd.clone(), tree.clone()]).await.unwrap();
+    assert!(!std::path::Path::new(&odd).exists());
+    assert!(!std::path::Path::new(&tree).exists());
+    assert!(!std::path::Path::new(&format!("{dir}/pwned")).exists(), "文件名里的命令不能被执行");
+    assert!(std::path::Path::new(&outside).exists());
+    // 不合格的路径不执行
+    assert!(conn.remove_fast(&["/".to_string()]).await.is_err());
+    assert!(conn.remove_fast(&[format!("{dir}/../x")]).await.is_err());
+
+    std::fs::remove_dir_all(&dir).unwrap();
+    conn.disconnect().await.unwrap();
 }

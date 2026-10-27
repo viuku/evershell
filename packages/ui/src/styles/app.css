@@ -451,6 +451,33 @@
   font-size: 11px;
 }
 
+/* 二级菜单：贴在那一项右边，打开时那一项保持高亮 */
+.menu__subwrap {
+  position: relative;
+}
+
+.menu__more {
+  margin-left: 16px;
+  opacity: 0.7;
+}
+
+.menu__item--open {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.menu__sub {
+  position: absolute;
+  top: -5px;
+  left: calc(100% + 1px);
+  min-width: 140px;
+}
+
+.menu__sub--left {
+  left: auto;
+  right: calc(100% + 1px);
+}
+
 /* ---------- 悬停提示（TooltipLayer） ---------- */
 
 .tip {
@@ -587,6 +614,21 @@
 
 .dialog-error {
   color: var(--danger);
+}
+
+.dialog-detail {
+  max-height: 120px;
+  margin: 0;
+  padding: 6px 8px;
+  overflow: auto;
+  border-radius: 5px;
+  background: var(--content);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
 }
 
 .dialog-actions {

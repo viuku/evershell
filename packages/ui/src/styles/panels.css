@@ -141,11 +141,22 @@
   flex: 1 1 200px;
 }
 
-.files__table {
+.files__body {
   position: relative;
   flex: 1 1 0;
   min-height: 0;
+}
+
+/* 文件列表本身接收键盘焦点，行不接收（core/platform.ts 的 fileKeyAction） */
+.files__table {
+  position: absolute;
+  inset: 0;
   overflow: auto;
+  outline: none;
+}
+
+.files__table:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 /* 进目录要等一会儿时，文件表中间一个“加载中”的小框（照 FinalShell） */
@@ -195,6 +206,9 @@
 .files__row {
   position: relative;
   height: 21px;
+  /* 按住拖动连选时不要选中文字；键盘移动时滚到表头下面，不被表头挡住 */
+  user-select: none;
+  scroll-margin-top: 22px;
 }
 
 /* 双击打开文件时，那一行底下一条进度（读进编辑器要时间，网络慢时不至于像没点上） */
@@ -226,9 +240,58 @@
   }
 }
 
-.files__row:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+/* 删除整个文件夹这类要等一会儿的操作：盖在文件表中间，列表滚到哪都看得见 */
+.files__busy {
+  position: absolute;
+  inset: 22px 0 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+/* 从访达拖文件进来：拖在空白处或文件上时整个文件表描一圈虚线，拖在文件夹上时只高亮那一行 */
+.files__drop-frame {
+  position: absolute;
+  inset: 22px 0 0;
+  border: 2px dashed var(--accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  pointer-events: none;
+}
+
+.files__drop-tip {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.files__drop-tip svg {
+  flex: 0 0 auto;
+}
+
+.files__inner .grid-row.files__row--drop,
+.tree__row.tree__row--drop {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/* 选中的行（蓝底白字）被拖上去：底色不变，换一圈白边 */
+.files__inner .grid-row--on.files__row--drop,
+.tree__row--on.tree__row--drop {
+  background: var(--accent);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85);
 }
 
 .files__name {
@@ -381,4 +444,127 @@
   justify-content: flex-end;
   gap: 8px;
   padding-top: 6px;
+}
+
+/* ---------- 文件权限对话框（PermissionsDialog，设计稿方案 A） ---------- */
+
+.perm__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 16px 12px;
+  border-bottom: 1px solid var(--line2);
+}
+
+.perm__head svg {
+  flex: 0 0 auto;
+}
+
+.perm__title {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.perm__name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.perm__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+}
+
+.perm__owners {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 52px minmax(0, 1fr);
+  align-items: center;
+}
+
+.perm__table {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--content);
+}
+
+.perm__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 50px 50px 50px 40px;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--line2);
+}
+
+.perm__row--head {
+  background: var(--zebra);
+}
+
+.perm__cell {
+  display: flex;
+  justify-content: center;
+}
+
+.perm__digit {
+  font-weight: 600;
+}
+
+.perm__special {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 28px;
+  padding: 0 10px;
+  background: var(--zebra);
+}
+
+.perm__special label,
+.perm__check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.perm__line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.perm__octal {
+  width: 58px;
+}
+
+.perm__octal[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.perm__symbolic {
+  font-size: 11.5px;
+}
+
+.perm__presets {
+  margin-left: auto;
+}
+
+.perm__range {
+  width: 128px;
+  margin-left: auto;
+}
+
+.perm__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line2);
+}
+
+.perm__summary {
+  flex: 1 1 auto;
 }

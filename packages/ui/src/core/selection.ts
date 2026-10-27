@@ -2,6 +2,7 @@
 // - 单击只选这一项；按住 ⌘（其他系统 Ctrl）单击加选或取消这一项；
 // - 按住 Shift 单击，选中从起点到这一项的一整段，之前 ⌘ 加选的保留；再 Shift 单击别处，这一段跟着变；
 // - ↑↓ 移动，按住 Shift 时往上下扩大或缩小这一段；全选选中当前看得见的所有行。
+// - 在行上按住左键上下拖动（文件区，照 FinalShell）：按下时照单击算，拖到哪一行就从起点选到哪一行。
 // 列表顺序（看得见的行）由调用方传入，这里只管算选中了哪些。
 
 export interface Selection {
@@ -32,7 +33,8 @@ function span(order: readonly string[], a: string, b: string): string[] {
   return order.slice(Math.min(i, j), Math.max(i, j) + 1);
 }
 
-function extendTo(sel: Selection, order: readonly string[], id: string): Selection {
+/** 起点到 id 这一段加上 base 里原有的；没有起点时只选 id。Shift 单击、按住拖动都用它 */
+export function extendTo(sel: Selection, order: readonly string[], id: string): Selection {
   const anchor = sel.anchor !== null && order.includes(sel.anchor) ? sel.anchor : null;
   if (anchor === null) return selectOnly(id);
   return { ...sel, ids: new Set([...sel.base, ...span(order, anchor, id)]), focus: id, anchor };
@@ -67,6 +69,22 @@ export function moveSelect(sel: Selection, order: readonly string[], delta: 1 | 
   // 没有起点（比如起点被折叠起来了）就从当前这一项算起
   const anchor = sel.anchor !== null && order.includes(sel.anchor) ? sel.anchor : (order[at] ?? null);
   return extendTo({ ...sel, anchor }, order, next);
+}
+
+/** Home / End：跳到第一项或最后一项；extend：按住 Shift，从起点选到那里 */
+export function jumpSelect(sel: Selection, order: readonly string[], to: 'first' | 'last', extend: boolean): Selection {
+  const next = to === 'first' ? order[0] : order[order.length - 1];
+  if (next === undefined) return sel;
+  if (!extend) return selectOnly(next);
+  const anchor = sel.anchor !== null && order.includes(sel.anchor) ? sel.anchor : (sel.focus ?? next);
+  return extendTo({ ...sel, anchor }, order, next);
+}
+
+/** 直接打字跳转：第一个以 prefix 开头的（不分大小写）；没有时返回 null */
+export function findByPrefix(labels: readonly string[], prefix: string): number | null {
+  const p = prefix.toLocaleLowerCase();
+  const i = labels.findIndex((l) => l.toLocaleLowerCase().startsWith(p));
+  return i < 0 ? null : i;
 }
 
 /** 全选看得见的行 */

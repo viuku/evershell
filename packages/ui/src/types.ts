@@ -214,7 +214,15 @@ export interface FileEntry {
   perm: string;
   /** 用户名；拿不到时为 uid 数字的字符串 */
   owner: string;
+  /** 用户组名；拿不到时为 gid 数字的字符串 */
+  group: string;
 }
+
+/**
+ * 改权限时连同文件夹里的内容怎么改：self 只改它自己；all 它自己和里面的全部；
+ * dirs 它自己和里面的文件夹；files 只改里面的文件、不改它自己。不是文件夹时都只改它自己
+ */
+export type PermScope = 'self' | 'all' | 'dirs' | 'files';
 
 export interface TransferProgress {
   done: number;
@@ -250,6 +258,20 @@ export interface SshSession {
   upload(remotePath: string, data: Blob, onProgress?: (p: TransferProgress) => void): Promise<void>;
   /** 桌面端保存到“下载”目录并返回本地路径；网页端交给浏览器下载并返回文件名 */
   download(remotePath: string, onProgress?: (p: TransferProgress) => void): Promise<string>;
+  /** 改权限，mode 是低 12 位（含 SUID、SGID、粘滞位）；递归时不跟进符号链接（docs/specs/file-ops.md） */
+  chmod(path: string, mode: number, scope: PermScope): Promise<void>;
+  /** 快速删除：服务器上执行一条 rm -rf 删掉 paths（绝对路径）。命令由内核拼，路径加引号 */
+  removeFast(paths: string[]): Promise<void>;
+  /**
+   * 下载整个文件夹到“下载”目录，返回本机路径；列文件夹内容时进度的 total 为 0。
+   * 网页端没有这项（浏览器存不了文件夹）
+   */
+  downloadDir?(remotePath: string, onProgress?: (p: TransferProgress) => void): Promise<string>;
+  /**
+   * 打包传输：服务器上把 dir 里的 names 打成 .tar.gz，下载后解压到“下载”目录，返回解压出来的每一项。
+   * 打包时进度的 total 为 0。网页端没有这项
+   */
+  packDownload?(dir: string, names: string[], onProgress?: (p: TransferProgress) => void): Promise<string[]>;
 }
 
 /** 密码、私钥这类机密的保存位置。桌面端是加密的保险箱（钥匙在系统钥匙串里），网页端不支持。 */

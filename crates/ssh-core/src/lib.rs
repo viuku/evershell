@@ -10,6 +10,7 @@ mod flow;
 pub mod keys;
 pub mod known_hosts;
 pub mod monitor;
+pub mod remote_cmd;
 pub mod sftp;
 
 use std::borrow::Cow;
@@ -30,7 +31,7 @@ pub use monitor::{
     CpuDetail, CpuGroup, IfaceStat, MonitorDetail, MonitorHandle, MonitorSnapshot, ProcDetail, SocketRow, SocketTable,
     SystemInfo,
 };
-pub use sftp::{FileEntry, FileKind, Sftp, TransferProgress};
+pub use sftp::{FileEntry, FileKind, PermScope, Sftp, TransferProgress};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -394,6 +395,26 @@ impl Connection {
             }
         }
         Ok(out)
+    }
+
+    /// 快速删除：一条 `rm -rf` 删掉 paths（绝对路径）。命令怎么拼、怎么防注入见 `remote_cmd`
+    pub async fn remove_fast(&self, paths: &[String]) -> Result<()> {
+        let out = self.exec(&remote_cmd::rm_rf(paths)?).await?;
+        if out.exit_code == Some(0) {
+            return Ok(());
+        }
+        Err(Error::Sftp(format!("删除失败：{}", remote_cmd::failure_reason(&out.stderr, out.exit_code))))
+    }
+
+    /// 打包传输的第一步：把 dir 里的 names 在服务器上打成 .tar.gz，返回临时包的路径。
+    /// 只有登录用户自己能读；下载完由调用方删掉
+    pub async fn pack(&self, dir: &str, names: &[String]) -> Result<String> {
+        let out = self.exec(&remote_cmd::pack(dir, names)?).await?;
+        let path = out.stdout_lossy();
+        if out.exit_code == Some(0) && path.starts_with('/') && !path.contains('\n') {
+            return Ok(path);
+        }
+        Err(Error::Sftp(format!("服务器上无法打包：{}", remote_cmd::failure_reason(&out.stderr, out.exit_code))))
     }
 
     /// SFTP 会话。第一次调用时打开，之后返回同一个。

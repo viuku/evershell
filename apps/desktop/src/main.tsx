@@ -1,4 +1,4 @@
-import { App, connectStorageSync, EditorApp, isMac, ManagerApp } from '@evershell/ui';
+import { App, connectStorageSync, EditorApp, guardStrayFileDrops, isMac, ManagerApp } from '@evershell/ui';
 import { StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { editorHost, managerHost, storageSync, tauriBackend, windowKind } from './tauri-backend';
@@ -8,6 +8,9 @@ const windowButtonsInset = isMac ? 78 : undefined;
 
 // 主窗口、编辑窗口、连接管理器共用本地数据，一个窗口写了通知其他窗口
 connectStorageSync(storageSync);
+
+// 文件拖到没人接的地方时不让网页内核把窗口换成那个文件
+guardStrayFileDrops();
 
 // 几个窗口加载同一个页面，按窗口标签决定显示哪个（src-tauri/src/windows.rs）
 const kind = windowKind();

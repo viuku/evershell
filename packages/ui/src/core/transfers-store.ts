@@ -16,6 +16,8 @@ export interface TransferItem {
   error: string | null;
   /** 最近一段时间的速率，字节/秒 */
   speed: number;
+  /** 还不知道总大小时（服务器上正在打包、正在统计文件夹）显示的话 */
+  waiting: string | null;
   startedAt: number;
   updatedAt: number;
 }
@@ -27,18 +29,22 @@ function patch(id: string, p: Partial<TransferItem>): void {
   transfersStore.set((list) => list.map((t) => (t.id === id ? { ...t, ...p } : t)));
 }
 
-/** 包一层：登记队列项，把进度回调接到 store 上 */
+/**
+ * 包一层：登记队列项，把进度回调接到 store 上。
+ * 一开始不知道总大小时 total 给 0，waiting 是这段时间显示的话（「正在服务器上打包…」）
+ */
 export async function trackTransfer<T>(
   dir: 'up' | 'down',
   name: string,
   route: string,
   total: number,
   run: (onProgress: (p: TransferProgress) => void) => Promise<T>,
+  waiting: string | null = null,
 ): Promise<T> {
   const id = newId('xfr');
   const now = Date.now();
   transfersStore.set((list) => [
-    { id, dir, name, route, done: 0, total, status: 'running', error: null, speed: 0, startedAt: now, updatedAt: now },
+    { id, dir, name, route, done: 0, total, status: 'running', error: null, speed: 0, waiting, startedAt: now, updatedAt: now },
     ...list,
   ]);
   let lastAt = now;

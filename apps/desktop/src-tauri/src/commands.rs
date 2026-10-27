@@ -6,7 +6,10 @@ use std::time::{Duration, Instant};
 
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
-use ssh_core::{Auth, FileEntry, HostKeyProblem, MonitorDetail, MonitorSnapshot, ShellEvent, SystemInfo, TransferProgress};
+use ssh_core::{
+    Auth, FileEntry, FileKind, HostKeyProblem, MonitorDetail, MonitorSnapshot, PermScope, ShellEvent, SystemInfo,
+    TransferProgress,
+};
 use tauri::ipc::{Channel, InvokeBody, InvokeResponseBody, JavaScriptChannelId, Request};
 use tauri::{AppHandle, Manager, State, Webview};
 
@@ -14,6 +17,7 @@ use crate::local_file::{self, PickedFile};
 use crate::local_import::{self, Dirs, LocalConfig, Platform};
 use crate::secrets::Secrets;
 use crate::session::{self, ConnectParams, SessionManager};
+use crate::unpack;
 
 /// 原始字节请求（write / upload）的元数据放在请求头里，正文留给字节本身
 const SESSION_HEADER: &str = "x-session";
@@ -323,6 +327,130 @@ pub async fn sftp_download(
     }
 }
 
+/// 下载整个文件夹到"下载"目录，重名时文件夹名加序号，返回本机路径。符号链接不下；
+/// 服务器给的名字不像正常文件名的跳过，不会写到下载目录外面（docs/specs/file-ops.md）
+#[tauri::command]
+pub async fn sftp_download_dir(
+    app: AppHandle,
+    state: State<'_, SessionManager>,
+    id: String,
+    path: String,
+    on_progress: Channel<TransferProgress>,
+) -> Result<String, String> {
+    use tokio::io::AsyncWriteExt;
+
+    let sftp = sftp(&state, &id).await?;
+    let downloads = download_dir(&app)?;
+    // 先列全、算出总大小，进度才有意义；列的时候回调里 total 为 0
+    let _ = on_progress.send(TransferProgress { done: 0, total: 0 });
+    let entries = sftp.walk(&path).await.map_err(|e| e.to_string())?;
+    let total: u64 = entries.iter().filter(|(_, e)| e.kind == FileKind::File).map(|(_, e)| e.size).sum();
+    let base = path.trim_end_matches('/');
+    let name = base.rsplit('/').next().filter(|s| !s.is_empty()).unwrap_or("download");
+    let root = create_unique_dir(&downloads, name).await?;
+
+    let mut done = 0u64;
+    let mut throttle = ProgressThrottle::default();
+    for (rel, entry) in entries {
+        let Some(local_rel) = unpack::local_relative(&rel) else {
+            log::warn!("{base} 里有名字不正常的项目，已跳过：{rel:?}");
+            continue;
+        };
+        let local = root.join(local_rel);
+        match entry.kind {
+            FileKind::Dir => {
+                tokio::fs::create_dir_all(&local).await.map_err(|e| format!("无法在下载目录创建文件夹：{e}"))?;
+            }
+            FileKind::File => {
+                let mut file =
+                    tokio::fs::File::create(&local).await.map_err(|e| format!("无法在下载目录创建文件：{e}"))?;
+                let before = done;
+                let n = sftp
+                    .download(&format!("{base}/{rel}"), &mut file, |p| {
+                        let all = TransferProgress { done: before + p.done, total };
+                        if throttle.due(all) {
+                            let _ = on_progress.send(all);
+                        }
+                    })
+                    .await
+                    .map_err(|e| format!("{rel}：{e}"))?;
+                file.flush().await.map_err(|e| format!("无法写入下载目录：{e}"))?;
+                done += n;
+            }
+            FileKind::Link => {}
+        }
+    }
+    let _ = on_progress.send(TransferProgress { done: total, total });
+    Ok(root.to_string_lossy().into_owned())
+}
+
+/// 打包传输：服务器上把 dir 里的 names 打成 .tar.gz，下载到"下载"目录里的隐藏临时文件，
+/// 解压出来（`unpack`）后删掉两头的临时包。返回解压出来的每一项。打包时回调里 total 为 0
+#[tauri::command]
+pub async fn sftp_pack_download(
+    app: AppHandle,
+    state: State<'_, SessionManager>,
+    id: String,
+    dir: String,
+    names: Vec<String>,
+    on_progress: Channel<TransferProgress>,
+) -> Result<Vec<String>, String> {
+    use tokio::io::AsyncWriteExt;
+
+    let conn = state.connection(&id).map_err(|e| e.to_string())?;
+    let sftp = conn.sftp().await.map_err(|e| e.to_string())?;
+    let downloads = download_dir(&app)?;
+    let _ = on_progress.send(TransferProgress { done: 0, total: 0 });
+    let remote = conn.pack(&dir, &names).await.map_err(|e| e.to_string())?;
+
+    let (local, mut file) = create_unique(&downloads, &format!(".evershell-pack-{}.tar.gz", std::process::id())).await?;
+    let mut throttle = ProgressThrottle::default();
+    let got = sftp
+        .download(&remote, &mut file, |p| {
+            if throttle.due(p) {
+                let _ = on_progress.send(p);
+            }
+        })
+        .await
+        .map(drop)
+        .map_err(|e| e.to_string());
+    let flushed = file.flush().await.map_err(|e| format!("无法写入下载目录：{e}"));
+    drop(file);
+    // 服务器上的临时包成不成功都删
+    let _ = sftp.remove(&remote, false).await;
+    if let Err(e) = got.and(flushed) {
+        let _ = tokio::fs::remove_file(&local).await;
+        return Err(e);
+    }
+
+    let archive = local.clone();
+    let unpacked = tokio::task::spawn_blocking(move || unpack::unpack_tar_gz(&archive, &downloads))
+        .await
+        .map_err(|e| format!("解压失败：{e}"));
+    let _ = tokio::fs::remove_file(&local).await;
+    Ok(unpacked??.into_iter().map(|p| p.to_string_lossy().into_owned()).collect())
+}
+
+/// 改权限：mode 是低 12 位，scope 见 `PermScope`
+#[tauri::command]
+pub async fn sftp_chmod(
+    state: State<'_, SessionManager>,
+    id: String,
+    path: String,
+    mode: u32,
+    scope: PermScope,
+) -> Result<(), String> {
+    let sftp = sftp(&state, &id).await?;
+    sftp.chmod(&path, mode, scope).await.map_err(|e| e.to_string())
+}
+
+/// 快速删除：服务器上执行一条 rm -rf（命令在内核里拼，路径加引号）
+#[tauri::command]
+pub async fn ssh_remove_fast(state: State<'_, SessionManager>, id: String, paths: Vec<String>) -> Result<(), String> {
+    let conn = state.connection(&id).map_err(|e| e.to_string())?;
+    conn.remove_fast(&paths).await.map_err(|e| e.to_string())
+}
+
 /// 把前端生成的文件（如导出的连接）存进"下载"目录，重名时自动加序号，返回保存路径。
 /// WKWebView 不处理 `<a download>`，所以桌面端走这里。
 #[tauri::command]
@@ -444,6 +572,23 @@ async fn sftp(state: &SessionManager, id: &str) -> Result<ssh_core::Sftp, String
 
 fn header<'a>(request: &'a Request<'_>, name: &str) -> Option<&'a str> {
     request.headers().get(name).and_then(|v| v.to_str().ok())
+}
+
+fn download_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path().download_dir().map_err(|_| "未找到本机的下载目录".to_string())
+}
+
+/// 在 `dir` 下新建一个不与现有文件重名的文件夹：`nginx`、`nginx (1)`…
+async fn create_unique_dir(dir: &Path, name: &str) -> Result<PathBuf, String> {
+    for n in 0u32.. {
+        let candidate = if n == 0 { dir.join(name) } else { dir.join(format!("{name} ({n})")) };
+        match tokio::fs::create_dir(&candidate).await {
+            Ok(()) => return Ok(candidate),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("无法在下载目录创建文件夹：{e}")),
+        }
+    }
+    unreachable!()
 }
 
 /// 在 `dir` 下新建一个不与现有文件重名的文件：`a.txt`、`a (1).txt`、`a (2).txt`…

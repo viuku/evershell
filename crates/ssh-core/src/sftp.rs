@@ -47,6 +47,23 @@ pub struct FileEntry {
     pub perm: String,
     /// 用户名；拿不到时为 uid 数字的字符串
     pub owner: String,
+    /// 用户组名；拿不到时为 gid 数字的字符串
+    pub group: String,
+}
+
+/// 改权限时连同文件夹里的内容怎么改（docs/specs/file-ops.md）。路径不是文件夹时都只改它自己
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PermScope {
+    /// 只改它自己
+    #[serde(rename = "self")]
+    Target,
+    /// 它自己和里面的全部
+    All,
+    /// 它自己和里面的文件夹
+    Dirs,
+    /// 只改里面的文件，不改它自己
+    Files,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -148,18 +165,101 @@ impl Sftp {
         Ok(())
     }
 
-    /// 删除文件或空目录
+    /// 删除文件；目录连同里面的内容一起删，先删里面的，最后删目录本身。
+    /// 里面的符号链接只删链接本身，不跟进它指向的目录。里面某一项删不掉时停下，报那一项的路径
     pub async fn remove(&self, path: &str, is_dir: bool) -> Result<()> {
-        if is_dir {
-            self.raw.rmdir(path).await.map_err(|e| match e {
-                SftpError::Status(s) if s.status_code == StatusCode::Failure => {
-                    Error::Sftp("目录不为空或权限不足".into())
-                }
-                e => sftp_err(e),
-            })?;
-        } else {
+        if !is_dir {
             self.raw.remove(path).await.map_err(sftp_err)?;
+            return Ok(());
         }
+        // 深度优先，不用递归：栈里放（目录, 里面是否已经删空）
+        let mut stack = vec![(path.to_string(), false)];
+        while let Some((dir, emptied)) = stack.pop() {
+            let inner = dir != path;
+            let at = |e: Error| if inner { Error::Sftp(format!("{dir}：{e}")) } else { e };
+            if emptied {
+                self.raw.rmdir(dir.as_str()).await.map_err(|e| match e {
+                    // 删空了还删不掉：多半是删的同时有别的程序往里写
+                    SftpError::Status(s) if s.status_code == StatusCode::Failure => {
+                        at(Error::Sftp("目录不为空或权限不足".into()))
+                    }
+                    e => at(sftp_err(e)),
+                })?;
+                continue;
+            }
+            let entries = self.list_dir(&dir).await.map_err(at)?;
+            stack.push((dir.clone(), true));
+            for entry in entries {
+                let child = if dir.ends_with('/') { format!("{dir}{}", entry.name) } else { format!("{dir}/{}", entry.name) };
+                if entry.kind == FileKind::Dir {
+                    stack.push((child, false));
+                } else {
+                    self.raw
+                        .remove(child.as_str())
+                        .await
+                        .map_err(|e| Error::Sftp(format!("{child}：{}", sftp_err(e))))?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// root 下的全部内容（不含 root 本身），相对路径用 `/` 分隔；文件夹排在它里面的内容前面。
+    /// 不跟进符号链接。名字不像正常文件名的（含 `/` 或 NUL、是 `.` `..`，服务器给的不可信）跳过
+    pub async fn walk(&self, root: &str) -> Result<Vec<(String, FileEntry)>> {
+        let mut out = Vec::new();
+        let mut stack = vec![(root.trim_end_matches('/').to_string(), String::new())];
+        while let Some((abs, rel)) = stack.pop() {
+            let abs = if abs.is_empty() { "/".to_string() } else { abs };
+            for entry in self.list_dir(&abs).await? {
+                if entry.name.is_empty() || entry.name == ".." || entry.name.contains(['/', '\0']) {
+                    log::warn!("{abs} 里有名字不正常的项目，已跳过：{:?}", entry.name);
+                    continue;
+                }
+                let child_rel = if rel.is_empty() { entry.name.clone() } else { format!("{rel}/{}", entry.name) };
+                if entry.kind == FileKind::Dir {
+                    let child_abs = if abs == "/" { format!("/{}", entry.name) } else { format!("{abs}/{}", entry.name) };
+                    stack.push((child_abs, child_rel.clone()));
+                }
+                out.push((child_rel, entry));
+            }
+        }
+        Ok(out)
+    }
+
+    /// 改权限，mode 只取低 12 位（含 SUID、SGID、粘滞位）。文件夹连同里面的内容改时，
+    /// 先改里面的、最后改它自己（免得先把自己改成不可读，里面就列不出来）；符号链接不跟进、也不改
+    pub async fn chmod(&self, path: &str, mode: u32, scope: PermScope) -> Result<()> {
+        let mode = mode & 0o7777;
+        let is_dir = matches!(
+            self.raw.lstat(path).await.map_err(sftp_err)?.attrs.file_type(),
+            FileType::Dir
+        );
+        if scope == PermScope::Target || !is_dir {
+            return self.set_mode(path, mode).await;
+        }
+        let base = path.trim_end_matches('/');
+        // walk 里文件夹在它的内容前面，倒过来就是先内容、后文件夹
+        for (rel, entry) in self.walk(path).await?.into_iter().rev() {
+            let wanted = match entry.kind {
+                FileKind::Dir => scope != PermScope::Files,
+                FileKind::File => scope != PermScope::Dirs,
+                FileKind::Link => false,
+            };
+            if wanted {
+                let child = format!("{base}/{rel}");
+                self.set_mode(&child, mode).await.map_err(|e| Error::Sftp(format!("{child}：{e}")))?;
+            }
+        }
+        if scope != PermScope::Files {
+            self.set_mode(path, mode).await?;
+        }
+        Ok(())
+    }
+
+    async fn set_mode(&self, path: &str, mode: u32) -> Result<()> {
+        let attrs = FileAttributes { permissions: Some(mode), ..Default::default() };
+        self.raw.setstat(path, attrs).await.map_err(sftp_err)?;
         Ok(())
     }
 
@@ -546,6 +646,12 @@ fn to_entry(file: File) -> FileEntry {
             .or_else(|| longname_owner(&file.longname))
             .or_else(|| attrs.uid.map(|u| u.to_string()))
             .unwrap_or_default(),
+        group: attrs
+            .group
+            .clone()
+            .or_else(|| longname_group(&file.longname))
+            .or_else(|| attrs.gid.map(|g| g.to_string()))
+            .unwrap_or_default(),
     }
 }
 
@@ -555,6 +661,12 @@ fn longname_owner(longname: &str) -> Option<String> {
     let fields: Vec<&str> = longname.split_whitespace().collect();
     // 至少要有 权限 链接数 用户 组 大小 时间… 才像 ls -l 的格式
     (fields.len() >= 8 && fields[0].len() == 10).then(|| fields[2].to_string())
+}
+
+/// 第 4 列是用户组，规则同 `longname_owner`
+fn longname_group(longname: &str) -> Option<String> {
+    let fields: Vec<&str> = longname.split_whitespace().collect();
+    (fields.len() >= 8 && fields[0].len() == 10).then(|| fields[3].to_string())
 }
 
 fn longname_field(longname: &str, index: usize) -> Option<String> {

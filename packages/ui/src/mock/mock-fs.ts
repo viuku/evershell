@@ -1,5 +1,6 @@
-import type { FileEntry } from '../types';
-import { basename, normalizePath, parentPath } from '../core/paths';
+import type { FileEntry, PermScope } from '../types';
+import { basename, joinPath, normalizePath, parentPath } from '../core/paths';
+import { formatPerm } from '../core/permissions';
 
 // 内存里的假文件树，给 Mock 后端的 SFTP 和假 shell 共用
 
@@ -24,6 +25,11 @@ export type MockNode = MockFile | MockDir;
 
 const DAY = 86400;
 const now = Math.floor(Date.now() / 1000);
+
+/** 假服务器上用户组照常见的 Linux：syslog 在 adm 组，其余和用户同名 */
+function groupOf(owner: string): string {
+  return owner === 'syslog' ? 'adm' : owner;
+}
 
 function dir(owner: string, children: Record<string, MockNode> = {}, perm = 'drwxr-xr-x', ageDays = 30): MockDir {
   return { kind: 'dir', mtime: now - ageDays * DAY, perm, owner, children: new Map(Object.entries(children)) };
@@ -198,6 +204,7 @@ export class MockFs {
       mtime: n.mtime,
       perm: n.perm,
       owner: n.owner,
+      group: groupOf(n.owner),
     }));
   }
 
@@ -257,7 +264,45 @@ export class MockFs {
     const node = this.resolve(path);
     if (!node) throw new Error('文件不存在');
     const name = basename(path);
-    return { name, kind: node.kind, size: node.kind === 'dir' ? 4096 : node.size, mtime: node.mtime, perm: node.perm, owner: node.owner };
+    return {
+      name,
+      kind: node.kind,
+      size: node.kind === 'dir' ? 4096 : node.size,
+      mtime: node.mtime,
+      perm: node.perm,
+      owner: node.owner,
+      group: groupOf(node.owner),
+    };
+  }
+
+  /** 改权限，范围同真服务器（core/sftp.rs 的 chmod）：递归时不碰符号链接 */
+  chmod(path: string, mode: number, scope: PermScope): void {
+    const node = this.resolve(path);
+    if (!node) throw new Error('文件不存在');
+    const set = (n: MockNode) => {
+      n.perm = formatPerm(mode, n.kind);
+    };
+    if (scope === 'self' || node.kind !== 'dir') return set(node);
+    const walk = (d: MockDir) => {
+      for (const child of d.children.values()) {
+        if (child.kind === 'dir') {
+          walk(child);
+          if (scope !== 'files') set(child);
+        } else if (child.kind === 'file' && scope !== 'dirs') set(child);
+      }
+    };
+    walk(node);
+    if (scope !== 'files') set(node);
+  }
+
+  /** 文件夹里全部文件加起来多大，模拟下载文件夹时算进度用 */
+  treeSize(path: string): number {
+    const node = this.resolve(path);
+    if (!node) throw new Error('文件不存在');
+    if (node.kind !== 'dir') return node.size;
+    let total = 0;
+    for (const [name] of node.children) total += this.treeSize(joinPath(path, name));
+    return total;
   }
 
   /** 编辑器读文件：有内容给内容，没有就编几行；看着像二进制的给带 0 字节的 */
